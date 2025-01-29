@@ -42,6 +42,7 @@ export const verifyEmail = async (req, res) => {
 };
 
 export const linkedInAuth = async (req, res) => {
+  console.log("code",req.body.code);
   try {
     const result = await authService.linkedInAuth(req.body.code);
     res.json({ token: result.token });
@@ -128,5 +129,15 @@ console.log("password",newPassword);
       return res.status(200).json({ message: result });
   } catch (error) {
       return res.status(500).json({ message: error.message });
+  }
+};
+export async function linkedinSignIn(req, res){
+  try {
+    const { code } = req.body;
+    const { token, user } = await authService.linkedinSignIn(code);
+    res.json({ token, user });
+  } catch (error) {
+    console.error("LinkedIn OAuth Error:", error);
+    res.status(500).json({ error: "LinkedIn authentication failed" });
   }
 };

@@ -130,40 +130,42 @@ class AuthService {
     
 
   async linkedInAuth(code) {
+    console.log("code before accesstoken",code);
     const tokenResponse = await axios.post('https://www.linkedin.com/oauth/v2/accessToken', null, {
       params: {
         grant_type: 'authorization_code',
         code,
         client_id: process.env.LINKEDIN_CLIENT_ID,
         client_secret: process.env.LINKEDIN_CLIENT_SECRET,
-        redirect_uri: `${process.env.FRONTEND_URL}/auth/linkedin/callback`
+        redirect_uri: `${process.env.FRONTEND_URL}/linkedin/callback`
       }
     });
-
+console.log("redirect_uri",`${process.env.FRONTEND_URL}/linkedin/callback`);
     const accessToken = tokenResponse.data.access_token;
+    console.log("accessToken",accessToken);
 
-    const [profileResponse, emailResponse] = await Promise.all([
-      axios.get('https://api.linkedin.com/v2/me', {
-        headers: { Authorization: `Bearer ${accessToken}` },
-        params: {
-          projection: '(id,localizedFirstName,localizedLastName)'
-        }
-      }),
-      axios.get('https://api.linkedin.com/v2/emailAddress?q=members&projection=(elements*(handle~))', {
+    const [profileResponse] = await Promise.all([
+      axios.get('https://api.linkedin.com/v2/userinfo', {
         headers: { Authorization: `Bearer ${accessToken}` }
+       /*  params: {
+          projection: '(localizedFirstName,localizedLastName)'
+        } */
       })
+    /*   axios.get('https://api.linkedin.com/v2/emailAddress?q=members&projection=(elements*(handle~))', {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      }) */
     ]);
 
     const profile = profileResponse.data;
-    const email = emailResponse.data.elements[0]['handle~'].emailAddress;
-
-    let user = await userRepository.findByEmail(email);
+   // const email = emailResponse.data.elements[0]['handle~'].emailAddress;
+console.log("profile",profileResponse);
+    let user = await userRepository.findByEmail(profile.email);
     if (!user) {
       user = await userRepository.create({
-        fullName: `${profile.localizedFirstName} ${profile.localizedLastName}`,
-        email,
-        isVerified: true,
-        linkedInId: profile.id
+        fullName: profile.name,
+        email:profile.email,
+        isVerified: profile.email_verified,
+        linkedInId: profile.sub
       });
     }
 
@@ -270,7 +272,7 @@ async verifyAccount(userId) {
   }
 }
 
-
+/* 
 async changePassword(email, newPassword){
   // Recherche de l'utilisateur par email
   const user = await userRepository.findByEmail(email);
@@ -294,7 +296,7 @@ async changePassword(email, newPassword){
 
   return { success: true, message: 'Mot de passe changé avec succès.' };
 
-}
+} */
 
 async changePassword(email, newPassword){
     // Recherche de l'utilisateur par email
@@ -310,6 +312,51 @@ async changePassword(email, newPassword){
     return { success: true, message: 'Mot de passe changé avec succès.' };
 
 }
+
+async linkedinSignIn(code){
+  console.log("code/////",code);
+  const clientId = process.env.LINKEDIN_CLIENT_ID;
+  const clientSecret = process.env.LINKEDIN_CLIENT_SECRET;
+  const redirectUri = `${process.env.FRONTEND_URL}/linkedin/signin/callback`;
+
+  // Get LinkedIn Access Token
+  const tokenResponse = await axios.post("https://www.linkedin.com/oauth/v2/accessToken", null, {
+    params: {
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: redirectUri,
+      client_id: clientId,
+      client_secret: clientSecret,
+    },
+  });
+console.log("tokenResponse",tokenResponse);
+  const accessToken = tokenResponse.data.access_token;
+  console.log("accessToken",accessToken);
+
+   // Fetch LinkedIn User Info
+  const profileResponse = await axios.get("https://api.linkedin.com/v2/userinfo", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  const { sub,name, given_name, family_name, email, email_verified } = profileResponse.data;
+
+  // Check if user exists, else create one
+  let user = await User.findOne({ email });
+  if (!user) {
+    user = new User({
+      fullName: name,
+      email,
+      linkedInId: sub,
+      isVerified: email_verified,
+    });
+    await user.save();
+  }
+
+  // Generate JWT Token
+  const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: "7d" });
+
+  return { token, user }; 
+};
 
 }
 
