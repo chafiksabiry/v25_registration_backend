@@ -1,5 +1,5 @@
 import express from 'express';
-import { register, login, verifyEmail, linkedInAuth, sendOTP, verifyOTP,verifyAccount,generateVerificationCode,changePassword} from '../controllers/authController.js';
+import { register, login, verifyEmail, linkedInAuth, sendOTP, verifyOTP,verifyAccount,generateVerificationCode,changePassword,linkedinSignIn} from '../controllers/authController.js';
 
 const router = express.Router();
 
@@ -7,6 +7,8 @@ router.post('/register', register);
 router.post('/login', login);
 router.post('/verify-email', verifyEmail);
 router.post('/linkedin', linkedInAuth);
+router.post("/signin/linkedin", linkedinSignIn);
+
 // Route pour envoyer l'OTP
 router.post('/send-otp', sendOTP);
 
