@@ -17,7 +17,7 @@ mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log('Connected to MongoDB'))
   .catch(err => console.error('MongoDB connection error:', err));
   const corsOptions = {
-    origin: ['http://localhost:5173','http://38.242.208.242:5175'],  // Remplacez ceci par l'URL de votre frontend si nécessaire
+    origin: ['http://localhost:5173','http://38.242.208.242:5175','http://38.242.208.242:5157'],  // Remplacez ceci par l'URL de votre frontend si nécessaire
     methods: ['GET', 'POST', 'PUT', 'DELETE'],  // Méthodes HTTP autorisées
     allowedHeaders: ['Content-Type', 'Authorization'], 
     credentials: true// En-têtes autorisés
