@@ -17,7 +17,7 @@ export const register = async (req, res) => {
   }
 };
 
-export const login = async (req, res) => {
+/* export const login = async (req, res) => {
   try {
     const result = await authService.login(req.body.email, req.body.password);
     console.log('Login verification code:', result.verificationCode);
@@ -29,7 +29,22 @@ export const login = async (req, res) => {
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
+}; */
+export const login = async (req, res) => {
+  try {
+    const result = await authService.login(req.body.email, req.body.password);
+    console.log('Login verification code:', result.verificationCode);
+    
+    res.status(201).json({ 
+      message: 'Verification code sent', 
+      data: { code: result.verificationCode } 
+    });
+  } catch (error) {
+    console.error("Login error:", error.message);
+    res.status(400).json({ error: "Invalid credentials" }); // Retourne une structure explicite
+  }
 };
+
 
 export const verifyEmail = async (req, res) => {
   try {

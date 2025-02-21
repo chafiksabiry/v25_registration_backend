@@ -318,7 +318,7 @@ async linkedinSignIn(code){
   const clientId = process.env.LINKEDIN_CLIENT_ID;
   const clientSecret = process.env.LINKEDIN_CLIENT_SECRET;
   const redirectUri = `${process.env.FRONTEND_URL}/linkedin/signin/callback`;
-
+console.log("redirectUri",redirectUri);
   // Get LinkedIn Access Token
   const tokenResponse = await axios.post("https://www.linkedin.com/oauth/v2/accessToken", null, {
     params: {

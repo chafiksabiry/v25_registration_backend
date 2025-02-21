@@ -25,8 +25,8 @@ ENV VITE_SUPABASE_URL=https://ubmusernkksbnxhvsgox.supabase.co
 ENV TWILIO_PHONE_NUMBER=+16185185941
 ENV MONGODB_URI=mongodb://harx:gcZ62rl8hoME@185.137.122.3:27017/V25_Registration
 ENV PORT=5000
-ENV FRONTEND_URL=http://38.242.208.242:5157/auth
-ENV CORS_ORIGIN=http://38.242.208.242:5157
+ENV FRONTEND_URL=https://registration.harx.ai:5157/auth
+ENV CORS_ORIGIN=https://registration.harx.ai:5157
 # Exposer le port utilisé par votre backend
 EXPOSE 5000
 
