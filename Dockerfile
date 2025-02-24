@@ -15,8 +15,8 @@ COPY . .
 
 # Définir les variables d'environnement
 ENV VITE_OPENAI_API_KEY=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
-ENV VITE_LINKEDIN_CLIENT_ID=78dci2o5ppds4v
-ENV VITE_LINKEDIN_CLIENT_SECRET=WPL_AP1.T45rXV4XwyxtS5pl.cTa72w
+ENV LINKEDIN_CLIENT_ID=78dci2o5ppds4v
+ENV LINKEDIN_CLIENT_SECRET=WPL_AP1.T45rXV4XwyxtS5pl.cTa72w
 #ENV VITE_LINKEDIN_REDIRECT_URI=http://localhost:5173/linkedin-callback
 ENV JWT_SECRET=your_jwt_secret_key_here
 
@@ -25,6 +25,10 @@ ENV VITE_SUPABASE_URL=https://ubmusernkksbnxhvsgox.supabase.co
 ENV TWILIO_PHONE_NUMBER=+16185185941
 ENV MONGODB_URI=mongodb://harx:gcZ62rl8hoME@185.137.122.3:27017/V25_Registration
 ENV PORT=5000
+ENV FRONTEND_URL=https://registration.harx.ai:5157/auth
+ENV CORS_ORIGIN=https://registration.harx.ai:5157
+#ENV FRONTEND_URL=http:localhost:5157/auth
+#ENV CORS_ORIGIN=http:localhost:5157
 
 # Exposer le port utilisé par votre backend
 EXPOSE 5000
