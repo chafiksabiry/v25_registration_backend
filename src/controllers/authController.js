@@ -156,3 +156,11 @@ export async function linkedinSignIn(req, res){
     res.status(500).json({ error: "LinkedIn authentication failed" });
   }
 };
+
+export async function sendVerificationEmail(req, res) {
+  const { email, code } = req.body;
+  console.log("email",email);
+  console.log("code",code);
+  const result = await authService.sendVerificationEmail(email, code);
+  res.json({ message: result });
+}
