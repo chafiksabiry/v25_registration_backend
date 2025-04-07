@@ -41,8 +41,10 @@ class AuthService {
   }
 
   async register(userData) {
+    console.log("userData",userData);
     const existingUser = await userRepository.findByEmail(userData.email);
     if (existingUser) {
+      console.warn("Email already registered");
       throw new Error('Email already registered');
     }
 
@@ -358,6 +360,41 @@ console.log("tokenResponse",tokenResponse);
   return { token, user }; 
 };
 
+async sendVerificationEmail(email, code) {
+  try {
+    // Send verification email using Brevo
+    const response = await axios.post('https://api.brevo.com/v3/smtp/email', {
+      sender: {
+        name: process.env.SMTP_SENDER_NAME,
+        email: process.env.BREVO_FROM_EMAIL
+      },
+      to: [{
+        email: email,
+        name: email.split('@')[0]
+      }],
+      subject: 'Email Verification',
+      htmlContent: `
+        <h1>Email Verification</h1>
+        <p>Your verification code is: <strong>${code}</strong></p>
+        <p>This code will expire in 10 minutes.</p>
+      `
+    }, {
+      headers: {
+        'api-key': process.env.BREVO_API_KEY,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.data) {
+      throw new Error('No response data from Brevo API');
+    }
+
+    return { success: true, message: 'Verification email sent successfully', data: response.data };
+  } catch (error) {
+    console.error('Error sending verification email:', error.response?.data || error.message);
+    throw new Error(error.response?.data?.message || 'Failed to send verification email');
+  }
+}
 }
 
 

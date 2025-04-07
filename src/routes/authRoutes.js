@@ -1,5 +1,5 @@
 import express from 'express';
-import { register, login, verifyEmail, linkedInAuth, sendOTP, verifyOTP,verifyAccount,generateVerificationCode,changePassword,linkedinSignIn} from '../controllers/authController.js';
+import { register, login, verifyEmail, linkedInAuth, sendOTP,sendVerificationEmail, verifyOTP,verifyAccount,generateVerificationCode,changePassword,linkedinSignIn} from '../controllers/authController.js';
 
 const router = express.Router();
 
@@ -17,5 +17,5 @@ router.post('/verify-otp', verifyOTP);
 router.post('/verify-account', verifyAccount);
 router.post('/generate-verification-code', generateVerificationCode);
 router.post('/change-password', changePassword);
-
+router.post('/send-verification-email', sendVerificationEmail);
 export default router;
