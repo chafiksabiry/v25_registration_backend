@@ -361,6 +361,9 @@ console.log("tokenResponse",tokenResponse);
 };
 
 async sendVerificationEmail(email, code) {
+  if (!process.env.BREVO_API_KEY) {
+    console.error('❌ BREVO_API_KEY is undefined!');
+  }
   try {
     // Send verification email using Brevo
     const response = await axios.post('https://api.brevo.com/v3/smtp/email', {
