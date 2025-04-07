@@ -29,7 +29,9 @@ ENV FRONTEND_URL=https://registration.harx.ai/auth
 ENV CORS_ORIGIN=https://registration.harx.ai
 #ENV FRONTEND_URL=http:localhost:5157/auth
 #ENV CORS_ORIGIN=http:localhost:5157
-
+ENV BREVO_API_KEY=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
+ENV BREVO_FROM_EMAIL=chafik.sabiry@harx.ai
+ENV SMTP_SENDER_NAME=harx
 # Exposer le port utilisé par votre backend
 EXPOSE 5000
 
