@@ -361,7 +361,7 @@ console.log("tokenResponse",tokenResponse);
 };
 
 async sendVerificationEmail(email, code) {
-  console.log("brevo api key",process.env.BREVO_API_KEY);
+  console.log("sendverififcationemail from service");
   if (!process.env.BREVO_API_KEY) {
     console.log('❌ BREVO_API_KEY is undefined!');
   }
