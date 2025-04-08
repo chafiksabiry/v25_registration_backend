@@ -161,6 +161,8 @@ export async function sendVerificationEmail(req, res) {
   const { email, code } = req.body;
   console.log("email",email);
   console.log("code",code);
+  console.log("📩 Calling sendVerificationEmail...");
   const result = await authService.sendVerificationEmail(email, code);
+  console.log("📩 sendVerificationEmail result:", result);
   res.json({ message: result });
 }
