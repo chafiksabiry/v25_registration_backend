@@ -87,7 +87,6 @@ class AuthService {
         code: verificationCode,
         expiresAt: verificationExpiry
       },
-      lastLogin: new Date()
     });
 
     return { verificationCode };
