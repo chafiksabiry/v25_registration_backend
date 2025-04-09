@@ -181,3 +181,31 @@ export const checkFirstLogin = async (req, res) => {
     return res.status(500).json({ error: error.message });
   }
 };
+export const changeUserType = async (req, res) => {
+  const { userId, newType } = req.body;
+
+  // Validate input
+  if (!userId || !newType) {
+    return res.status(400).json({ error: 'Both userId and newType are required' });
+  }
+
+  try {
+    // Call the service to change the user type
+    const result = await authService.changeUserType(userId, newType);
+
+    // Return success message
+    return res.status(200).json({
+      message: 'User type updated successfully',
+      data: result,
+    });
+  } catch (error) {
+    console.error("Error changing user type:", error.message);
+    return res.status(500).json({ error: error.message });
+  }
+};
+export const checkUserType = async (req, res) => {
+  const { userId } = req.body;
+  const userType = await authService.checkUserType(userId);
+  res.json({ userType });
+};
+
