@@ -166,3 +166,18 @@ export async function sendVerificationEmail(req, res) {
   console.log("📩 sendVerificationEmail result:", result);
   res.json({ message: result });
 }
+export const checkFirstLogin = async (req, res) => {
+  const { userId } = req.body;
+
+  if (!userId) {
+    return res.status(400).json({ error: 'userId is required' });
+  }
+
+  try {
+    const result = await authService.checkFirstLogin(userId);
+    return res.status(200).json(result); // { isFirstLogin: true/false }
+  } catch (error) {
+    console.error("checkFirstLogin error:", error.message);
+    return res.status(500).json({ error: error.message });
+  }
+};
