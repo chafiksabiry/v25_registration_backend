@@ -414,6 +414,34 @@ async checkFirstLogin(userId) {
 
   return { isFirstLogin };
 }
+async changeUserType(userId, newType) {
+  try {
+    // Find the user by their ID
+    const user = await userRepository.findById({ _id: userId });
+    
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    // Update the user's type
+    user.typeUser = newType;
+    await user.save();
+
+    return { success: true, message: `User type changed to ${newType}` };
+  } catch (error) {
+    console.error('Error changing user type:', error);
+    throw new Error('Failed to change user type');
+  }
+}
+
+async checkUserType(userId) {
+  const user = await userRepository.findById({ _id: userId });
+  if (!user) {
+    throw new Error('User not found');
+  }
+  return user.typeUser;
+}
+
 
 }
 
