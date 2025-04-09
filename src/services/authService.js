@@ -86,7 +86,8 @@ class AuthService {
       verificationCode: {
         code: verificationCode,
         expiresAt: verificationExpiry
-      }
+      },
+      lastLogin: new Date()
     });
 
     return { verificationCode };
@@ -399,6 +400,22 @@ async sendVerificationEmail(email, code) {
     throw new Error(error.response?.data?.message || 'Failed to send verification email');
   }
 }
+async checkFirstLogin(userId) {
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new Error("User not found");
+  }
+
+  const isFirstLogin = user.lastLogin === null;
+
+  if (isFirstLogin) {
+    user.lastLogin = new Date();
+    await user.save();
+  }
+
+  return { isFirstLogin };
+}
+
 }
 
 
