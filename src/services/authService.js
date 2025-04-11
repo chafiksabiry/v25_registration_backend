@@ -3,6 +3,7 @@ import axios from 'axios';
 import userRepository from '../repositories/userRepository.js';
 import User from '../models/User.js'; // Modèle utilisateur
 import twilio from 'twilio';
+import { getClientIp } from '../utils/ipHelper.js';
 
 const client = twilio('AC8a453959a6cb01cbbd1c819b00c5782f', '7ade91a170bff98bc625543287ee62c8');
 class AuthService {
@@ -40,7 +41,7 @@ class AuthService {
     );
   }
 
-  async register(userData) {
+  async register(userData, req) {
     console.log("userData",userData);
     const existingUser = await userRepository.findByEmail(userData.email);
     if (existingUser) {
@@ -51,19 +52,25 @@ class AuthService {
     const verificationCode = this.generateVerificationCode();
     const verificationExpiry = new Date();
     verificationExpiry.setMinutes(verificationExpiry.getMinutes() + 10);
-   const result = await userRepository.create({
+    
+    const clientIp = getClientIp(req);
+    const result = await userRepository.create({
       ...userData,
       verificationCode: {
         code: verificationCode,
         expiresAt: verificationExpiry
-      }
+      },
+      ipHistory: [{
+        ip: clientIp,
+        action: 'register'
+      }]
     });
     console.log("result2",result);
 
     return { verificationCode , result};
   }
 
-  async login(email, password) {
+  async login(email, password, req) {
     console.log('we are here');
     const user = await userRepository.findByEmail(email);
     console.log("user",user);
@@ -82,11 +89,19 @@ class AuthService {
     const verificationExpiry = new Date();
     verificationExpiry.setMinutes(verificationExpiry.getMinutes() + 10);
     console.log("verificationCodeLogin",verificationCode);
+    
+    const clientIp = getClientIp(req);
     await userRepository.update(user._id, {
       verificationCode: {
         code: verificationCode,
         expiresAt: verificationExpiry
       },
+      $push: {
+        ipHistory: {
+          ip: clientIp,
+          action: 'login'
+        }
+      }
     });
 
     return { verificationCode };

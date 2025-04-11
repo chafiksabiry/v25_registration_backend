@@ -3,7 +3,7 @@ import authService from '../services/authService.js';
 
 export const register = async (req, res) => {
   try {
-    const result = await authService.register(req.body);
+    const result = await authService.register(req.body, req);
     console.log("result1",result);
     console.log("result._id",result.result._id);
     console.log('Verification code:', result.verificationCode);
@@ -32,7 +32,7 @@ export const register = async (req, res) => {
 }; */
 export const login = async (req, res) => {
   try {
-    const result = await authService.login(req.body.email, req.body.password);
+    const result = await authService.login(req.body.email, req.body.password, req);
     console.log('Login verification code:', result.verificationCode);
     
     res.status(201).json({ 
