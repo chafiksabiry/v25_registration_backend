@@ -414,6 +414,50 @@ async sendVerificationEmail(email, code) {
     throw new Error(error.response?.data?.message || 'Failed to send verification email');
   }
 }
+async checkFirstLogin(userId) {
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new Error("User not found");
+  }
+
+  const isFirstLogin = user.lastLogin === null;
+
+  if (isFirstLogin) {
+    user.lastLogin = new Date();
+    await user.save();
+  }
+
+  return { isFirstLogin };
+}
+async changeUserType(userId, newType) {
+  try {
+    // Find the user by their ID
+    const user = await userRepository.findById({ _id: userId });
+    
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    // Update the user's type
+    user.typeUser = newType;
+    await user.save();
+
+    return { success: true, message: `User type changed to ${newType}` };
+  } catch (error) {
+    console.error('Error changing user type:', error);
+    throw new Error('Failed to change user type');
+  }
+}
+
+async checkUserType(userId) {
+  const user = await userRepository.findById({ _id: userId });
+  if (!user) {
+    throw new Error('User not found');
+  }
+  return user.typeUser;
+}
+
+
 }
 
 
