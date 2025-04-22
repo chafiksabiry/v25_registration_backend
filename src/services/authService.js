@@ -91,11 +91,16 @@ class AuthService {
     console.log("verificationCodeLogin",verificationCode);
     
     const clientIp = getClientIp(req);
+    
+    // Check if it's first time login
+    const isFirstTime = user.firstTime;
+    
     await userRepository.update(user._id, {
       verificationCode: {
         code: verificationCode,
         expiresAt: verificationExpiry
       },
+      firstTime: false, // Set firstTime to false after first login
       $push: {
         ipHistory: {
           ip: clientIp,
@@ -420,14 +425,7 @@ async checkFirstLogin(userId) {
     throw new Error("User not found");
   }
 
-  const isFirstLogin = user.lastLogin === null;
-
-  if (isFirstLogin) {
-    user.lastLogin = new Date();
-    await user.save();
-  }
-
-  return { isFirstLogin };
+  return { isFirstLogin: user.firstTime };
 }
 async changeUserType(userId, newType) {
   try {
