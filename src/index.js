@@ -25,7 +25,8 @@ mongoose.connect(process.env.MONGODB_URI)
       'https://registration.harx.ai',
       'https://v25.harx.ai',
       'https://api-registration.harx.ai',
-      'https://v25-preprod.harx.ai'
+      'https://v25-preprod.harx.ai',
+      'https://preprod-registration.harx.ai'
     ],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'], 
