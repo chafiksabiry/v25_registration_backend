@@ -59,6 +59,10 @@ const userSchema = new mongoose.Schema({
   typeUser: {
     type :String,
     default: null,
+  },
+    firstTime: {
+    type: Boolean,
+    default: true
   }
 });
 
