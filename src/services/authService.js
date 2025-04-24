@@ -414,7 +414,7 @@ async sendVerificationEmail(email, code) {
     throw new Error(error.response?.data?.message || 'Failed to send verification email');
   }
 }
-async checkFirstLogin(userId) {
+/* async checkFirstLogin(userId) {
   const user = await User.findById(userId);
   if (!user) {
     throw new Error("User not found");
@@ -428,7 +428,16 @@ async checkFirstLogin(userId) {
   }
 
   return { isFirstLogin };
+} */
+async checkFirstLogin(userId) {
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new Error("User not found");
+  }
+
+  return { isFirstLogin: user.firstTime };
 }
+
 async changeUserType(userId, newType) {
   try {
     // Find the user by their ID
