@@ -70,7 +70,7 @@ class AuthService {
     return { verificationCode , result};
   }
 
-  async login(email, password, req) {
+ /*  async login(email, password, req) {
     console.log('we are here');
     const user = await userRepository.findByEmail(email);
     console.log("user",user);
@@ -105,7 +105,50 @@ class AuthService {
     });
 
     return { verificationCode };
+  } */
+
+  async login(email, password, req) {
+    console.log('we are here');
+    const user = await userRepository.findByEmail(email);
+    console.log("user",user);
+    if (!user) {
+      console.log('user not found');
+      throw new Error('Invalid credentials');
+    }
+
+    const isMatch = await user.comparePassword(password);
+    if (!isMatch) {
+      console.log('invalid credentials')
+      throw new Error('Invalid credentials');
+    }
+
+    const verificationCode = this.generateVerificationCode();
+    const verificationExpiry = new Date();
+    verificationExpiry.setMinutes(verificationExpiry.getMinutes() + 10);
+    console.log("verificationCodeLogin",verificationCode);
+    
+    const clientIp = getClientIp(req);
+    
+    // Check if it's first time login
+    const isFirstTime = user.firstTime;
+    
+    await userRepository.update(user._id, {
+      verificationCode: {
+        code: verificationCode,
+        expiresAt: verificationExpiry
+      },
+      firstTime: false, // Set firstTime to false after first login
+      $push: {
+        ipHistory: {
+          ip: clientIp,
+          action: 'login'
+        }
+      }
+    });
+
+    return { verificationCode };
   }
+
 
 
     async verifyEmail(email, code) {
