@@ -10,7 +10,7 @@ import { errorHandler } from './middleware/errorHandler.js';
 dotenv.config();
 
 const app = express();
-app.set('trust proxy', true); // <-- ajoute ceci
+//app.set('trust proxy', true); // <-- ajoute ceci
 const PORT = process.env.PORT || 5000;
 // Connect to MongoDB
 mongoose.connect(process.env.MONGODB_URI)
@@ -24,7 +24,8 @@ mongoose.connect(process.env.MONGODB_URI)
       'https://registration.harx.ai:5157',
       'https://registration.harx.ai',
       'https://v25.harx.ai',
-      'https://api-registration.harx.ai'
+      'https://api-registration.harx.ai',
+      'http://localhost:3000'
     ],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'], 
