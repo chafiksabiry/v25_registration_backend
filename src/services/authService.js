@@ -2,8 +2,10 @@ import jwt from 'jsonwebtoken';
 import axios from 'axios';
 import userRepository from '../repositories/userRepository.js';
 import User from '../models/User.js'; // Modèle utilisateur
+import Timezone from '../models/Timezone.js';
 import twilio from 'twilio';
 import { getClientIp } from '../utils/ipHelper.js';
+import ipInfoService from './ipInfoService.js';
 
 const client = twilio('AC8a453959a6cb01cbbd1c819b00c5782f', '7ade91a170bff98bc625543287ee62c8');
 class AuthService {
@@ -41,6 +43,69 @@ class AuthService {
     );
   }
 
+  // Méthode pour trouver un timezone existant
+  async findTimezone(locationInfo) {
+    try {
+      if (!locationInfo || !locationInfo.timezone || !locationInfo.countryCode) {
+        return null;
+      }
+
+      // Chercher si le timezone existe avec country code ET zone name
+      const timezone = await Timezone.findOne({ 
+        countryCode: locationInfo.countryCode,
+        zoneName: locationInfo.timezone 
+      });
+      
+      if (!timezone) {
+        console.warn(`Timezone not found for country: ${locationInfo.countryCode}, zone: ${locationInfo.timezone}`);
+        return null;
+      }
+
+      return timezone._id;
+    } catch (error) {
+      console.error('Error in findTimezone:', error);
+      return null;
+    }
+  }
+
+  // Méthode pour enrichir les informations IP avec les données géographiques
+  async enrichIPInfo(ipAddress) {
+    try {
+      if (!ipAddress) {
+        console.warn('No IP address provided');
+        return null;
+      }
+
+      const locationInfo = await ipInfoService.getLocationInfo(ipAddress);
+      
+      if (!locationInfo) {
+        console.warn('Unable to get location info for IP:', ipAddress);
+        return null;
+      }
+
+      // Trouver le timezone existant
+      const timezoneId = await this.findTimezone(locationInfo);
+
+      // Si on n'arrive pas à trouver le timezone, retourner null
+      if (!timezoneId) {
+        console.warn('Unable to find timezone for:', locationInfo);
+        return null;
+      }
+
+      return {
+        region: locationInfo.region || null,
+        city: locationInfo.city || null,
+        isp: locationInfo.isp || null,
+        postal: locationInfo.postal || null,
+        coordinates: locationInfo.coordinates || null,
+        location: timezoneId
+      };
+    } catch (error) {
+      console.error('Error enriching IP info:', error);
+      return null;
+    }
+  }
+
   async register(userData, req) {
     console.log("userData",userData);
     const existingUser = await userRepository.findByEmail(userData.email);
@@ -54,6 +119,8 @@ class AuthService {
     verificationExpiry.setMinutes(verificationExpiry.getMinutes() + 10);
     
     const clientIp = getClientIp(req);
+    const locationInfo = await this.enrichIPInfo(clientIp);
+    
     const result = await userRepository.create({
       ...userData,
       verificationCode: {
@@ -62,7 +129,8 @@ class AuthService {
       },
       ipHistory: [{
         ip: clientIp,
-        action: 'register'
+        action: 'register',
+        ...(locationInfo && { locationInfo: locationInfo })
       }]
     });
     console.log("result2",result);
@@ -91,6 +159,7 @@ class AuthService {
     console.log("verificationCodeLogin",verificationCode);
     
     const clientIp = getClientIp(req);
+    const locationInfo = await this.enrichIPInfo(clientIp);
     
     // Check if it's first time login
     const isFirstTime = user.firstTime;
@@ -104,7 +173,8 @@ class AuthService {
       $push: {
         ipHistory: {
           ip: clientIp,
-          action: 'login'
+          action: 'login',
+          ...(locationInfo && { locationInfo: locationInfo })
         }
       }
     });
