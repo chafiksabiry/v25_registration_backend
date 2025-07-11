@@ -32,6 +32,6 @@ const timezoneSchema = new mongoose.Schema({
 
 // Index pour optimiser les recherches
 timezoneSchema.index({ countryCode: 1 });
-timezoneSchema.index({ zoneName: 1 });
+// Note: zoneName a déjà un index via 'unique: true'
 
 export default mongoose.model('Timezone', timezoneSchema); 
