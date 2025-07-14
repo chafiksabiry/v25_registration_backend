@@ -32,6 +32,7 @@ ENV CORS_ORIGIN=https://preprod-registration.harx.ai
 ENV BREVO_API_KEY=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
 ENV BREVO_FROM_EMAIL=chafik.sabiry@harx.ai
 ENV SMTP_SENDER_NAME=harx
+ENV IP_INFO_TOKEN=9150a0245fbc83
 # Exposer le port utilisé par votre backend
 EXPOSE 5000
 
