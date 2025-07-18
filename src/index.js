@@ -11,7 +11,7 @@ import { errorHandler } from './middleware/errorHandler.js';
 dotenv.config();
 
 const app = express();
-//app.set('trust proxy', true); // <-- ajoute ceci
+app.set('trust proxy', true); // <-- ajoute ceci
 const PORT = process.env.PORT || 5000;
 // Connect to MongoDB
 mongoose.connect(process.env.MONGODB_URI)
@@ -48,8 +48,7 @@ const limiter = rateLimit({
   max: 100, // limit each IP to 100 requests per windowMs
   standardHeaders: true,
   legacyHeaders: false,
-  // Configuration plus sécurisée du trust proxy
-  //trustProxy: true
+  trustProxy: true
 });
 
 app.use(limiter);
