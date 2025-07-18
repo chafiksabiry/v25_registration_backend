@@ -50,6 +50,18 @@ const userSchema = new mongoose.Schema({
     action: {
       type: String,
       enum: ['register', 'login']
+    },
+    locationInfo: {
+      location: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Timezone',
+        required: false
+      },
+      region: String,
+      city: String,
+      isp: String,
+      postal: String,
+      coordinates: String // format: "lat,lng"
     }
   }],
   createdAt: {

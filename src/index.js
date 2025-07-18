@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import mongoose from 'mongoose';
 import rateLimit from 'express-rate-limit';
 import authRoutes from './routes/authRoutes.js';
+import userRoutes from './routes/userRoutes.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
 dotenv.config();
@@ -24,7 +25,8 @@ mongoose.connect(process.env.MONGODB_URI)
       'https://registration.harx.ai:5157',
       'https://registration.harx.ai',
       'https://v25.harx.ai',
-      'https://api-registration.harx.ai'
+      'https://api-registration.harx.ai',
+      'http://localhost:3000'
     ],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'], 
@@ -53,6 +55,7 @@ app.use(limiter);
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
 
 // Error handling
 app.use(errorHandler);
