@@ -35,9 +35,15 @@ class AuthService {
     return { verificationCode , result};
   }
 
-  generateToken(userId) {
+  generateToken(userId, userInfo = {}) {
     return jwt.sign(
-      { userId },
+      { 
+        userId,
+        email: userInfo.email,
+        fullName: userInfo.fullName,
+        typeUser: userInfo.typeUser,
+        isVerified: userInfo.isVerified
+      },
       process.env.JWT_SECRET,
       { expiresIn: '24h' }
     );
@@ -211,8 +217,13 @@ class AuthService {
           // isVerified: true
         });
     
-        // Générer un token et le retourner
-        return { token: this.generateToken(user._id) };
+        // Générer un token et le retourner avec les informations utilisateur
+        return { token: this.generateToken(user._id, {
+          email: user.email,
+          fullName: user.fullName,
+          typeUser: user.typeUser,
+          isVerified: user.isVerified
+        }) };
       } catch (error) {
         console.error('Error in verifyEmail:', error.message);
         // Propager une erreur pour qu'elle puisse être gérée par l'appelant
@@ -261,7 +272,12 @@ console.log("profile",profileResponse);
       });
     }
 
-    return { token: this.generateToken(user._id) };
+    return { token: this.generateToken(user._id, {
+      email: user.email,
+      fullName: user.fullName,
+      typeUser: user.typeUser,
+      isVerified: user.isVerified
+    }) };
   }
 
 // Service pour envoyer un OTP
@@ -444,8 +460,14 @@ console.log("tokenResponse",tokenResponse);
     await user.save();
   }
 
-  // Generate JWT Token
-  const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: "7d" });
+  // Generate JWT Token with user info
+  const token = jwt.sign({ 
+    userId: user._id,
+    email: user.email,
+    fullName: user.fullName,
+    typeUser: user.typeUser,
+    isVerified: user.isVerified
+  }, process.env.JWT_SECRET, { expiresIn: "7d" });
 
   return { token, user }; 
 };
