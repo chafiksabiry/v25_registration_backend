@@ -4,14 +4,14 @@ import authService from '../services/authService.js';
 export const register = async (req, res) => {
   try {
     const result = await authService.register(req.body, req);
-    console.log("result1",result);
-    console.log("result._id",result.result._id);
+    console.log("result1", result);
+    console.log("result._id", result.result._id);
     console.log('Verification code:', result.verificationCode);
     //res.status(201).json({ message: 'Registration successful' });
-    res.status(201).json({ 
-      message: 'Registration successful', 
-      data: { code: result.verificationCode , _id:result.result._id} 
-  });
+    res.status(201).json({
+      message: 'Registration successful',
+      data: { code: result.verificationCode, _id: result.result._id }
+    });
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
@@ -34,10 +34,10 @@ export const login = async (req, res) => {
   try {
     const result = await authService.login(req.body.email, req.body.password, req);
     console.log('Login verification code:', result.verificationCode);
-    
-    res.status(201).json({ 
-      message: 'Verification code sent', 
-      data: { code: result.verificationCode } 
+
+    res.status(201).json({
+      message: 'Verification code sent',
+      data: { code: result.verificationCode }
     });
   } catch (error) {
     console.error("Login error:", error.message);
@@ -49,15 +49,15 @@ export const login = async (req, res) => {
 export const verifyEmail = async (req, res) => {
   try {
     const result = await authService.verifyEmail(req.body.email, req.body.code);
-    console.log("ResultController",result);
-    res.json({ token: result.token,result });
+    console.log("ResultController", result);
+    res.json({ token: result.token, result });
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
 };
 
 export const linkedInAuth = async (req, res) => {
-  console.log("code",req.body.code);
+  console.log("code", req.body.code);
   try {
     const result = await authService.linkedInAuth(req.body.code);
     res.json({ token: result.token });
@@ -71,14 +71,14 @@ export const linkedInAuth = async (req, res) => {
 // Contrôleur pour envoyer un OTP
 export const sendOTP = async (req, res) => {
   const { userId, phoneNumber } = req.body;
-console.log("userId in sndotp controller",userId);
+  console.log("userId in sndotp controller", userId);
   if (!userId || !phoneNumber) {
     return res.status(400).json({ error: 'userId and phoneNumber are required' });
   }
 
   try {
     const result = await authService.sendOTPWithTwilio(userId, phoneNumber);
-    console.log("result in otp controller",result)
+    console.log("result in otp controller", result)
     return res.status(200).json(result);
   } catch (error) {
     return res.status(500).json({ error: error.message });
@@ -88,8 +88,8 @@ console.log("userId in sndotp controller",userId);
 // Contrôleur pour vérifier un OTP
 export const verifyOTP = async (req, res) => {
   const { userId, otp } = req.body;
-  console.log("userId",userId);
-console.log("userandotp",otp);
+  console.log("userId", userId);
+  console.log("userandotp", otp);
   if (!userId || !otp) {
     return res.status(400).json({ error: 'userId and otp are required' });
   }
@@ -120,33 +120,33 @@ export async function verifyAccount(req, res) {
 
 };
 //generer du code pour la verification email 
-export async function generateVerificationCode(req,res){
+export async function generateVerificationCode(req, res) {
   const { email } = req.body;
   const result = await authService.generateVerificationCodeForRecovery(email);
-  console.log("resultControllerrecovry",result);
+  console.log("resultControllerrecovry", result);
   return res.status(200).json(result);  // Compte vérifié avec succès
 };
 
 //controlleur pour changement de mot de passe
 export async function changePassword(req, res) {
   try {
-      const { email, newPassword } = req.body;
-console.log("email",email);
-console.log("password",newPassword);
-      // Validation des champs
-      if (!email || !newPassword) {
-          return res.status(400).json({ message: 'Email et nouveau mot de passe requis.' });
-      }
+    const { email, newPassword } = req.body;
+    console.log("email", email);
+    console.log("password", newPassword);
+    // Validation des champs
+    if (!email || !newPassword) {
+      return res.status(400).json({ message: 'Email et nouveau mot de passe requis.' });
+    }
 
-      // Appel du service pour changer le mot de passe
-      const result = await authService.changePassword(email, newPassword);
+    // Appel du service pour changer le mot de passe
+    const result = await authService.changePassword(email, newPassword);
 
-      return res.status(200).json({ message: result });
+    return res.status(200).json({ message: result });
   } catch (error) {
-      return res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: error.message });
   }
 };
-export async function linkedinSignIn(req, res){
+export async function linkedinSignIn(req, res) {
   try {
     const { code } = req.body;
     const { token, user } = await authService.linkedinSignIn(code);
@@ -159,12 +159,19 @@ export async function linkedinSignIn(req, res){
 
 export async function sendVerificationEmail(req, res) {
   const { email, code } = req.body;
-  console.log("email",email);
-  console.log("code",code);
+  console.log("email", email);
+  console.log("code", code);
   console.log("📩 Calling sendVerificationEmail...");
-  const result = await authService.sendVerificationEmail(email, code);
-  console.log("📩 sendVerificationEmail result:", result);
-  res.json({ message: result });
+
+  try {
+    const result = await authService.sendVerificationEmail(email, code);
+    console.log("📩 sendVerificationEmail result:", result);
+    res.status(200).json({ message: result });
+  } catch (error) {
+    console.error("❌ Controller Error in sendVerificationEmail:", error.message);
+    // Return 500 instead of crashing, handling the CORS/502 issue
+    res.status(500).json({ error: error.message || "Failed to send verification email" });
+  }
 }
 export const checkFirstLogin = async (req, res) => {
   const { userId } = req.body;
