@@ -59,18 +59,27 @@ app.use(errorHandler);
 export { app };
 
 // Start Server Logic
-// If process.env.PORT is present, we are likely in a hosting environment (Railway/Heroku/Render) that expects us to listen.
-// We also check for direct execution.
+console.log('--- STARTUP DEBUG ---');
+console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('PORT:', process.env.PORT);
+console.log('npm_lifecycle_event:', process.env.npm_lifecycle_event);
+console.log('argv[1]:', process.argv[1]);
+console.log('meta.url:', import.meta.url);
+
 const shouldStartServer =
   process.env.NODE_ENV !== 'test' &&
   (process.argv[1] === fileURLToPath(import.meta.url) ||
     process.env.npm_lifecycle_event === 'start' ||
     process.env.npm_lifecycle_event === 'dev' ||
-    process.env.PORT // If PORT is set, assume we need to listen (common in PaaS)
+    !!process.env.PORT // If PORT is set, assume we need to listen
   );
 
+console.log('shouldStartServer:', shouldStartServer);
+
 if (shouldStartServer) {
-  app.listen(PORT, () => {
+  app.listen(PORT, '0.0.0.0', () => { // Explicitly bind to 0.0.0.0
     console.log(`Server running on port ${PORT}`);
   });
+} else {
+  console.log('Server not starting. shouldStartServer is false.');
 }
