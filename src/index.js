@@ -72,8 +72,12 @@ console.log('shouldStartServer:', shouldStartServer);
 
 if (shouldStartServer) {
   // Bind to 0.0.0.0 to ensure Docker accessibility
-  app.listen(PORT, '0.0.0.0', () => {
+  const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on port ${PORT}`);
+  });
+
+  server.on('error', (err) => {
+    console.error('SERVER STARTUP ERROR:', err);
   });
 } else {
   console.log('Server not started (Serverless mode or missing PORT).');
