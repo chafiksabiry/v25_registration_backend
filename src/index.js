@@ -19,30 +19,23 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/filemanag
   .then(() => console.log('Connected to MongoDB'))
   .catch(err => console.error('MongoDB connection error:', err));
 const corsOptions = {
-  origin: [
-    'http://localhost:5157',
-    'http://38.242.208.242:5175',
-    'http://38.242.208.242:5157',
-    'https://registration.harx.ai:5157',
-    'https://registration.harx.ai',
-    'https://v25.harx.ai',
-    'https://api-registration.harx.ai',
-    'http://localhost:3000',
-    'https://harx25register.netlify.app'
-  ],
+  origin: true, // Allow any origin dynamically (for debugging CORS issues)
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
   optionsSuccessStatus: 200
 };
+
 app.use(cors(corsOptions));
-// Middleware
-/* app.use(cors({
-  origin: process.env.CORS_ORIGIN,
-  credentials: true
-})); */
+app.options('*', cors(corsOptions)); // Enable pre-flight across-the-board
+
 app.use(helmet());
 app.use(express.json());
+
+// Health Check
+app.get('/', (req, res) => {
+  res.status(200).json({ status: 'OK', message: 'Server is running' });
+});
 
 // Configure rate limiting
 const limiter = rateLimit({
@@ -65,8 +58,18 @@ app.use(errorHandler);
 // Export app for serverless use
 export { app };
 
-// Only listen if run directly (not as a module) or if forced (e.g. Railway)
-if (process.env.NODE_ENV !== 'test' && (process.argv[1] === fileURLToPath(import.meta.url) || process.env.npm_lifecycle_event === 'start' || process.env.npm_lifecycle_event === 'dev')) {
+// Start Server Logic
+// If process.env.PORT is present, we are likely in a hosting environment (Railway/Heroku/Render) that expects us to listen.
+// We also check for direct execution.
+const shouldStartServer =
+  process.env.NODE_ENV !== 'test' &&
+  (process.argv[1] === fileURLToPath(import.meta.url) ||
+    process.env.npm_lifecycle_event === 'start' ||
+    process.env.npm_lifecycle_event === 'dev' ||
+    process.env.PORT // If PORT is set, assume we need to listen (common in PaaS)
+  );
+
+if (shouldStartServer) {
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
   });

@@ -6,7 +6,6 @@ import helmet from 'helmet';
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
 import rateLimit from 'express-rate-limit';
-import { container } from './config/di';
 import { errorHandler } from './interfaces/http/middleware/errorHandler';
 import authRoutes from './interfaces/http/routes/auth';
 import fileRoutes from './interfaces/http/routes/files';
