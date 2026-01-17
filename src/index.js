@@ -1,3 +1,4 @@
+// FORCE UPDATE: Debug logs added
 import { fileURLToPath } from 'url';
 import express from 'express';
 import cors from 'cors';
