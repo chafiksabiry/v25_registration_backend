@@ -12,7 +12,7 @@ import { errorHandler } from './middleware/errorHandler.js';
 dotenv.config();
 
 const app = express();
-app.set('trust proxy', true); // <-- ajoute ceci
+app.set('trust proxy', 1); // Use '1' to trust the first proxy (Netlify/Railway)
 const PORT = process.env.PORT || 5000;
 // Connect to MongoDB
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/filemanager')
