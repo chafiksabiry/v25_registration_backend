@@ -72,8 +72,6 @@ console.log('PORT:', process.env.PORT);
 const isMainModule = process.argv[1] === fileURLToPath(import.meta.url);
 const shouldStartServer = !!process.env.PORT || isMainModule;
 
-const shouldStartServer = !!process.env.PORT || isMainModule;
-
 console.log('shouldStartServer:', shouldStartServer);
 
 if (shouldStartServer) {
