@@ -72,12 +72,16 @@ console.log('PORT:', process.env.PORT);
 const isMainModule = process.argv[1] === fileURLToPath(import.meta.url);
 const shouldStartServer = !!process.env.PORT || isMainModule;
 
+const shouldStartServer = !!process.env.PORT || isMainModule;
+
 console.log('shouldStartServer:', shouldStartServer);
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log('--- SERVER STARTED ---');
-  console.log(`Server running on port ${PORT}`);
-  console.log('----------------------');
-});
-
-export { app };
+if (shouldStartServer) {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log('--- SERVER STARTED ---');
+    console.log(`Server running on port ${PORT}`);
+    console.log('----------------------');
+  });
+} else {
+  console.log('Server not started (Serverless mode or missing PORT).');
+}
