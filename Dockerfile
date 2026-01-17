@@ -24,17 +24,12 @@ ENV VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 ENV VITE_SUPABASE_URL=https://ubmusernkksbnxhvsgox.supabase.co
 ENV TWILIO_PHONE_NUMBER=+16185185941
 ENV MONGODB_URI=mongodb://harx:gcZ62rl8hoME@38.242.208.242:27018/V25_CompanySearchWizard
-ENV PORT=5000
 ENV FRONTEND_URL=https://registration.harx.ai/auth
 ENV CORS_ORIGIN=https://registration.harx.ai
-#ENV FRONTEND_URL=http:localhost:5157/auth
-#ENV CORS_ORIGIN=http:localhost:5157
 ENV BREVO_API_KEY=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
 ENV BREVO_FROM_EMAIL=chafik.sabiry@harx.ai
 ENV SMTP_SENDER_NAME=harx
 ENV IP_INFO_TOKEN=9150a0245fbc83
-# Exposer le port utilisé par votre backend
-EXPOSE 5000
 
 # Démarrer l'application
 CMD ["npm", "start"]

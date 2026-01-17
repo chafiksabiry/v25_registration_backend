@@ -14,7 +14,7 @@ dotenv.config();
 
 const app = express();
 app.set('trust proxy', 1); // Use '1' to trust the first proxy (Netlify/Railway)
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT;
 // Connect to MongoDB
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/filemanager')
   .then(() => console.log('Connected to MongoDB'))
@@ -74,15 +74,10 @@ const shouldStartServer = !!process.env.PORT || isMainModule;
 
 console.log('shouldStartServer:', shouldStartServer);
 
-if (shouldStartServer) {
-  // Bind to 0.0.0.0 to ensure Docker accessibility
-  const server = app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on port ${PORT}`);
-  });
+app.listen(PORT, '0.0.0.0', () => {
+  console.log('--- SERVER STARTED ---');
+  console.log(`Server running on port ${PORT}`);
+  console.log('----------------------');
+});
 
-  server.on('error', (err) => {
-    console.error('SERVER STARTUP ERROR:', err);
-  });
-} else {
-  console.log('Server not started (Serverless mode or missing PORT).');
-}
+export { app };
