@@ -17,23 +17,24 @@ const PORT = process.env.PORT || 5000;
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log('Connected to MongoDB'))
   .catch(err => console.error('MongoDB connection error:', err));
-  const corsOptions = {
-    origin: [
-      'http://localhost:5157',
-      'http://38.242.208.242:5175',
-      'http://38.242.208.242:5157',
-      'https://registration.harx.ai:5157',
-      'https://registration.harx.ai',
-      'https://v25.harx.ai',
-      'https://api-registration.harx.ai',
-      'http://localhost:3000'
-    ],
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'], 
-    credentials: true,
-    optionsSuccessStatus: 200
-  };
-  app.use(cors(corsOptions));
+const corsOptions = {
+  origin: [
+    'http://localhost:5157',
+    'http://38.242.208.242:5175',
+    'http://38.242.208.242:5157',
+    'https://registration.harx.ai:5157',
+    'https://registration.harx.ai',
+    'https://v25.harx.ai',
+    'https://api-registration.harx.ai',
+    'http://localhost:3000',
+    'https://harx25register.netlify.app'
+  ],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+  optionsSuccessStatus: 200
+};
+app.use(cors(corsOptions));
 // Middleware
 /* app.use(cors({
   origin: process.env.CORS_ORIGIN,
