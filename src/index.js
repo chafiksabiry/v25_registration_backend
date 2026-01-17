@@ -65,8 +65,8 @@ app.use(errorHandler);
 // Export app for serverless use
 export { app };
 
-// Only listen if run directly (not as a module)
-if (process.env.NODE_ENV !== 'test' && process.argv[1] === fileURLToPath(import.meta.url)) {
+// Only listen if run directly (not as a module) or if forced (e.g. Railway)
+if (process.env.NODE_ENV !== 'test' && (process.argv[1] === fileURLToPath(import.meta.url) || process.env.npm_lifecycle_event === 'start' || process.env.npm_lifecycle_event === 'dev')) {
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
   });
