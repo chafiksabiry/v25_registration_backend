@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'url';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -14,7 +15,7 @@ const app = express();
 app.set('trust proxy', true); // <-- ajoute ceci
 const PORT = process.env.PORT || 5000;
 // Connect to MongoDB
-mongoose.connect(process.env.MONGODB_URI)
+mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/filemanager')
   .then(() => console.log('Connected to MongoDB'))
   .catch(err => console.error('MongoDB connection error:', err));
 const corsOptions = {
@@ -61,6 +62,12 @@ app.use('/api/users', userRoutes);
 // Error handling
 app.use(errorHandler);
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+// Export app for serverless use
+export { app };
+
+// Only listen if run directly (not as a module)
+if (process.env.NODE_ENV !== 'test' && process.argv[1] === fileURLToPath(import.meta.url)) {
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
