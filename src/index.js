@@ -64,9 +64,13 @@ console.log('--- STARTUP DEBUG ---');
 console.log('PORT:', process.env.PORT);
 
 // Simplified startup logic:
-// If PORT is defined (as in Docker/Railway), start the server.
-// Netlify Functions don't set PORT by default in production.
-const shouldStartServer = !!process.env.PORT || process.argv[1] === fileURLToPath(import.meta.url);
+// 1. If PORT is defined (Railway/Heroku/Docker), we MUST listen on it.
+// 2. If running directly (node src/index.js), we should listen (defaulting to 5000).
+// 3. If Netlify Functions, PORT is usually undefined, and we export 'app' instead.
+
+// Detect if running as main module
+const isMainModule = process.argv[1] === fileURLToPath(import.meta.url);
+const shouldStartServer = !!process.env.PORT || isMainModule;
 
 console.log('shouldStartServer:', shouldStartServer);
 
