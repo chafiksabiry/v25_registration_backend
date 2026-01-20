@@ -8,7 +8,8 @@ import nodemailer from 'nodemailer';
 import { getClientIp } from '../utils/ipHelper.js';
 import ipInfoService from './ipInfoService.js';
 
-const client = twilio('AC8a453959a6cb01cbbd1c819b00c5782f', '7ade91a170bff98bc625543287ee62c8');
+
+const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 class AuthService {
   generateVerificationCode() {
     return Math.floor(100000 + Math.random() * 900000).toString();
@@ -288,6 +289,11 @@ class AuthService {
   // Service pour envoyer un OTP
   async sendOTPWithTwilio(userId, phoneNumber) {
     try {
+      if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN || !process.env.TWILIO_PHONE_NUMBER) {
+        console.error("🚨 Missing Twilio Configuration! Check TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER.");
+        throw new Error('Server misconfiguration: Missing SMS credentials.');
+      }
+
       const otp = Math.floor(100000 + Math.random() * 900000);
       const expiresAt = new Date(Date.now() + 300000);
       console.log("userIdInSendOTPWithTwilio", userId);
