@@ -130,12 +130,14 @@ export async function generateVerificationCode(req, res) {
 //controlleur pour changement de mot de passe
 export async function changePassword(req, res) {
   try {
-    const { email, newPassword } = req.body;
-    console.log("email", email);
+    const { newPassword } = req.body;
+    const email = req.user.email;
+    console.log("email from token", email);
     console.log("password", newPassword);
+
     // Validation des champs
-    if (!email || !newPassword) {
-      return res.status(400).json({ message: 'Email et nouveau mot de passe requis.' });
+    if (!newPassword) {
+      return res.status(400).json({ message: 'Nouveau mot de passe requis.' });
     }
 
     // Appel du service pour changer le mot de passe
