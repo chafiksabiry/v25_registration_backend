@@ -1,3 +1,5 @@
+import express from 'express';
+import { register, login, verifyEmail, linkedInAuth, sendOTP, sendVerificationEmail, checkUserType, verifyOTP, verifyAccount, generateVerificationCode, changePassword, linkedinSignIn, checkFirstLogin, changeUserType } from '../controllers/authController.js';
 import { authenticate } from '../middleware/auth.js';
 
 const router = express.Router();
