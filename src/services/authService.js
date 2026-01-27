@@ -506,7 +506,8 @@ class AuthService {
 
       // Define email options
       const mailOptions = {
-        from: `"${process.env.SMTP_FROM_NAME || 'Support'}" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER}>`,
+        from: `"${process.env.SMTP_FROM_NAME || 'Support'}" <${process.env.SMTP_USER}>`, // Force sender to match auth user to prevent spam blocking
+        replyTo: process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER, // Allow replies to go to the desired address
         to: email,
         subject: 'Email Verification',
         html: `
