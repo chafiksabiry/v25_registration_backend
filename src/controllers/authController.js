@@ -219,12 +219,16 @@ export const checkUserType = async (req, res) => {
 };
 
 
+
 export const resendVerification = async (req, res) => {
   const { email } = req.body;
   try {
     const { verificationCode } = await authService.generateVerificationCodeForRecovery(email);
     await authService.sendVerificationEmail(email, verificationCode);
-    res.status(200).json({ message: 'Verification code resent successfully' });
+    res.status(200).json({
+      message: 'Verification code resent successfully',
+      data: { code: verificationCode }
+    });
   } catch (error) {
     console.error("Error in resendVerification:", error.message);
     res.status(500).json({ message: error.message || 'Failed to resend verification code' });
