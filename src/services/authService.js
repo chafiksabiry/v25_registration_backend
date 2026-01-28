@@ -307,6 +307,13 @@ class AuthService {
         },
         { upsert: true, new: true }
       );
+      console.log('--- Twilio Config Check ---');
+      console.log('Full TWILIO_ACCOUNT_SID:', process.env.TWILIO_ACCOUNT_SID ? `'${process.env.TWILIO_ACCOUNT_SID}'` : 'UNDEFINED');
+      console.log('TWILIO_AUTH_TOKEN defined:', !!process.env.TWILIO_AUTH_TOKEN);
+      console.log('TWILIO_AUTH_TOKEN length:', process.env.TWILIO_AUTH_TOKEN ? process.env.TWILIO_AUTH_TOKEN.length : 0);
+      console.log('Twilio Phone Number:', process.env.TWILIO_PHONE_NUMBER);
+      console.log('---------------------------');
+
       console.log("OTP updated in DB for user:", result._id);
 
       console.log(`Attempting to send SMS to ${phoneNumber} from ${process.env.TWILIO_PHONE_NUMBER}...`);
