@@ -37,7 +37,7 @@ export const login = async (req, res) => {
 
     res.status(201).json({
       message: 'Verification code sent',
-      data: { code: result.verificationCode }
+      data: { code: result.verificationCode, userId: result.userId, phone: result.phone }
     });
   } catch (error) {
     console.error("Login error:", error.message);

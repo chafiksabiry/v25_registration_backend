@@ -187,7 +187,7 @@ class AuthService {
       }
     });
 
-    return { verificationCode };
+    return { verificationCode, userId: user._id, phone: user.phone };
   }
 
 
@@ -349,7 +349,16 @@ class AuthService {
           },
           { upsert: true, new: true }
         );
-        return { success: true, message: 'OTP verified successfully' };
+        return {
+          token: this.generateToken(user._id, {
+            email: user.email,
+            fullName: user.fullName,
+            typeUser: user.typeUser,
+            isVerified: user.isVerified
+          }),
+          success: true,
+          message: 'OTP verified successfully'
+        };
       } else {
         return { error: true, message: 'Invalid OTP. Please try again.' }
         // throw new Error('Invalid OTP. Please try again.');
