@@ -307,13 +307,15 @@ class AuthService {
         },
         { upsert: true, new: true }
       );
-      console.log("result", result);
+      console.log("OTP updated in DB for user:", result._id);
 
-      await client.messages.create({
+      console.log(`Attempting to send SMS to ${phoneNumber} from ${process.env.TWILIO_PHONE_NUMBER}...`);
+      const twilioResponse = await client.messages.create({
         body: `Your OTP code is: ${otp}`,
         to: phoneNumber,
         from: process.env.TWILIO_PHONE_NUMBER,
       });
+      console.log('Twilio response SID:', twilioResponse.sid);
       console.log('done');
       return { success: true, message: 'OTP sent successfully' };
 
