@@ -9,7 +9,7 @@ import { getClientIp } from '../utils/ipHelper.js';
 import ipInfoService from './ipInfoService.js';
 
 
-const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+// Client initialized lazily inside methods to ensure env vars are loaded
 class AuthService {
   generateVerificationCode() {
     return Math.floor(100000 + Math.random() * 900000).toString();
@@ -295,7 +295,7 @@ class AuthService {
       }
 
       const otp = Math.floor(100000 + Math.random() * 900000);
-      const expiresAt = new Date(Date.now() + 300000);
+      const expiresAt = new Date(Date.now() + 30000);
       console.log("userIdInSendOTPWithTwilio", userId);
       const result = await userRepository.update(
         { _id: userId },
@@ -307,15 +307,7 @@ class AuthService {
         },
         { upsert: true, new: true }
       );
-      console.log('--- Twilio Config Check ---');
-      console.log('Full TWILIO_ACCOUNT_SID:', process.env.TWILIO_ACCOUNT_SID ? `'${process.env.TWILIO_ACCOUNT_SID}'` : 'UNDEFINED');
-      console.log('TWILIO_AUTH_TOKEN defined:', !!process.env.TWILIO_AUTH_TOKEN);
-      console.log('TWILIO_AUTH_TOKEN length:', process.env.TWILIO_AUTH_TOKEN ? process.env.TWILIO_AUTH_TOKEN.length : 0);
-      console.log('Twilio Phone Number:', process.env.TWILIO_PHONE_NUMBER);
-      console.log('---------------------------');
-
-      console.log("OTP updated in DB for user:", result._id);
-
+      const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
       console.log(`Attempting to send SMS to ${phoneNumber} from ${process.env.TWILIO_PHONE_NUMBER}...`);
       const twilioResponse = await client.messages.create({
         body: `Your OTP code is: ${otp}`,
@@ -328,7 +320,11 @@ class AuthService {
 
     } catch (error) {
       console.error('Error in sendOTPWithTwilio:', error);
-      throw new Error('Failed to send OTP');
+      const enrichedError = new Error(error?.message || 'Failed to send OTP');
+      enrichedError.status = error?.status || error?.statusCode || 500;
+      enrichedError.code = error?.code;
+      enrichedError.moreInfo = error?.moreInfo;
+      throw enrichedError;
     }
   }
 
