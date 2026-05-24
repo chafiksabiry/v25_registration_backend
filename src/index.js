@@ -21,7 +21,7 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/filemanag
   .catch(err => console.error('MongoDB connection error:', err));
 const corsOptions = {
   origin: true, // Allow any origin dynamically (for debugging CORS issues)
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
   optionsSuccessStatus: 200
