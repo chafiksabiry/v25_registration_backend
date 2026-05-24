@@ -64,6 +64,24 @@ const userSchema = new mongoose.Schema({
       coordinates: String // format: "lat,lng"
     }
   }],
+  // Pending account changes — held until the user proves possession of
+  // the new email / phone (or current email for password) via Brevo / OTP.
+  pendingChanges: {
+    emailChange: {
+      newEmail: String,
+      code: String,
+      expiresAt: Date
+    },
+    passwordChange: {
+      code: String,
+      expiresAt: Date
+    },
+    phoneChange: {
+      newPhone: String,
+      otp: String,
+      otpExpiresAt: Date
+    }
+  },
   createdAt: {
     type: Date,
     default: Date.now
