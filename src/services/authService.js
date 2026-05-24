@@ -295,7 +295,7 @@ class AuthService {
       }
 
       const otp = Math.floor(100000 + Math.random() * 900000);
-      const expiresAt = new Date(Date.now() + 30000);
+      const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 min — 30s was too short for SMS delivery + user input
       console.log("userIdInSendOTPWithTwilio", userId);
       const result = await userRepository.update(
         { _id: userId },
