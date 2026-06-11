@@ -310,7 +310,10 @@ class AuthService {
       const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
       console.log(`Attempting to send SMS to ${phoneNumber} from ${process.env.TWILIO_PHONE_NUMBER}...`);
       const twilioResponse = await client.messages.create({
-        body: `Your OTP code is: ${otp}`,
+        body:
+          `HARX TECHNOLOGIES Inc.\n` +
+          `Votre code de verification est : ${otp}\n` +
+          `Ce code expire dans 5 minutes. Ne le partagez avec personne.`,
         to: phoneNumber,
         from: process.env.TWILIO_PHONE_NUMBER,
       });
