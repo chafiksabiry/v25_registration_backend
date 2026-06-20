@@ -28,7 +28,7 @@ app.use(cors({
     'http://38.242.208.242:5157',
     'https://harx25register.netlify.app:5157',
     'https://harx25register.netlify.app',
-    'https://harx25pageslinks.netlify.app',
+    'https://harx.ai',
     'https://v25registrationbackend-production.up.railway.app',
     'http://localhost:3000',
     'https://harx25register.netlify.app',
