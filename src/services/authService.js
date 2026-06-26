@@ -555,7 +555,10 @@ class AuthService {
   }
   async changeUserType(userId, newType) {
     try {
-      // Find the user by their ID
+      if (newType === 'admin') {
+        throw new Error('Admin role cannot be assigned through this endpoint');
+      }
+
       const user = await userRepository.findById({ _id: userId });
 
       if (!user) {
@@ -579,6 +582,49 @@ class AuthService {
       throw new Error('User not found');
     }
     return user.typeUser;
+  }
+
+  async adminLogin(email, password, req) {
+    const user = await userRepository.findByEmail(email);
+    if (!user || user.typeUser !== 'admin') {
+      throw new Error('Invalid admin credentials');
+    }
+
+    const isMatch = await user.comparePassword(password);
+    if (!isMatch) {
+      throw new Error('Invalid admin credentials');
+    }
+
+    const clientIp = getClientIp(req);
+    const locationInfo = await this.enrichIPInfo(clientIp);
+
+    await userRepository.update(user._id, {
+      firstTime: false,
+      isVerified: true,
+      verificationCode: undefined,
+      $push: {
+        ipHistory: {
+          ip: clientIp,
+          action: 'login',
+          ...(locationInfo && { locationInfo }),
+        },
+      },
+    });
+
+    return {
+      token: this.generateToken(user._id, {
+        email: user.email,
+        fullName: user.fullName,
+        typeUser: user.typeUser,
+        isVerified: true,
+      }),
+      user: {
+        userId: user._id,
+        email: user.email,
+        fullName: user.fullName,
+        typeUser: user.typeUser,
+      },
+    };
   }
 
 

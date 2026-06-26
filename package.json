@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "nodemon src/index.js",
     "start": "node src/index.js",
+    "seed:admin": "node scripts/seedAdminUser.js",
     "build": "echo 'No build step required for backend'"
   },
   "dependencies": {
