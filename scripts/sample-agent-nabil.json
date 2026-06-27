@@ -1,0 +1,1169 @@
+{
+  "_id": "6a3c08edced08f5ef23a2a71",
+  "userId": "6a3c087a51f15e390804a4ad",
+  "plan": "6a38cf30d99e9535fd867034",
+  "stripeCustomerId": "",
+  "subscriptionStatus": "",
+  "status": "draft",
+  "isBasicProfileCompleted": true,
+  "onboardingProgress": {
+    "phases": {
+      "phase1": {
+        "requiredActions": {
+          "accountCreated": true,
+          "emailVerified": true
+        },
+        "optionalActions": {
+          "locationConfirmed": false,
+          "identityVerified": false,
+          "twoFactorEnabled": false
+        },
+        "status": "completed",
+        "completedAt": "2026-06-24T16:42:21.499Z"
+      },
+      "phase2": {
+        "requiredActions": {
+          "experienceAdded": true,
+          "skillsAdded": true,
+          "industriesAdded": true,
+          "activitiesAdded": true,
+          "availabilitySet": true,
+          "experienceVideosAdded": true
+        },
+        "optionalActions": {
+          "photoUploaded": true,
+          "bioCompleted": true
+        },
+        "status": "completed",
+        "completedAt": "2026-06-24T17:26:58.148Z"
+      },
+      "phase3": {
+        "requiredActions": {
+          "languageAssessmentDone": true,
+          "contactCenterAssessmentDone": true
+        },
+        "optionalActions": {
+          "technicalEvaluationDone": false,
+          "bestPracticesReviewed": false
+        },
+        "status": "completed",
+        "completedAt": "2026-06-24T17:26:58.148Z"
+      },
+      "phase4": {
+        "requiredActions": {
+          "subscriptionActivated": true
+        },
+        "status": "completed",
+        "completedAt": "2026-06-25T00:06:59.041Z"
+      },
+      "phase5": {
+        "requiredActions": {
+          "gigApplied": false
+        },
+        "status": "in_progress"
+      }
+    },
+    "currentPhase": 5,
+    "lastUpdated": "2026-06-25T00:06:59.045Z"
+  },
+  "availability": {
+    "schedule": [
+      {
+        "day": "Monday",
+        "hours": {
+          "start": "12:00",
+          "end": "18:00"
+        },
+        "_id": "6a3c1338ced08f5ef23a2b53"
+      },
+      {
+        "day": "Tuesday",
+        "hours": {
+          "start": "12:00",
+          "end": "18:00"
+        },
+        "_id": "6a3c1338ced08f5ef23a2b54"
+      },
+      {
+        "day": "Wednesday",
+        "hours": {
+          "start": "12:00",
+          "end": "18:00"
+        },
+        "_id": "6a3c1338ced08f5ef23a2b55"
+      },
+      {
+        "day": "Thursday",
+        "hours": {
+          "start": "12:00",
+          "end": "18:00"
+        },
+        "_id": "6a3c1338ced08f5ef23a2b56"
+      },
+      {
+        "day": "Friday",
+        "hours": {
+          "start": "12:00",
+          "end": "18:00"
+        },
+        "_id": "6a3c1338ced08f5ef23a2b57"
+      },
+      {
+        "day": "Saturday",
+        "hours": {
+          "start": "12:00",
+          "end": "18:00"
+        },
+        "_id": "6a3c1338ced08f5ef23a2b58"
+      },
+      {
+        "day": "Sunday",
+        "hours": {
+          "start": "12:00",
+          "end": "18:00"
+        },
+        "_id": "6a3c1338ced08f5ef23a2b59"
+      }
+    ],
+    "timeZone": "6989ccbda30fa8d236791f9a",
+    "flexibility": [
+      "Remote Work Available",
+      "Flexible Hours",
+      "Weekend Rotation",
+      "Shift Swapping Allowed",
+      "Part-Time Options"
+    ]
+  },
+  "personalInfo": {
+    "name": "Nabil Nakbi",
+    "country": "6989ccbda30fa8d236791f9a",
+    "email": "nakbinakbi@gmail.com",
+    "phone": "+212626966304",
+    "languages": [
+      {
+        "language": "698b1e94a30fa8d2367922ad",
+        "proficiency": "C1",
+        "assessmentResults": {
+          "completeness": {
+            "score": 85,
+            "feedback": "The transcript is in French."
+          },
+          "fluency": {
+            "score": 85,
+            "feedback": "The transcript is in French."
+          },
+          "proficiency": {
+            "score": 85,
+            "feedback": "The transcript is in French."
+          },
+          "overall": {
+            "score": 85,
+            "strengths": "CEFR C1 demonstrated",
+            "areasForImprovement": ""
+          },
+          "source": "experience",
+          "completedAt": "2026-06-24T17:22:00.743Z"
+        },
+        "_id": "6a3c08edced08f5ef23a2a72"
+      },
+      {
+        "language": "698b1e92a30fa8d2367922a6",
+        "proficiency": "B1",
+        "assessmentResults": {
+          "completeness": {
+            "score": 60,
+            "feedback": ""
+          },
+          "fluency": {
+            "score": 60,
+            "feedback": ""
+          },
+          "proficiency": {
+            "score": 60,
+            "feedback": ""
+          },
+          "overall": {
+            "score": 60,
+            "strengths": "",
+            "areasForImprovement": ""
+          },
+          "source": "cv",
+          "completedAt": "2026-06-24T16:42:21.495Z"
+        },
+        "_id": "6a3c08edced08f5ef23a2a73"
+      },
+      {
+        "language": "698b1e86a30fa8d236792285",
+        "proficiency": "B2",
+        "assessmentResults": {
+          "completeness": {
+            "score": 75,
+            "feedback": ""
+          },
+          "fluency": {
+            "score": 75,
+            "feedback": ""
+          },
+          "proficiency": {
+            "score": 75,
+            "feedback": ""
+          },
+          "overall": {
+            "score": 75,
+            "strengths": "",
+            "areasForImprovement": ""
+          },
+          "source": "cv",
+          "completedAt": "2026-06-24T16:42:21.496Z"
+        },
+        "_id": "6a3c08edced08f5ef23a2a74"
+      }
+    ],
+    "presentationVideo": {
+      "recordedAt": "2026-06-24T16:42:21.496Z"
+    },
+    "photo": {
+      "url": "https://res.cloudinary.com/dyqg8x26j/image/upload/v1782322017/rep-profile-photos/hdt3raou623omo7yjxlf.jpg",
+      "publicId": "rep-profile-photos/hdt3raou623omo7yjxlf"
+    }
+  },
+  "professionalSummary": {
+    "yearsOfExperience": 5,
+    "currentRole": "Chargé de back office à Freelance et conseil",
+    "industries": [
+      "698ad08d668f5c4f2d46a91d",
+      "698ad08d668f5c4f2d46a927",
+      "698ad08d668f5c4f2d46a91f",
+      "698ad08d668f5c4f2d46a929"
+    ],
+    "activities": [
+      "698ad0869c56276cf340dcb5",
+      "698ad0869c56276cf340dcb6",
+      "698ad0869c56276cf340dcb4",
+      "698ad0869c56276cf340dcb7",
+      "698ad0869c56276cf340dcb3"
+    ],
+    "keyExpertise": [
+      "Data Processing: Word, Excel",
+      "Data Analysis: Power BI, R, SPSS, Stata, SAS, Eviews",
+      "Enterprise Resource Planning (ERP): Odoo12, JBMANAGER",
+      "Financial Accounting, Economic Analysis",
+      "Business Model and Business Plan"
+    ],
+    "keyExpertise_i18n": {
+      "en": [
+        "Data Processing: Word, Excel",
+        "Data Analysis: Power BI, R, SPSS, Stata, SAS, Eviews",
+        "Enterprise Resource Planning (ERP): Odoo12, JBMANAGER",
+        "Financial Accounting, Economic Analysis",
+        "Business Model and Business Plan"
+      ],
+      "fr": [
+        "Traitement des données : Word, Excel",
+        "Analyse des données : Power BI, R, SPSS, Stata, voyant tools, SAS, eviews",
+        "Gestion intégré d’entreprise (ERP) : Odoo12, JBMANAGER",
+        "Comptabilité financière, analyse économique",
+        "Business model et Business plan"
+      ]
+    },
+    "notableCompanies": [],
+    "profileDescription": "Nabil Nakbi currently excels as a Freelance Back Office Manager, focusing on delivering insightful analyses and recommendations. With five years of experience across various roles, he has developed expertise in data processing and econometric analysis within the financial sector. His significant projects include assessing water quality impacts in line with sustainable development goals and exploring the relationship between mental imagery and emotional well-being. Proficient in tools like Power BI, SPSS, and Python, Nabil possesses strong analytical skills alongside his capabilities in ERP systems and financial modeling.",
+    "profileDescription_i18n": {
+      "en": "Nabil Nakbi currently excels as a Freelance Back Office Manager, focusing on delivering insightful analyses and recommendations. With five years of experience across various roles, he has developed expertise in data processing and econometric analysis within the financial sector. His significant projects include assessing water quality impacts in line with sustainable development goals and exploring the relationship between mental imagery and emotional well-being. Proficient in tools like Power BI, SPSS, and Python, Nabil possesses strong analytical skills alongside his capabilities in ERP systems and financial modeling.",
+      "fr": "Nabil Nakbi excelle actuellement en tant que Freelance Back Office Manager, se concentrant sur la fourniture d'analyses et de recommandations éclairantes. Avec cinq ans d'expérience dans divers rôles, il a développé une expertise en traitement de données et en analyse économétrique dans le secteur financier. Ses projets significatifs incluent l'évaluation des impacts de la qualité de l'eau en lien avec les objectifs de développement durable et l'exploration de la relation entre l'imagerie mentale et le bien-être émotionnel. Maîtrisant des outils tels que Power BI, SPSS et Python, Nabil possède de solides compétences analytiques ainsi que des capacités dans les systèmes ERP et la modélisation financière."
+    }
+  },
+  "skills": {
+    "technical": [
+      {
+        "skill": "69a5e085defc6af37053e57a",
+        "level": 5,
+        "details": "Detected from experience video"
+      },
+      {
+        "skill": "69a5e085defc6af37053e57d",
+        "level": 4,
+        "details": "Detected from experience video"
+      },
+      {
+        "skill": "69a5e085defc6af37053e57f",
+        "level": 3,
+        "details": "Detected from experience video"
+      },
+      {
+        "skill": "69a5e085defc6af37053e581",
+        "level": 4,
+        "details": "Detected from experience video"
+      }
+    ],
+    "professional": [
+      {
+        "skill": "69a5e2b8eb71647fdaa7a0be",
+        "level": 4,
+        "details": "Detected from experience video"
+      },
+      {
+        "skill": "69a5e2b8eb71647fdaa7a0ba",
+        "level": 4,
+        "details": "Detected from experience video"
+      },
+      {
+        "skill": "69a5e2b8eb71647fdaa7a0bf",
+        "level": 3,
+        "details": "Detected from experience video"
+      }
+    ],
+    "soft": [
+      {
+        "skill": "69a5e2c0ab6db8210c67c0c4",
+        "level": 4,
+        "details": "Detected from experience video"
+      },
+      {
+        "skill": "69a5e2c0ab6db8210c67c0ba",
+        "level": 4,
+        "details": "Detected from experience video"
+      },
+      {
+        "skill": "69a5e2c0ab6db8210c67c0c5",
+        "level": 4,
+        "details": "Detected from experience video"
+      }
+    ],
+    "contactCenter": []
+  },
+  "experience": [
+    {
+      "title": "Back Office Manager",
+      "title_i18n": {
+        "en": "Back Office Manager",
+        "fr": "Chargé de back office"
+      },
+      "responsibilities_i18n": {
+        "en": [
+          "Analyzed extramarital relationships explained by individual and relational characteristics using SPSS: An empirical study using a logit model.",
+          "Analyzed water quality and pollution levels in major global cities using R, in relation to SDG 6 – Ensure availability and sustainable management of water and sanitation for all.",
+          "Analyzed the influence of mental imagery capacity on negative affect levels and characteristics of intrusive post-traumatic memories using SPSS.",
+          "Conducted econometric analysis of financial performance and governance of European companies using Python.",
+          "Performed econometric analysis of the impact of venture capital on startup performance using Python.",
+          "Conducted econometric study: logistic and probit regression for Willingness to Pay (WTP) using Stata 13.",
+          "Conducted statistical study on the link between TikTok usage, self-esteem, loneliness, and gender among pre-adolescents using jamovi.",
+          "Analyzed local or foreign market using econometric tools."
+        ],
+        "fr": [
+          "Analyse des relations extraconjugales expliquées par les caractéristiques individuelles et relationnelles à l’aide de SPSS : Une étude empirique à l’aide d’un modèle logit.",
+          "Analyser la qualité de l'eau et les niveaux de pollution dans les grandes villes mondiales à l'aide de R, en lien avec l'ODD 6 – Garantir l'accès à une eau propre et durable.",
+          "Analyse de l’influence de la capacité d’imagerie mentale sur le niveau d’affect négatif et les caractéristiques des souvenirs intrusifs post-traumatiques à l’aide de SPSS.",
+          "Analyse Économétrique des Performances Financières et de la Gouvernance des Entreprises Européennes à l’aide de python.",
+          "Analyse économétrique de l’impact du capital risque sur la performance des startups à l’aide de Python.",
+          "étude économétrique : régression logistique et probit pour le Consentement à Payer (CAP) à l’aide de Stata 13.",
+          "Etude statistique sur le lien entre l'usage de TikTok, l'estime de soi, le sentiment de solitude et le genre chez des pré-adolescents à l’aide de jamovi.",
+          "l'analyse du marché local ou étranger à l'aide de l'outil économétrique."
+        ]
+      },
+      "achievements_i18n": {
+        "en": [],
+        "fr": []
+      },
+      "company": "Freelance et conseil",
+      "startDate": "2020-07-01T00:00:00.000Z",
+      "endDate": "2025-02-28T00:00:00.000Z",
+      "responsibilities": [
+        "Analyzed extramarital relationships explained by individual and relational characteristics using SPSS: An empirical study using a logit model.",
+        "Analyzed water quality and pollution levels in major global cities using R, in relation to SDG 6 – Ensure availability and sustainable management of water and sanitation for all.",
+        "Analyzed the influence of mental imagery capacity on negative affect levels and characteristics of intrusive post-traumatic memories using SPSS.",
+        "Conducted econometric analysis of financial performance and governance of European companies using Python.",
+        "Performed econometric analysis of the impact of venture capital on startup performance using Python.",
+        "Conducted econometric study: logistic and probit regression for Willingness to Pay (WTP) using Stata 13.",
+        "Conducted statistical study on the link between TikTok usage, self-esteem, loneliness, and gender among pre-adolescents using jamovi.",
+        "Analyzed local or foreign market using econometric tools."
+      ],
+      "achievements": [],
+      "_id": "6a3c08edced08f5ef23a2a75",
+      "videoAnalysis": {
+        "technicalSkills": [
+          {
+            "skill": "69a5e085defc6af37053e57a",
+            "score": 90,
+            "evidence": {
+              "en": "You transformed complex data into actionable results for decision-making.",
+              "fr": "Vous avez transformé des données complexes en résultats exploitables pour la prise de décisions."
+            }
+          }
+        ],
+        "professionalSkills": [
+          {
+            "skill": "69a5e2b8eb71647fdaa7a0ba",
+            "score": 80,
+            "evidence": {
+              "en": "You managed various studies in different domains, indicating strong time management.",
+              "fr": "Vous avez géré diverses études dans différents domaines, ce qui indique une bonne gestion du temps."
+            }
+          },
+          {
+            "skill": "69a5e2b8eb71647fdaa7a0be",
+            "score": 85,
+            "evidence": {
+              "en": "You conducted numerous studies independently, showing autonomy.",
+              "fr": "Vous avez réalisé de nombreuses études de manière autonome, montrant votre autonomie."
+            }
+          }
+        ],
+        "softSkills": [
+          {
+            "skill": "69a5e2c0ab6db8210c67c0ba",
+            "score": 75,
+            "evidence": {
+              "en": "You communicated complex data results clearly for decision-making.",
+              "fr": "Vous avez communiqué clairement les résultats de données complexes pour la prise de décisions."
+            }
+          }
+        ],
+        "spokenLanguages": [
+          {
+            "language": "698b1e94a30fa8d2367922ad",
+            "level": "C1",
+            "score": 85,
+            "evidence": {
+              "en": "You spoke fluently in French throughout the transcript.",
+              "fr": "Vous avez parlé couramment en français tout au long de la transcription."
+            }
+          }
+        ],
+        "industries": [
+          {
+            "industry": "698ad08d668f5c4f2d46a91d",
+            "score": 80
+          },
+          {
+            "industry": "698ad08d668f5c4f2d46a927",
+            "score": 70
+          },
+          {
+            "industry": "698ad08d668f5c4f2d46a91f",
+            "score": 60
+          }
+        ],
+        "activities": [
+          {
+            "activity": "698ad0869c56276cf340dcb5",
+            "score": 90
+          }
+        ],
+        "contactCenterSkills": {
+          "customerService": {
+            "score": 0,
+            "notes": {
+              "en": "You didn't mention any customer service activities.",
+              "fr": "Vous n'avez pas mentionné d'activités de service client."
+            }
+          },
+          "communication": {
+            "score": 75,
+            "notes": {
+              "en": "You communicated complex data results clearly.",
+              "fr": "Vous avez communiqué clairement les résultats de données complexes."
+            }
+          },
+          "problemSolving": {
+            "score": 85,
+            "notes": {
+              "en": "You solved complex data problems through analysis.",
+              "fr": "Vous avez résolu des problèmes de données complexes grâce à l'analyse."
+            }
+          },
+          "empathy": {
+            "score": 0,
+            "notes": {
+              "en": "You didn't mention empathy-related activities.",
+              "fr": "Vous n'avez pas mentionné d'activités liées à l'empathie."
+            }
+          },
+          "multitasking": {
+            "score": 80,
+            "notes": {
+              "en": "You managed studies in various domains simultaneously.",
+              "fr": "Vous avez géré des études dans divers domaines simultanément."
+            }
+          },
+          "salesOrientation": {
+            "score": 0,
+            "notes": {
+              "en": "You didn't mention any sales-oriented activities.",
+              "fr": "Vous n'avez pas mentionné d'activités orientées vers la vente."
+            }
+          },
+          "conflictResolution": {
+            "score": 0,
+            "notes": {
+              "en": "You didn't mention conflict resolution activities.",
+              "fr": "Vous n'avez pas mentionné d'activités de résolution de conflits."
+            }
+          },
+          "productKnowledge": {
+            "score": 0,
+            "notes": {
+              "en": "You didn't mention specific product knowledge.",
+              "fr": "Vous n'avez pas mentionné de connaissances spécifiques sur les produits."
+            }
+          }
+        },
+        "overallConfidence": 85,
+        "detectedLanguageOfSpeech": "French",
+        "relevance": {
+          "onTopic": true,
+          "score": 90,
+          "reason": {
+            "en": "You spoke about your experience conducting studies in various domains.",
+            "fr": "Vous avez parlé de votre expérience dans la réalisation d'études dans divers domaines."
+          }
+        },
+        "summary": {
+          "en": "You demonstrated strong analytical skills by conducting studies in finance, marketing, and other fields. Your ability to transform complex data into actionable insights is evident. Consider detailing more about your specific role and daily tasks.",
+          "fr": "Vous avez démontré de solides compétences analytiques en réalisant des études dans la finance, le marketing et d'autres domaines. Votre capacité à transformer des données complexes en informations exploitables est évidente. Pensez à détailler davantage votre rôle spécifique et vos tâches quotidiennes."
+        }
+      },
+      "videoAnalyzedAt": "2026-06-24T17:07:30.911Z",
+      "videoDuration": 40.08,
+      "videoFraudCheck": {
+        "faceDetected": true,
+        "faceCount": 1,
+        "samePersonAcrossFrames": true,
+        "looksLive": true,
+        "livenessConfidence": 95,
+        "identityMatch": null,
+        "identityConfidence": 0,
+        "identityChecked": false,
+        "fraudRisk": "low",
+        "reasons": [
+          {
+            "en": "Exactly one face detected across all frames.",
+            "fr": "Exactement un visage détecté sur toutes les images."
+          },
+          {
+            "en": "The person appears to be live and filmed by a webcam.",
+            "fr": "La personne semble être en direct et filmée par une webcam."
+          },
+          {
+            "en": "No signs of manipulation or spoofing detected.",
+            "fr": "Aucun signe de manipulation ou de falsification détecté."
+          }
+        ],
+        "checkedFrames": 3
+      },
+      "videoLanguageAssessment": {
+        "assessable": true,
+        "languages": [
+          {
+            "language": "698b1e94a30fa8d2367922ad",
+            "cefr": "C1",
+            "overallScore": 85,
+            "fluency": {
+              "score": 85,
+              "feedback": {
+                "en": "You demonstrate a high level of fluency with complex sentence structures and a professional tone.",
+                "fr": "Vous démontrez un haut niveau de fluidité avec des structures de phrases complexes et un ton professionnel."
+              }
+            },
+            "grammar": {
+              "score": 85,
+              "feedback": {
+                "en": "Your grammar is strong, with correct use of complex tenses and structures.",
+                "fr": "Votre grammaire est solide, avec une utilisation correcte des temps et structures complexes."
+              }
+            },
+            "vocabulary": {
+              "score": 88,
+              "feedback": {
+                "en": "You use a rich and specialized vocabulary appropriate for professional contexts.",
+                "fr": "Vous utilisez un vocabulaire riche et spécialisé, approprié pour des contextes professionnels."
+              }
+            },
+            "coherence": {
+              "score": 85,
+              "feedback": {
+                "en": "Your ideas are well-organized and logically presented, enhancing overall coherence.",
+                "fr": "Vos idées sont bien organisées et présentées de manière logique, ce qui améliore la cohérence globale."
+              }
+            },
+            "pronunciationEstimate": {
+              "score": 80,
+              "confidence": "medium",
+              "feedback": {
+                "en": "Based on your word choice and coherence, your pronunciation is likely clear and professional.",
+                "fr": "En se basant sur votre choix de mots et votre cohérence, votre prononciation est probablement claire et professionnelle."
+              }
+            },
+            "strengths": {
+              "en": "Your command of specialized vocabulary and complex grammatical structures is impressive.",
+              "fr": "Votre maîtrise du vocabulaire spécialisé et des structures grammaticales complexes est impressionnante."
+            },
+            "areasForImprovement": {
+              "en": "Continue to refine your fluency and pronunciation to achieve even greater clarity.",
+              "fr": "Continuez à affiner votre fluidité et votre prononciation pour atteindre une clarté encore plus grande."
+            },
+            "evidenceWords": 65
+          }
+        ]
+      },
+      "videoRelevance": {
+        "onTopic": true,
+        "score": 90,
+        "reason": {
+          "en": "You spoke about your experience conducting studies in various domains.",
+          "fr": "Vous avez parlé de votre expérience dans la réalisation d'études dans divers domaines."
+        }
+      },
+      "videoTranscription": "Dans cette expérience, j'ai réalisé de nombreuses études statistiques, économétriques et financières dans des domaines variés, finance, marketing, sciences sociales, environnement et entrepreneuriat, en transformant des données complexes en résultats exploitables pour la prise de décisions. J'ai utilisé des outils d'analyse avancée tels que SPS-2S, Stata-R et Excel pour mener des régressions logistiques, modèles économétriques, analyses quantitatives, études de marché et variations de performances financières.",
+      "videoUrl": "https://res.cloudinary.com/dyqg8x26j/video/upload/v1782320817/experience-videos/exp-1782320817676.webm"
+    },
+    {
+      "title": "Debt Recovery Intern",
+      "title_i18n": {
+        "en": "Debt Recovery Intern",
+        "fr": "Stagiaire en Recouvrement forcé des créances publiques"
+      },
+      "responsibilities_i18n": {
+        "en": [
+          "Opposition on bank account.",
+          "Opposition on vehicle.",
+          "Request for the sale of the business assets."
+        ],
+        "fr": [
+          "Opposition sur compte bancaire.",
+          "Opposition sur véhicule.",
+          "Requête visant la vente du fonds de commerce."
+        ]
+      },
+      "achievements_i18n": {
+        "en": [],
+        "fr": []
+      },
+      "company": "Agence-CNSS",
+      "startDate": "2016-04-01T00:00:00.000Z",
+      "endDate": "2016-07-31T00:00:00.000Z",
+      "responsibilities": [
+        "Opposition on bank account.",
+        "Opposition on vehicle.",
+        "Request for the sale of the business assets."
+      ],
+      "achievements": [],
+      "_id": "6a3c08edced08f5ef23a2a76",
+      "videoAnalysis": {
+        "technicalSkills": [
+          {
+            "skill": "69a5e085defc6af37053e57d",
+            "score": 80,
+            "evidence": {
+              "en": "You contributed to the procedures of opposition on bank accounts and vehicles, which shows your understanding of compliance.",
+              "fr": "Vous avez contribué aux procédures d'opposition sur comptes bancaires et véhicules, ce qui montre votre compréhension de la conformité."
+            }
+          },
+          {
+            "skill": "69a5e085defc6af37053e581",
+            "score": 75,
+            "evidence": {
+              "en": "You participated in following legal procedures related to asset seizure and sale, indicating your process compliance skills.",
+              "fr": "Vous avez participé au suivi des démarches juridiques liées à la saisie et à la vente des actifs, indiquant vos compétences en conformité des processus."
+            }
+          }
+        ],
+        "professionalSkills": [
+          {
+            "skill": "69a5e2b8eb71647fdaa7a0bf",
+            "score": 70,
+            "evidence": {
+              "en": "You were involved in debt recovery activities, which require operational discipline.",
+              "fr": "Vous avez participé aux activités de recouvrement, qui nécessitent une discipline opérationnelle."
+            }
+          }
+        ],
+        "softSkills": [
+          {
+            "skill": "69a5e2c0ab6db8210c67c0c5",
+            "score": 75,
+            "evidence": {
+              "en": "Your role in handling legal procedures and compliance suggests a strong sense of professional ethics.",
+              "fr": "Votre rôle dans la gestion des procédures légales et de la conformité suggère un fort sens de l'éthique professionnelle."
+            }
+          }
+        ],
+        "spokenLanguages": [
+          {
+            "language": "698b1e94a30fa8d2367922ad",
+            "level": "C1",
+            "score": 85,
+            "evidence": {
+              "en": "You spoke fluently in French throughout the transcript.",
+              "fr": "Vous avez parlé couramment en français tout au long de la transcription."
+            }
+          }
+        ],
+        "industries": [
+          {
+            "industry": "698ad08d668f5c4f2d46a929",
+            "score": 85
+          }
+        ],
+        "activities": [
+          {
+            "activity": "698ad0869c56276cf340dcb3",
+            "score": 90
+          }
+        ],
+        "contactCenterSkills": {
+          "customerService": {
+            "score": 0,
+            "notes": {
+              "en": "You didn't mention any direct customer service activities.",
+              "fr": "Vous n'avez pas mentionné d'activités de service client direct."
+            }
+          },
+          "communication": {
+            "score": 0,
+            "notes": {
+              "en": "You didn't provide details about communication skills.",
+              "fr": "Vous n'avez pas fourni de détails sur les compétences en communication."
+            }
+          },
+          "problemSolving": {
+            "score": 0,
+            "notes": {
+              "en": "You didn't mention problem-solving activities.",
+              "fr": "Vous n'avez pas mentionné d'activités de résolution de problèmes."
+            }
+          },
+          "empathy": {
+            "score": 0,
+            "notes": {
+              "en": "You didn't mention empathy-related activities.",
+              "fr": "Vous n'avez pas mentionné d'activités liées à l'empathie."
+            }
+          },
+          "multitasking": {
+            "score": 0,
+            "notes": {
+              "en": "You didn't mention multitasking activities.",
+              "fr": "Vous n'avez pas mentionné d'activités de multitâche."
+            }
+          },
+          "salesOrientation": {
+            "score": 0,
+            "notes": {
+              "en": "You didn't mention sales-oriented activities.",
+              "fr": "Vous n'avez pas mentionné d'activités orientées vers la vente."
+            }
+          },
+          "conflictResolution": {
+            "score": 0,
+            "notes": {
+              "en": "You didn't mention conflict resolution activities.",
+              "fr": "Vous n'avez pas mentionné d'activités de résolution de conflits."
+            }
+          },
+          "productKnowledge": {
+            "score": 0,
+            "notes": {
+              "en": "You didn't mention product knowledge activities.",
+              "fr": "Vous n'avez pas mentionné d'activités de connaissance des produits."
+            }
+          }
+        },
+        "overallConfidence": 85,
+        "detectedLanguageOfSpeech": "French",
+        "relevance": {
+          "onTopic": true,
+          "score": 90,
+          "reason": {
+            "en": "You spoke about your role in debt recovery at Agence-CNSS, detailing specific tasks and skills.",
+            "fr": "Vous avez parlé de votre rôle dans le recouvrement de créances à l'Agence-CNSS, en détaillant des tâches et compétences spécifiques."
+          }
+        },
+        "summary": {
+          "en": "You effectively described your experience as a Debt Recovery Intern at Agence-CNSS. You highlighted your involvement in compliance and legal procedures, showcasing your skills in process compliance and professional ethics. Your fluency in French was evident throughout.",
+          "fr": "Vous avez efficacement décrit votre expérience en tant que stagiaire en recouvrement de créances à l'Agence-CNSS. Vous avez mis en avant votre implication dans les procédures de conformité et légales, montrant vos compétences en conformité des processus et en éthique professionnelle. Votre maîtrise du français était évidente tout au long."
+        }
+      },
+      "videoAnalyzedAt": "2026-06-24T17:22:00.734Z",
+      "videoDuration": 40.964,
+      "videoFraudCheck": {
+        "faceDetected": true,
+        "faceCount": 1,
+        "samePersonAcrossFrames": true,
+        "looksLive": true,
+        "livenessConfidence": 95,
+        "identityMatch": null,
+        "identityConfidence": 0,
+        "identityChecked": false,
+        "fraudRisk": "low",
+        "reasons": [
+          {
+            "en": "Exactly one face detected across frames.",
+            "fr": "Exactement un visage détecté sur toutes les images."
+          },
+          {
+            "en": "The person appears to be live and filmed by a webcam.",
+            "fr": "La personne semble être en direct et filmée par une webcam."
+          },
+          {
+            "en": "No signs of manipulation or spoofing detected.",
+            "fr": "Aucun signe de manipulation ou de falsification détecté."
+          }
+        ],
+        "checkedFrames": 3
+      },
+      "videoLanguageAssessment": {
+        "assessable": true,
+        "languages": [
+          {
+            "language": "698b1e94a30fa8d2367922ad",
+            "cefr": "C1",
+            "overallScore": 85,
+            "fluency": {
+              "score": 85,
+              "feedback": {
+                "en": "You demonstrate a high level of fluency with complex sentence structures and a professional tone.",
+                "fr": "Vous démontrez un haut niveau de fluidité avec des structures de phrases complexes et un ton professionnel."
+              }
+            },
+            "grammar": {
+              "score": 88,
+              "feedback": {
+                "en": "Your grammar is very accurate, with no noticeable errors in the transcript.",
+                "fr": "Votre grammaire est très précise, sans erreurs notables dans le transcript."
+              }
+            },
+            "vocabulary": {
+              "score": 85,
+              "feedback": {
+                "en": "You use a wide range of vocabulary appropriate for a professional context.",
+                "fr": "Vous utilisez un large éventail de vocabulaire approprié pour un contexte professionnel."
+              }
+            },
+            "coherence": {
+              "score": 80,
+              "feedback": {
+                "en": "Your ideas are well-organized and logically presented, contributing to overall coherence.",
+                "fr": "Vos idées sont bien organisées et présentées de manière logique, contribuant à la cohérence globale."
+              }
+            },
+            "pronunciationEstimate": {
+              "score": 80,
+              "confidence": "medium",
+              "feedback": {
+                "en": "Based on your vocabulary and coherence, your pronunciation is likely clear and professional.",
+                "fr": "En se basant sur votre vocabulaire et votre cohérence, votre prononciation est probablement claire et professionnelle."
+              }
+            },
+            "strengths": {
+              "en": "Your command of professional vocabulary and complex grammatical structures is impressive.",
+              "fr": "Votre maîtrise du vocabulaire professionnel et des structures grammaticales complexes est impressionnante."
+            },
+            "areasForImprovement": {
+              "en": "Continue to expand your vocabulary to include more nuanced expressions.",
+              "fr": "Continuez à élargir votre vocabulaire pour inclure des expressions plus nuancées."
+            },
+            "evidenceWords": 67
+          }
+        ]
+      },
+      "videoRelevance": {
+        "onTopic": true,
+        "score": 90,
+        "reason": {
+          "en": "You spoke about your role in debt recovery at Agence-CNSS, detailing specific tasks and skills.",
+          "fr": "Vous avez parlé de votre rôle dans le recouvrement de créances à l'Agence-CNSS, en détaillant des tâches et compétences spécifiques."
+        }
+      },
+      "videoTranscription": "Dans ce stage, j'ai participé aux activités de recouvrement des créances sociales en contribuant aux procédures d'opposition sur comptes bancaires et véhicules des débiteurs. J'ai également pris part au suivi des démarches juridiques liées à la saisie et à la vente des actifs des entreprises en situation d'MPI. Cette expérience m'a permis de développer des compétences en recouvrement, en gestion administrative et en application des procédures réglementaires.",
+      "videoUrl": "https://res.cloudinary.com/dyqg8x26j/video/upload/v1782321697/experience-videos/exp-1782321697595.webm"
+    },
+    {
+      "title": "Public Market Procedure Intern",
+      "title_i18n": {
+        "en": "Public Market Procedure Intern",
+        "fr": "Stagiaire en Procédure de passation du Marché publique"
+      },
+      "responsibilities_i18n": {
+        "en": [
+          "Analyzed the DCE in quantitative terms (Market amounts, deadlines).",
+          "Analyzed the DCE in qualitative terms (legal and technical aspects).",
+          "Verified the perfect compliance of files in form, substance, and deadlines.",
+          "Assisted the supervisor in entering administrative data."
+        ],
+        "fr": [
+          "Analyser les DCE aux plans quantitatif (Montants des marchés, délais).",
+          "Analyser les DCE aux plans qualitatifs (aspects juridique et technique).",
+          "Vérifier la parfaite conformité des dossiers sur la forme, le fond, les délais impartis.",
+          "Assistance l’encadrant en saisie des données administratives."
+        ]
+      },
+      "achievements_i18n": {
+        "en": [],
+        "fr": []
+      },
+      "company": "Direction régionale d’agriculture",
+      "startDate": "2014-08-01T00:00:00.000Z",
+      "endDate": "2014-08-31T00:00:00.000Z",
+      "responsibilities": [
+        "Analyzed the DCE in quantitative terms (Market amounts, deadlines).",
+        "Analyzed the DCE in qualitative terms (legal and technical aspects).",
+        "Verified the perfect compliance of files in form, substance, and deadlines.",
+        "Assisted the supervisor in entering administrative data."
+      ],
+      "achievements": [],
+      "_id": "6a3c08edced08f5ef23a2a77",
+      "videoAnalysis": {
+        "technicalSkills": [
+          {
+            "skill": "69a5e085defc6af37053e57d",
+            "score": 80,
+            "evidence": {
+              "en": "You ensured the compliance of files with regulatory requirements.",
+              "fr": "Vous avez assuré la conformité des dossiers avec les exigences réglementaires."
+            }
+          },
+          {
+            "skill": "69a5e085defc6af37053e57f",
+            "score": 70,
+            "evidence": {
+              "en": "You contributed to data entry ensuring reliability and information tracking.",
+              "fr": "Vous avez contribué à la saisie des données garantissant la fiabilité et le suivi des informations."
+            }
+          },
+          {
+            "skill": "69a5e085defc6af37053e57a",
+            "score": 75,
+            "evidence": {
+              "en": "You participated in quantitative and qualitative analysis of consultation files.",
+              "fr": "Vous avez participé à l'analyse quantitative et qualitative des dossiers de consultation."
+            }
+          }
+        ],
+        "professionalSkills": [
+          {
+            "skill": "69a5e2b8eb71647fdaa7a0ba",
+            "score": 80,
+            "evidence": {
+              "en": "You ensured compliance within the given timeframe.",
+              "fr": "Vous avez assuré la conformité dans le délai imparti."
+            }
+          }
+        ],
+        "softSkills": [
+          {
+            "skill": "69a5e2c0ab6db8210c67c0c4",
+            "score": 70,
+            "evidence": {
+              "en": "You ensured the reliability of information tracking.",
+              "fr": "Vous avez garanti la fiabilité du suivi des informations."
+            }
+          }
+        ],
+        "spokenLanguages": [
+          {
+            "language": "698b1e94a30fa8d2367922ad",
+            "level": "C1",
+            "score": 85,
+            "evidence": {
+              "en": "The transcript is in French.",
+              "fr": "La transcription est en français."
+            }
+          }
+        ],
+        "industries": [
+          {
+            "industry": "698ad08d668f5c4f2d46a929",
+            "score": 90
+          }
+        ],
+        "activities": [
+          {
+            "activity": "698ad0869c56276cf340dcb4",
+            "score": 80
+          },
+          {
+            "activity": "698ad0869c56276cf340dcb7",
+            "score": 70
+          }
+        ],
+        "contactCenterSkills": {
+          "customerService": {
+            "score": 0,
+            "notes": {
+              "en": "No evidence of customer service skills.",
+              "fr": "Aucune preuve de compétences en service client."
+            }
+          },
+          "communication": {
+            "score": 0,
+            "notes": {
+              "en": "No evidence of communication skills.",
+              "fr": "Aucune preuve de compétences en communication."
+            }
+          },
+          "problemSolving": {
+            "score": 0,
+            "notes": {
+              "en": "No evidence of problem-solving skills.",
+              "fr": "Aucune preuve de compétences en résolution de problèmes."
+            }
+          },
+          "empathy": {
+            "score": 0,
+            "notes": {
+              "en": "No evidence of empathy skills.",
+              "fr": "Aucune preuve de compétences en empathie."
+            }
+          },
+          "multitasking": {
+            "score": 0,
+            "notes": {
+              "en": "No evidence of multitasking skills.",
+              "fr": "Aucune preuve de compétences en multitâche."
+            }
+          },
+          "salesOrientation": {
+            "score": 0,
+            "notes": {
+              "en": "No evidence of sales orientation skills.",
+              "fr": "Aucune preuve de compétences en orientation vente."
+            }
+          },
+          "conflictResolution": {
+            "score": 0,
+            "notes": {
+              "en": "No evidence of conflict resolution skills.",
+              "fr": "Aucune preuve de compétences en résolution de conflits."
+            }
+          },
+          "productKnowledge": {
+            "score": 0,
+            "notes": {
+              "en": "No evidence of product knowledge.",
+              "fr": "Aucune preuve de connaissances sur les produits."
+            }
+          }
+        },
+        "overallConfidence": 85,
+        "detectedLanguageOfSpeech": "French",
+        "relevance": {
+          "onTopic": true,
+          "score": 90,
+          "reason": {
+            "en": "You spoke about your role as a Public Market Procedure Intern and your tasks.",
+            "fr": "Vous avez parlé de votre rôle en tant que stagiaire en procédure de marché public et de vos tâches."
+          }
+        },
+        "summary": {
+          "en": "You described your experience as a Public Market Procedure Intern, focusing on compliance, data entry, and analysis. Your role involved ensuring regulatory compliance and supporting administrative tasks.",
+          "fr": "Vous avez décrit votre expérience en tant que stagiaire en procédure de marché public, en vous concentrant sur la conformité, la saisie de données et l'analyse. Votre rôle impliquait d'assurer la conformité réglementaire et de soutenir les tâches administratives."
+        }
+      },
+      "videoAnalyzedAt": "2026-06-24T17:15:36.171Z",
+      "videoDuration": 37.948,
+      "videoFraudCheck": {
+        "faceDetected": true,
+        "faceCount": 1,
+        "samePersonAcrossFrames": true,
+        "looksLive": true,
+        "livenessConfidence": 95,
+        "identityMatch": null,
+        "identityConfidence": 0,
+        "identityChecked": false,
+        "fraudRisk": "low",
+        "reasons": [
+          {
+            "en": "Exactly one face detected across all frames.",
+            "fr": "Exactement un visage détecté sur toutes les images."
+          },
+          {
+            "en": "The person appears to be live and filmed by a webcam.",
+            "fr": "La personne semble être en direct et filmée par une webcam."
+          },
+          {
+            "en": "The same person is visible in all frames.",
+            "fr": "La même personne est visible sur toutes les images."
+          },
+          {
+            "en": "No signs of manipulation or spoofing detected.",
+            "fr": "Aucun signe de manipulation ou de falsification détecté."
+          }
+        ],
+        "checkedFrames": 3
+      },
+      "videoLanguageAssessment": {
+        "assessable": true,
+        "languages": [
+          {
+            "language": "698b1e94a30fa8d2367922ad",
+            "cefr": "C1",
+            "overallScore": 85,
+            "fluency": {
+              "score": 85,
+              "feedback": {
+                "en": "You demonstrate a high level of fluency with well-structured sentences and a clear flow of ideas.",
+                "fr": "Vous démontrez un haut niveau de fluidité avec des phrases bien structurées et un enchaînement clair des idées."
+              }
+            },
+            "grammar": {
+              "score": 88,
+              "feedback": {
+                "en": "Your grammatical structures are complex and accurate, showing a strong command of the language.",
+                "fr": "Vos structures grammaticales sont complexes et précises, montrant une bonne maîtrise de la langue."
+              }
+            },
+            "vocabulary": {
+              "score": 87,
+              "feedback": {
+                "en": "You use a wide range of vocabulary, particularly in a professional context, which enhances your communication.",
+                "fr": "Vous utilisez un large éventail de vocabulaire, notamment dans un contexte professionnel, ce qui enrichit votre communication."
+              }
+            },
+            "coherence": {
+              "score": 85,
+              "feedback": {
+                "en": "Your ideas are logically connected, and the text is coherent and easy to follow.",
+                "fr": "Vos idées sont logiquement connectées, et le texte est cohérent et facile à suivre."
+              }
+            },
+            "pronunciationEstimate": {
+              "score": 80,
+              "confidence": "medium",
+              "feedback": {
+                "en": "Based on your vocabulary and coherence, your pronunciation is likely clear and understandable.",
+                "fr": "En se basant sur votre vocabulaire et votre cohérence, votre prononciation est probablement claire et compréhensible."
+              }
+            },
+            "strengths": {
+              "en": "Your strengths include a rich vocabulary and complex grammatical structures.",
+              "fr": "Vos points forts incluent un vocabulaire riche et des structures grammaticales complexes."
+            },
+            "areasForImprovement": {
+              "en": "Continue to refine your pronunciation to ensure clarity in all contexts.",
+              "fr": "Continuez à affiner votre prononciation pour assurer la clarté dans tous les contextes."
+            },
+            "evidenceWords": 65
+          }
+        ]
+      },
+      "videoRelevance": {
+        "onTopic": true,
+        "score": 90,
+        "reason": {
+          "en": "You spoke about your role as a Public Market Procedure Intern and your tasks.",
+          "fr": "Vous avez parlé de votre rôle en tant que stagiaire en procédure de marché public et de vos tâches."
+        }
+      },
+      "videoTranscription": "Dans ce stage, j'ai participé à l'analyse quantitative et qualitative des dossiers de consultation des entreprises DCE en examinant les aspects financiers juridiques et techniques des marchés publics. J'ai assuré la vérification de la conformité des dossiers conformément aux exigences réglementaires au délai imparti. J'ai également contribué à la gestion administrative et à la saisie des données garantissant la fiabilité et le suivi des informations.",
+      "videoUrl": "https://res.cloudinary.com/dyqg8x26j/video/upload/v1782321297/experience-videos/exp-1782321297101.webm"
+    }
+  ],
+  "favoriteGigs": [],
+  "achievements": [],
+  "lastUpdated": "2026-06-25T00:06:59.042Z",
+  "gigs": [],
+  "createdAt": "2026-06-24T16:42:21.499Z",
+  "updatedAt": "2026-06-25T00:06:59.042Z",
+  "__v": 0
+}
