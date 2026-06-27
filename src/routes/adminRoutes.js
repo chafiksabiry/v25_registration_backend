@@ -5,6 +5,7 @@ import {
   adminUsers,
   adminUserDetail,
   adminUserFinancials,
+  adminWalletOverview,
 } from '../controllers/adminController.js';
 import { authenticate } from '../middleware/auth.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
@@ -16,5 +17,6 @@ router.get('/stats', authenticate, requireAdmin, adminStats);
 router.get('/users', authenticate, requireAdmin, adminUsers);
 router.get('/users/:userId', authenticate, requireAdmin, adminUserDetail);
 router.patch('/users/:userId/financials', authenticate, requireAdmin, adminUserFinancials);
+router.get('/wallet/overview', authenticate, requireAdmin, adminWalletOverview);
 
 export default router;

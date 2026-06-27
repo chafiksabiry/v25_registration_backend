@@ -1,6 +1,7 @@
 import authService from '../services/authService.js';
 import { getAdminStats, listUsers } from '../services/adminService.js';
 import { getUserDetail, updateUserFinancials } from '../services/adminUserDetailService.js';
+import { getWalletOverview } from '../services/adminWalletService.js';
 
 export const adminLogin = async (req, res) => {
   try {
@@ -53,5 +54,14 @@ export const adminUserFinancials = async (req, res) => {
     res.status(200).json({ success: true, data });
   } catch (error) {
     res.status(error.statusCode || 500).json({ message: error.message || 'Failed to update financials' });
+  }
+};
+
+export const adminWalletOverview = async (_req, res) => {
+  try {
+    const data = await getWalletOverview();
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    res.status(500).json({ message: error.message || 'Failed to load wallet overview' });
   }
 };
