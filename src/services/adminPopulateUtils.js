@@ -178,9 +178,10 @@ export async function populateCompanyForAdmin(db, company) {
 
   let planName = null;
   let planDetails = null;
+  const planRef = subscriptionDoc?.planId || company.planId || company.plan;
 
-  if (subscriptionDoc?.planId) {
-    const planDoc = await resolveSubscriptionPlan(db, subscriptionDoc.planId);
+  if (planRef) {
+    const planDoc = await resolveSubscriptionPlan(db, planRef);
     if (planDoc) {
       planName = planDoc.name || null;
       planDetails = {
@@ -199,12 +200,17 @@ export async function populateCompanyForAdmin(db, company) {
     planName = tier.charAt(0).toUpperCase() + tier.slice(1);
   }
 
+  const gigsCount = await db.collection('gigs').countDocuments({ companyId: company._id });
+
   populated.planName = planName;
   populated.planDetails = planDetails;
   populated.subscriptionStatus = subscriptionDoc?.status || company.subscriptionStatus || null;
   populated.subscriptionTier = tier;
   populated.subscriptionPeriodEnd = subscriptionDoc?.currentPeriodEnd || null;
   populated.stripeSubscriptionId = subscriptionDoc?.stripeSubscriptionId || null;
+  populated.gigsCount = gigsCount;
+  populated.displayEmail = company.contact?.email || null;
+  populated.displayPhone = company.contact?.phone || null;
 
   return populated;
 }
