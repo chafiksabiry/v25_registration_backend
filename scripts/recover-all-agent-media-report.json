@@ -1,0 +1,85 @@
+{
+  "generatedAt": "2026-06-27T19:31:43.080Z",
+  "summary": [
+    {
+      "email": "rali.sabiry2018@gmail.com",
+      "agentId": "6a39c7e2609cc28bdc61c612",
+      "hadPhoto": true,
+      "hadVideos": 4,
+      "recovery": {
+        "photoUrl": null,
+        "videoUrls": [
+          "https://res.cloudinary.com/dyqg8x26j/video/upload/v1782172002/experience-videos/exp-1782172002207.webm"
+        ],
+        "sources": [
+          "mapping:videos"
+        ]
+      },
+      "patched": true
+    },
+    {
+      "email": "nakbinakbi@gmail.com",
+      "agentId": "6a3c08edced08f5ef23a2a71",
+      "hadPhoto": true,
+      "hadVideos": 3,
+      "recovery": {
+        "photoUrl": null,
+        "videoUrls": [],
+        "sources": []
+      },
+      "patched": false
+    },
+    {
+      "email": "mamour.kasse.sn@gmail.com",
+      "agentId": "6a400d6c5cc77e5473256f28",
+      "hadPhoto": false,
+      "hadVideos": 0,
+      "recovery": {
+        "photoUrl": "https://res.cloudinary.com/dyqg8x26j/image/upload/v1782418705/rep-profile-photos/zla3iutamek5pjdhxbcr.jpg",
+        "videoUrls": [
+          "https://res.cloudinary.com/dyqg8x26j/video/upload/v1782370961/experience-videos/exp-1782370960951.webm",
+          "https://res.cloudinary.com/dyqg8x26j/video/upload/v1782372389/experience-videos/exp-1782372388846.webm"
+        ],
+        "sources": [
+          "mapping:photo",
+          "mapping:videos"
+        ]
+      },
+      "patched": true
+    },
+    {
+      "email": "riksabiry@gmail.com",
+      "agentId": "6a400ecafdd34156ea093db8",
+      "hadPhoto": false,
+      "hadVideos": 0,
+      "recovery": {
+        "photoUrl": "https://res.cloudinary.com/dyqg8x26j/image/upload/v1782148885/rep-profile-photos/o9ypuzwjln3h2g8dcy5t.jpg",
+        "videoUrls": [
+          "https://res.cloudinary.com/dyqg8x26j/video/upload/v1782146976/experience-videos/exp-1782146976393.webm",
+          "https://res.cloudinary.com/dyqg8x26j/video/upload/v1782147265/experience-videos/exp-1782147265291.webm",
+          "https://res.cloudinary.com/dyqg8x26j/video/upload/v1782147512/experience-videos/exp-1782147510971.webm",
+          "https://res.cloudinary.com/dyqg8x26j/video/upload/v1782147769/experience-videos/exp-1782147768308.webm",
+          "https://res.cloudinary.com/dyqg8x26j/video/upload/v1782148047/experience-videos/exp-1782148046846.webm",
+          "https://res.cloudinary.com/dyqg8x26j/video/upload/v1782148249/experience-videos/exp-1782148248765.webm"
+        ],
+        "sources": [
+          "mapping:photo",
+          "mapping:videos"
+        ]
+      },
+      "patched": true
+    },
+    {
+      "email": "zdz89175@gmail.com",
+      "agentId": "6a400ecbfdd34156ea093dbb",
+      "hadPhoto": false,
+      "hadVideos": 0,
+      "recovery": {
+        "photoUrl": null,
+        "videoUrls": [],
+        "sources": []
+      },
+      "patched": false
+    }
+  ]
+}

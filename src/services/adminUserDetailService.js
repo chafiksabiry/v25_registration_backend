@@ -37,6 +37,7 @@ function sanitizeAgent(agent) {
     status: agent.status,
     subscriptionStatus: agent.subscriptionStatus,
     plan: agent.plan,
+    planName: agent.planName,
     stripeCustomerId: agent.stripeCustomerId,
     isBasicProfileCompleted: agent.isBasicProfileCompleted,
     personalInfo: agent.personalInfo,
