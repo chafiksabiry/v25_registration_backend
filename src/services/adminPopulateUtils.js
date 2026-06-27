@@ -6,6 +6,7 @@ const REFERENCE_COLLECTIONS = [
   { collection: 'softskills', mapKey: 'skill' },
   { collection: 'industries', mapKey: 'industry' },
   { collection: 'activities', mapKey: 'activity' },
+  { collection: 'languages', mapKey: 'language' },
 ];
 
 function isObjectIdLike(value) {
@@ -51,11 +52,66 @@ function populateSkillGroups(maps, skills) {
   return populated;
 }
 
+function populateAnalysisRefList(maps, type, items, refField) {
+  if (!Array.isArray(items)) return items;
+  return items.map((entry) => {
+    if (!entry || typeof entry !== 'object') return entry;
+    const raw = entry[refField];
+    return {
+      ...entry,
+      [refField]: resolveName(maps, type, raw),
+      ...(isObjectIdLike(String(raw)) ? { [`${refField}Id`]: String(raw) } : {}),
+    };
+  });
+}
+
+function populateVideoAnalysis(maps, analysis) {
+  if (!analysis || typeof analysis !== 'object') return analysis;
+  return {
+    ...analysis,
+    technicalSkills: populateAnalysisRefList(maps, 'skill', analysis.technicalSkills, 'skill'),
+    professionalSkills: populateAnalysisRefList(maps, 'skill', analysis.professionalSkills, 'skill'),
+    softSkills: populateAnalysisRefList(maps, 'skill', analysis.softSkills, 'skill'),
+    spokenLanguages: populateAnalysisRefList(maps, 'language', analysis.spokenLanguages, 'language'),
+    industries: populateAnalysisRefList(maps, 'industry', analysis.industries, 'industry'),
+    activities: populateAnalysisRefList(maps, 'activity', analysis.activities, 'activity'),
+  };
+}
+
+function populateExperienceEntry(maps, entry) {
+  if (!entry || typeof entry !== 'object') return entry;
+
+  const populated = {
+    ...entry,
+    industries: populateIdList(maps, 'industry', entry.industries),
+    activities: populateIdList(maps, 'activity', entry.activities),
+  };
+
+  if (populated.videoAnalysis) {
+    populated.videoAnalysis = populateVideoAnalysis(maps, populated.videoAnalysis);
+  }
+
+  if (populated.videoLanguageAssessment?.languages) {
+    populated.videoLanguageAssessment = {
+      ...populated.videoLanguageAssessment,
+      languages: populateAnalysisRefList(
+        maps,
+        'language',
+        populated.videoLanguageAssessment.languages,
+        'language',
+      ),
+    };
+  }
+
+  return populated;
+}
+
 export async function loadReferenceNameMaps(db) {
   const maps = {
     skill: new Map(),
     industry: new Map(),
     activity: new Map(),
+    language: new Map(),
   };
 
   await Promise.all(
@@ -92,11 +148,7 @@ export function populateAgentReferences(agent, maps) {
   populated.skills = populateSkillGroups(maps, populated.skills);
 
   if (Array.isArray(populated.experience)) {
-    populated.experience = populated.experience.map((entry) => ({
-      ...entry,
-      industries: populateIdList(maps, 'industry', entry.industries),
-      activities: populateIdList(maps, 'activity', entry.activities),
-    }));
+    populated.experience = populated.experience.map((entry) => populateExperienceEntry(maps, entry));
   }
 
   return populated;
