@@ -105,5 +105,20 @@ export function populateAgentReferences(agent, maps) {
 export async function populateAgentForAdmin(db, agent) {
   if (!agent) return null;
   const maps = await loadReferenceNameMaps(db);
-  return populateAgentReferences(agent, maps);
+  const populated = populateAgentReferences(agent, maps);
+
+  if (populated.plan) {
+    const planId = populated.plan;
+    let planDoc = null;
+    try {
+      planDoc = await db
+        .collection('plans')
+        .findOne({ _id: new mongoose.Types.ObjectId(String(planId)) });
+    } catch {
+      planDoc = null;
+    }
+    populated.planName = planDoc?.name || null;
+  }
+
+  return populated;
 }
