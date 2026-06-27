@@ -5,6 +5,7 @@ import {
   formatRepOnboarding,
 } from './adminOnboardingUtils.js';
 import { populateAgentForAdmin } from './adminPopulateUtils.js';
+import { enrichAgentMedia } from './adminAgentMediaUtils.js';
 
 const LIST_LIMIT = 50;
 
@@ -47,6 +48,7 @@ function sanitizeAgent(agent) {
     achievements: agent.achievements,
     availability: agent.availability,
     onboardingProgress: agent.onboardingProgress,
+    mediaSummary: agent.mediaSummary,
     gigsCount: Array.isArray(agent.gigs) ? agent.gigs.length : 0,
     createdAt: agent.createdAt,
     lastUpdated: agent.lastUpdated,
@@ -230,10 +232,11 @@ export async function getUserDetail(userId) {
   if (user.typeUser === 'rep') {
     const agent = await db.collection('agents').findOne({ userId: userObjectId });
     const populatedAgent = agent ? await populateAgentForAdmin(db, agent) : null;
+    const enrichedAgent = populatedAgent ? await enrichAgentMedia(populatedAgent) : null;
     detail.onboarding = formatRepOnboarding(agent);
     detail.profile = {
       type: 'rep',
-      agent: sanitizeAgent(populatedAgent),
+      agent: sanitizeAgent(enrichedAgent),
       agentId: agent ? String(agent._id) : null,
     };
     if (agent) {
