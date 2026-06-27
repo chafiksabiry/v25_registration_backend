@@ -1,0 +1,37 @@
+﻿node : MongoServerError: $where is not allowed in this context
+Au caractère C:\Users\QARA\AppData\Local\Temp\ps-script-2e3f7571-f1a8-481c-a7f2-402346026e53.ps1:102 : 58
++ ... v25_registration_backend"; node scripts/scanVideoJobs.js 2>&1 | Out-F ...
++                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (MongoServerErro...in this context:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    at Connection.sendCommand 
+(D:\HARX2026\microservices\v25_registration_backend\node_modules\mongodb\lib\cmap\connection.js:296:27)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async Connection.command 
+(D:\HARX2026\microservices\v25_registration_backend\node_modules\mongodb\lib\cmap\connection.js:323:26)
+    at async Server.command 
+(D:\HARX2026\microservices\v25_registration_backend\node_modules\mongodb\lib\sdam\server.js:170:29)
+    at async AggregateOperation.executeCommand 
+(D:\HARX2026\microservices\v25_registration_backend\node_modules\mongodb\lib\operations\command.js:76:16)
+    at async AggregateOperation.execute 
+(D:\HARX2026\microservices\v25_registration_backend\node_modules\mongodb\lib\operations\aggregate.js:87:16)
+    at async tryOperation 
+(D:\HARX2026\microservices\v25_registration_backend\node_modules\mongodb\lib\operations\execute_operation.js:203:20)
+    at async executeOperation 
+(D:\HARX2026\microservices\v25_registration_backend\node_modules\mongodb\lib\operations\execute_operation.js:73:16)
+    at async AggregationCursor._initialize 
+(D:\HARX2026\microservices\v25_registration_backend\node_modules\mongodb\lib\cursor\aggregation_cursor.js:55:26)
+    at async AggregationCursor.cursorInit 
+(D:\HARX2026\microservices\v25_registration_backend\node_modules\mongodb\lib\cursor\abstract_cursor.js:607:27) {
+  errorResponse: {
+    ok: 0,
+    errmsg: '$where is not allowed in this context',
+    code: 2,
+    codeName: 'BadValue'
+  },
+  ok: 0,
+  code: 2,
+  codeName: 'BadValue',
+  Symbol(errorLabels): Set(0) {}
+}

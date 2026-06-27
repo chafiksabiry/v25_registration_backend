@@ -4,6 +4,7 @@ import {
   formatCompanyOnboarding,
   formatRepOnboarding,
 } from './adminOnboardingUtils.js';
+import { populateAgentForAdmin } from './adminPopulateUtils.js';
 
 const LIST_LIMIT = 50;
 
@@ -227,10 +228,11 @@ export async function getUserDetail(userId) {
 
   if (user.typeUser === 'rep') {
     const agent = await db.collection('agents').findOne({ userId: userObjectId });
+    const populatedAgent = agent ? await populateAgentForAdmin(db, agent) : null;
     detail.onboarding = formatRepOnboarding(agent);
     detail.profile = {
       type: 'rep',
-      agent: sanitizeAgent(agent),
+      agent: sanitizeAgent(populatedAgent),
       agentId: agent ? String(agent._id) : null,
     };
     if (agent) {
