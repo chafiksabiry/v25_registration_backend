@@ -8,6 +8,12 @@ import {
   updateMinutesPricing,
   updatePhoneLinePricing,
 } from '../services/adminPricingService.js';
+import {
+  listCompanyPlans,
+  listRepPlans,
+  updateCompanyPlan,
+  updateRepPlan,
+} from '../services/adminPlansService.js';
 
 export const adminLogin = async (req, res) => {
   try {
@@ -105,5 +111,41 @@ export const adminUpdatePhoneLinePricing = async (req, res) => {
     res.status(200).json({ success: true, data });
   } catch (error) {
     res.status(error.statusCode || 500).json({ message: error.message || 'Failed to update phone line pricing' });
+  }
+};
+
+export const adminCompanyPlans = async (_req, res) => {
+  try {
+    const data = await listCompanyPlans();
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    res.status(500).json({ message: error.message || 'Failed to load company plans' });
+  }
+};
+
+export const adminUpdateCompanyPlan = async (req, res) => {
+  try {
+    const data = await updateCompanyPlan(req.params.planId, req.body);
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    res.status(error.statusCode || 500).json({ message: error.message || 'Failed to update company plan' });
+  }
+};
+
+export const adminRepPlans = async (_req, res) => {
+  try {
+    const data = await listRepPlans();
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    res.status(500).json({ message: error.message || 'Failed to load rep plans' });
+  }
+};
+
+export const adminUpdateRepPlan = async (req, res) => {
+  try {
+    const data = await updateRepPlan(req.params.planId, req.body);
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    res.status(error.statusCode || 500).json({ message: error.message || 'Failed to update rep plan' });
   }
 };
