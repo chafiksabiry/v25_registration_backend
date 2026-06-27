@@ -154,6 +154,61 @@ export function populateAgentReferences(agent, maps) {
   return populated;
 }
 
+async function resolveSubscriptionPlan(db, planId) {
+  if (!planId || !mongoose.isValidObjectId(String(planId))) return null;
+  return db.collection('subscriptionplans').findOne({
+    _id: new mongoose.Types.ObjectId(String(planId)),
+  });
+}
+
+export async function populateCompanyForAdmin(db, company) {
+  if (!company) return null;
+
+  const populated = { ...company };
+  const companyIdStr = String(company._id);
+
+  const subscriptionDoc = await db
+    .collection('subscriptions')
+    .find({
+      $or: [{ companyId: companyIdStr }, { companyId: company._id }],
+    })
+    .sort({ createdAt: -1 })
+    .limit(1)
+    .next();
+
+  let planName = null;
+  let planDetails = null;
+
+  if (subscriptionDoc?.planId) {
+    const planDoc = await resolveSubscriptionPlan(db, subscriptionDoc.planId);
+    if (planDoc) {
+      planName = planDoc.name || null;
+      planDetails = {
+        name: planDoc.name,
+        price: planDoc.price,
+        currency: planDoc.currency,
+        description: planDoc.description,
+        maxGigs: planDoc.maxGigs,
+        maxReps: planDoc.maxReps,
+      };
+    }
+  }
+
+  const tier = typeof company.subscription === 'string' ? company.subscription : null;
+  if (!planName && tier) {
+    planName = tier.charAt(0).toUpperCase() + tier.slice(1);
+  }
+
+  populated.planName = planName;
+  populated.planDetails = planDetails;
+  populated.subscriptionStatus = subscriptionDoc?.status || company.subscriptionStatus || null;
+  populated.subscriptionTier = tier;
+  populated.subscriptionPeriodEnd = subscriptionDoc?.currentPeriodEnd || null;
+  populated.stripeSubscriptionId = subscriptionDoc?.stripeSubscriptionId || null;
+
+  return populated;
+}
+
 export async function populateAgentForAdmin(db, agent) {
   if (!agent) return null;
   const maps = await loadReferenceNameMaps(db);

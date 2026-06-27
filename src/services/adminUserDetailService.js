@@ -4,7 +4,7 @@ import {
   formatCompanyOnboarding,
   formatRepOnboarding,
 } from './adminOnboardingUtils.js';
-import { populateAgentForAdmin } from './adminPopulateUtils.js';
+import { populateAgentForAdmin, populateCompanyForAdmin } from './adminPopulateUtils.js';
 import { enrichAgentMedia } from './adminAgentMediaUtils.js';
 
 const LIST_LIMIT = 50;
@@ -244,6 +244,7 @@ export async function getUserDetail(userId) {
     }
   } else if (user.typeUser === 'company') {
     const company = await db.collection('companies').findOne({ userId: userObjectId });
+    const populatedCompany = company ? await populateCompanyForAdmin(db, company) : null;
     const onboardingDoc = company
       ? await db.collection('onboardingprogresses').findOne({ companyId: company._id })
       : null;
@@ -251,7 +252,7 @@ export async function getUserDetail(userId) {
     detail.onboarding = formatCompanyOnboarding(company, onboardingDoc);
     detail.profile = {
       type: 'company',
-      company: sanitizeCompany(company),
+      company: sanitizeCompany(populatedCompany),
       companyId: company ? String(company._id) : null,
       onboardingProgress: serialize(onboardingDoc),
     };
