@@ -6,6 +6,17 @@ function validationError(message, statusCode = 400) {
   return error;
 }
 
+function parseBoolean(value) {
+  if (value === true || value === 1) return true;
+  if (value === false || value === 0 || value == null) return false;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'true' || normalized === '1') return true;
+    if (normalized === 'false' || normalized === '0' || normalized === '') return false;
+  }
+  return Boolean(value);
+}
+
 function parseFeatures(raw) {
   if (Array.isArray(raw)) {
     return raw.map((item) => String(item).trim()).filter(Boolean);
@@ -28,7 +39,7 @@ function serializeCompanyPlan(doc) {
     stripePriceId: doc.stripePriceId || '',
     description: doc.description || '',
     features: Array.isArray(doc.features) ? doc.features : [],
-    isPopular: Boolean(doc.isPopular),
+    isPopular: parseBoolean(doc.isPopular),
     maxGigs: typeof doc.maxGigs === 'number' ? doc.maxGigs : 0,
     maxReps: typeof doc.maxReps === 'number' ? doc.maxReps : 0,
     updatedAt: doc.updatedAt || doc.createdAt || null,
@@ -44,7 +55,7 @@ function serializeRepPlan(doc) {
     stripePriceId: doc.stripePriceId || '',
     description: doc.description || '',
     features: Array.isArray(doc.features) ? doc.features : [],
-    isActive: doc.isActive !== false,
+    isActive: doc.isActive === undefined || doc.isActive === null ? true : parseBoolean(doc.isActive),
     sortOrder: typeof doc.sortOrder === 'number' ? doc.sortOrder : 0,
     updatedAt: doc.updatedAt || doc.createdAt || null,
   };
