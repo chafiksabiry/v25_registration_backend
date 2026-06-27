@@ -29,6 +29,7 @@ export const adminUsers = async (req, res) => {
       page: req.query.page,
       limit: req.query.limit,
       search: req.query.search,
+      typeUser: req.query.typeUser,
     });
     res.status(200).json({ success: true, data });
   } catch (error) {

@@ -24,7 +24,9 @@ const ADMIN = {
 async function main() {
   const uri = process.env.MONGODB_URI;
   if (!uri) {
-    console.error('MONGODB_URI is required');
+    console.error('MONGODB_URI is required.');
+    console.error('Create a .env file in this folder (see .env.example) or run:');
+    console.error('  MONGODB_URI="mongodb://..." npm run seed:admin');
     process.exit(1);
   }
 
