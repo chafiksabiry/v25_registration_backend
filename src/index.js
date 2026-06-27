@@ -8,6 +8,7 @@ import mongoose from 'mongoose';
 import rateLimit from 'express-rate-limit';
 import authRoutes from './routes/authRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
+import plansRoutes from './routes/plansRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
@@ -53,6 +54,7 @@ app.use(limiter);
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/plans', plansRoutes);
 app.use('/api/users', userRoutes);
 
 // Error handling

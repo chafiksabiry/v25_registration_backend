@@ -83,6 +83,35 @@ function applyCompanyProfileToUser(user, companyProfile) {
   };
 }
 
+function resolveRepDisplayName(agent, user) {
+  if (!agent?.personalInfo) return user.fullName;
+
+  const { personalInfo } = agent;
+  if (typeof personalInfo.name === 'string' && personalInfo.name.trim()) {
+    return personalInfo.name.trim();
+  }
+
+  const fromParts = [personalInfo.firstName, personalInfo.lastName]
+    .filter((part) => typeof part === 'string' && part.trim())
+    .join(' ')
+    .trim();
+  if (fromParts) return fromParts;
+
+  return user.fullName;
+}
+
+function applyRepProfileToUser(user, agent) {
+  if (!agent) return user;
+
+  const displayName = resolveRepDisplayName(agent, user);
+  if (displayName === user.fullName) return user;
+
+  return {
+    ...user,
+    displayName,
+  };
+}
+
 async function enrichUsersWithOnboarding(users) {
   if (!users.length) {
     return users;
@@ -95,7 +124,7 @@ async function enrichUsersWithOnboarding(users) {
     db
       .collection('agents')
       .find({ userId: { $in: userObjectIds } })
-      .project({ userId: 1, onboardingProgress: 1 })
+      .project({ userId: 1, onboardingProgress: 1, personalInfo: 1 })
       .toArray(),
     db.collection('companies').find({ userId: { $in: userObjectIds } }).project({ userId: 1 }).toArray(),
     loadCompanyProfilesForList(db, users),
@@ -116,7 +145,9 @@ async function enrichUsersWithOnboarding(users) {
     let enriched = { ...user };
 
     if (user.typeUser === 'rep') {
-      enriched.onboarding = formatRepOnboarding(agentByUserId.get(String(user._id)));
+      const agent = agentByUserId.get(String(user._id));
+      enriched.onboarding = formatRepOnboarding(agent);
+      enriched = applyRepProfileToUser(enriched, agent);
     } else if (user.typeUser === 'company') {
       const company = companyByUserId.get(String(user._id));
       const onboarding = company ? onboardingByCompanyId.get(String(company._id)) : null;
@@ -158,35 +189,67 @@ export async function getAdminStats() {
   };
 }
 
-export async function listUsers({ page = 1, limit = 25, search = '', typeUser = '' } = {}) {
+export async function listUsers({
+  page = 1,
+  limit = 25,
+  search = '',
+  typeUser = '',
+  verified = '',
+  onboardingStatus = '',
+  planName = '',
+} = {}) {
   const safeLimit = Math.min(Math.max(Number(limit) || 25, 1), 100);
   const safePage = Math.max(Number(page) || 1, 1);
   const skip = (safePage - 1) * safeLimit;
 
   const filter = {};
   const allowedTypes = ['rep', 'company', 'admin'];
+  const postFilters = Boolean(onboardingStatus || planName);
 
   if (typeUser && allowedTypes.includes(typeUser)) {
     filter.typeUser = typeUser;
   }
 
+  if (verified === 'true') {
+    filter.isVerified = true;
+  } else if (verified === 'false') {
+    filter.isVerified = false;
+  }
+
   if (search) {
     const db = mongoose.connection.db;
-    const matchingCompanies = await db
-      .collection('companies')
-      .find({
-        $or: [
-          { name: { $regex: search, $options: 'i' } },
-          { industry: { $regex: search, $options: 'i' } },
-          { 'contact.email': { $regex: search, $options: 'i' } },
-          { 'contact.phone': { $regex: search, $options: 'i' } },
-        ],
-      })
-      .project({ userId: 1 })
-      .toArray();
+    const [matchingCompanies, matchingAgents] = await Promise.all([
+      db
+        .collection('companies')
+        .find({
+          $or: [
+            { name: { $regex: search, $options: 'i' } },
+            { industry: { $regex: search, $options: 'i' } },
+            { 'contact.email': { $regex: search, $options: 'i' } },
+            { 'contact.phone': { $regex: search, $options: 'i' } },
+          ],
+        })
+        .project({ userId: 1 })
+        .toArray(),
+      db
+        .collection('agents')
+        .find({
+          $or: [
+            { 'personalInfo.name': { $regex: search, $options: 'i' } },
+            { 'personalInfo.firstName': { $regex: search, $options: 'i' } },
+            { 'personalInfo.lastName': { $regex: search, $options: 'i' } },
+            { 'personalInfo.email': { $regex: search, $options: 'i' } },
+          ],
+        })
+        .project({ userId: 1 })
+        .toArray(),
+    ]);
 
     const companyUserIds = matchingCompanies
       .map((company) => company.userId)
+      .filter((id) => id && mongoose.isValidObjectId(String(id)));
+    const agentUserIds = matchingAgents
+      .map((agent) => agent.userId)
       .filter((id) => id && mongoose.isValidObjectId(String(id)));
 
     filter.$or = [
@@ -194,7 +257,37 @@ export async function listUsers({ page = 1, limit = 25, search = '', typeUser = 
       { fullName: { $regex: search, $options: 'i' } },
       { phone: { $regex: search, $options: 'i' } },
       ...(companyUserIds.length ? [{ _id: { $in: companyUserIds } }] : []),
+      ...(agentUserIds.length ? [{ _id: { $in: agentUserIds } }] : []),
     ];
+  }
+
+  if (postFilters) {
+    const rawUsers = await User.find(filter)
+      .sort({ createdAt: -1 })
+      .select('fullName email phone typeUser isVerified createdAt')
+      .lean();
+    let users = await enrichUsersWithOnboarding(rawUsers);
+
+    if (onboardingStatus) {
+      users = users.filter((user) => user.onboarding?.phaseStatus === onboardingStatus);
+    }
+    if (planName) {
+      const normalizedPlan = String(planName).trim().toLowerCase();
+      users = users.filter((user) => (user.planName || '').toLowerCase() === normalizedPlan);
+    }
+
+    const total = users.length;
+    const paginated = users.slice(skip, skip + safeLimit);
+
+    return {
+      users: paginated,
+      pagination: {
+        page: safePage,
+        limit: safeLimit,
+        total,
+        pages: Math.ceil(total / safeLimit) || 1,
+      },
+    };
   }
 
   const [rawUsers, total] = await Promise.all([
