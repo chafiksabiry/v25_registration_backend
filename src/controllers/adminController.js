@@ -2,6 +2,12 @@ import authService from '../services/authService.js';
 import { getAdminStats, listUsers } from '../services/adminService.js';
 import { getUserDetail, updateUserFinancials } from '../services/adminUserDetailService.js';
 import { getWalletOverview } from '../services/adminWalletService.js';
+import {
+  getMinutesPricing,
+  getPhoneLinePricing,
+  updateMinutesPricing,
+  updatePhoneLinePricing,
+} from '../services/adminPricingService.js';
 
 export const adminLogin = async (req, res) => {
   try {
@@ -63,5 +69,41 @@ export const adminWalletOverview = async (_req, res) => {
     res.status(200).json({ success: true, data });
   } catch (error) {
     res.status(500).json({ message: error.message || 'Failed to load wallet overview' });
+  }
+};
+
+export const adminMinutesPricing = async (_req, res) => {
+  try {
+    const data = await getMinutesPricing();
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    res.status(500).json({ message: error.message || 'Failed to load minutes pricing' });
+  }
+};
+
+export const adminUpdateMinutesPricing = async (req, res) => {
+  try {
+    const data = await updateMinutesPricing(req.body);
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    res.status(error.statusCode || 500).json({ message: error.message || 'Failed to update minutes pricing' });
+  }
+};
+
+export const adminPhoneLinePricing = async (_req, res) => {
+  try {
+    const data = await getPhoneLinePricing();
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    res.status(500).json({ message: error.message || 'Failed to load phone line pricing' });
+  }
+};
+
+export const adminUpdatePhoneLinePricing = async (req, res) => {
+  try {
+    const data = await updatePhoneLinePricing(req.body);
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    res.status(error.statusCode || 500).json({ message: error.message || 'Failed to update phone line pricing' });
   }
 };
