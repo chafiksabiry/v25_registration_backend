@@ -44,6 +44,9 @@ export const adminUsers = async (req, res) => {
       limit: req.query.limit,
       search: req.query.search,
       typeUser: req.query.typeUser,
+      verified: req.query.verified,
+      onboardingStatus: req.query.onboardingStatus,
+      planName: req.query.planName,
     });
     res.status(200).json({ success: true, data });
   } catch (error) {

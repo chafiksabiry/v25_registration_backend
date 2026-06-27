@@ -56,8 +56,35 @@ function serializeRepPlan(doc) {
     description: doc.description || '',
     features: Array.isArray(doc.features) ? doc.features : [],
     isActive: doc.isActive === undefined || doc.isActive === null ? true : parseBoolean(doc.isActive),
+    isPopular: parseBoolean(doc.isPopular),
     sortOrder: typeof doc.sortOrder === 'number' ? doc.sortOrder : 0,
     updatedAt: doc.updatedAt || doc.createdAt || null,
+  };
+}
+
+function serializePublicCompanyPlan(doc) {
+  return {
+    id: String(doc._id),
+    name: doc.name || '',
+    description: doc.description || '',
+    price: typeof doc.price === 'number' ? doc.price : 0,
+    currency: (doc.currency || 'eur').toLowerCase(),
+    features: Array.isArray(doc.features) ? doc.features : [],
+    popular: parseBoolean(doc.isPopular),
+  };
+}
+
+function serializePublicRepPlan(doc) {
+  const price = typeof doc.price === 'number' ? doc.price : 0;
+  return {
+    id: String(doc._id),
+    name: doc.name || '',
+    description: doc.description || '',
+    price,
+    currency: (doc.currency || 'eur').toLowerCase(),
+    features: Array.isArray(doc.features) ? doc.features : [],
+    popular: parseBoolean(doc.isPopular),
+    ctaLabel: price === 0 ? 'Subscribe' : 'Start trial',
   };
 }
 
@@ -110,7 +137,7 @@ export async function updateCompanyPlan(planId, payload = {}) {
     update.features = parseFeatures(payload.features);
   }
   if (payload.isPopular != null) {
-    update.isPopular = Boolean(payload.isPopular);
+    update.isPopular = parseBoolean(payload.isPopular);
   }
   if (payload.maxGigs != null) {
     const maxGigs = Number(payload.maxGigs);
@@ -123,9 +150,26 @@ export async function updateCompanyPlan(planId, payload = {}) {
     update.maxReps = Math.round(maxReps);
   }
 
+  if (update.isPopular === true) {
+    await db.collection('subscriptionplans').updateMany(
+      { _id: { $ne: objectId } },
+      { $set: { isPopular: false, updatedAt: new Date() } },
+    );
+  }
+
   await db.collection('subscriptionplans').updateOne({ _id: objectId }, { $set: update });
   const doc = await db.collection('subscriptionplans').findOne({ _id: objectId });
   return serializeCompanyPlan(doc);
+}
+
+export async function listPublicCompanyPlans() {
+  const db = mongoose.connection.db;
+  const docs = await db
+    .collection('subscriptionplans')
+    .find({})
+    .sort({ price: 1 })
+    .toArray();
+  return { plans: docs.map(serializePublicCompanyPlan) };
 }
 
 export async function listRepPlans() {
@@ -184,4 +228,17 @@ export async function updateRepPlan(planId, payload = {}) {
   await db.collection('plans').updateOne({ _id: objectId }, { $set: update });
   const doc = await db.collection('plans').findOne({ _id: objectId });
   return serializeRepPlan(doc);
+}
+
+export async function listPublicRepPlans() {
+  const db = mongoose.connection.db;
+  const docs = await db
+    .collection('plans')
+    .find({
+      targetUserType: 'representative',
+      $or: [{ isActive: true }, { isActive: { $exists: false } }, { isActive: null }],
+    })
+    .sort({ sortOrder: 1, price: 1 })
+    .toArray();
+  return { plans: docs.map(serializePublicRepPlan) };
 }
