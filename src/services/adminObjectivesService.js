@@ -55,57 +55,6 @@ async function countCompaniesOnboarded(db) {
   ).length;
 }
 
-async function countActiveSubscriptions(db) {
-  const activeSubs = await db
-    .collection('subscriptions')
-    .find({ status: { $in: ACTIVE_SUBSCRIPTION_STATUSES } })
-    .project({ companyId: 1, planId: 1 })
-    .toArray();
-
-  const uniqueCompanies = new Set(
-    activeSubs.map((sub) => String(sub.companyId)).filter(Boolean),
-  );
-
-  return {
-    count: uniqueCompanies.size,
-    subscriptions: activeSubs.length,
-  };
-}
-
-async function computeMrr(db) {
-  const activeSubs = await db
-    .collection('subscriptions')
-    .find({ status: { $in: ACTIVE_SUBSCRIPTION_STATUSES } })
-    .project({ planId: 1 })
-    .toArray();
-
-  if (!activeSubs.length) return 0;
-
-  const planIds = [
-    ...new Set(
-      activeSubs
-        .map((sub) => sub.planId)
-        .filter((id) => id && mongoose.isValidObjectId(String(id)))
-        .map((id) => new mongoose.Types.ObjectId(String(id))),
-    ),
-  ];
-
-  if (!planIds.length) return 0;
-
-  const plans = await db
-    .collection('subscriptionplans')
-    .find({ _id: { $in: planIds } })
-    .project({ price: 1 })
-    .toArray();
-
-  const priceByPlanId = new Map(plans.map((plan) => [String(plan._id), plan.price || 0]));
-
-  return activeSubs.reduce((sum, sub) => {
-    const price = priceByPlanId.get(String(sub.planId)) || 0;
-    return sum + price;
-  }, 0);
-}
-
 export async function getHarxActualMetrics() {
   const db = mongoose.connection.db;
   const year = new Date().getFullYear();
@@ -113,17 +62,14 @@ export async function getHarxActualMetrics() {
   const yearMatch = { createdAt: { $gte: yearStart } };
 
   const [
-    companiesSigned,
-    companiesOnboarded,
+    companies,
     repsOnboarded,
     repsWithActiveSubscription,
     annualCommissions,
     annualCompanyPayments,
     annualPhonePayments,
     annualHarxShare,
-    mrr,
   ] = await Promise.all([
-    countActiveSubscriptions(db).then((stats) => stats.count),
     countCompaniesOnboarded(db),
     countRepsOnboarded(db),
     db.collection('agents').countDocuments({ subscriptionStatus: { $in: ACTIVE_SUBSCRIPTION_STATUSES } }),
@@ -131,7 +77,6 @@ export async function getHarxActualMetrics() {
     sumCollectionAmount(db, 'companypayments', { status: 'succeeded', ...yearMatch }, 'amount'),
     sumCollectionAmount(db, 'phonenumberpayments', { status: 'succeeded', ...yearMatch }, 'amount'),
     sumCollectionAmount(db, 'reptransactions', yearMatch, 'harxShare'),
-    computeMrr(db),
   ]);
 
   const centsToEuros = (cents) => (cents || 0) / 100;
@@ -146,26 +91,28 @@ export async function getHarxActualMetrics() {
 
   return {
     year,
-    companiesSigned,
-    companiesOnboarded,
+    companies,
     repsOnboarded,
     repsWithActiveSubscription,
     annualRevenue,
     annualProfit,
-    mrr,
   };
+}
+
+function resolvedCompaniesTarget(doc) {
+  if (doc.companiesOnboarded != null) return doc.companiesOnboarded;
+  if (doc.companiesSigned != null) return doc.companiesSigned;
+  return null;
 }
 
 function serializeTargets(doc) {
   return {
     year: doc.year,
-    companiesSigned: doc.companiesSigned,
-    companiesOnboarded: doc.companiesOnboarded,
+    companies: resolvedCompaniesTarget(doc),
     repsOnboarded: doc.repsOnboarded,
     repsWithActiveSubscription: doc.repsWithActiveSubscription,
     annualRevenue: doc.annualRevenue,
     annualProfit: doc.annualProfit,
-    mrr: doc.mrr,
     notes: doc.notes || '',
     updatedAt: doc.updatedAt?.toISOString?.() || null,
   };
@@ -182,7 +129,7 @@ async function getOrCreateTargetsDoc() {
   return doc;
 }
 
-function buildComparisonRow({ key, label, target, actual, unit }) {
+function buildComparisonRow({ key, label, target, actual, unit, description }) {
   const hasTarget = target != null && target > 0;
   const progress = hasTarget ? Math.min(100, Math.round((actual / target) * 100)) : null;
   const gap = hasTarget ? actual - target : null;
@@ -195,6 +142,7 @@ function buildComparisonRow({ key, label, target, actual, unit }) {
     progress,
     gap,
     unit,
+    description: description || null,
     status: !hasTarget ? 'no_target' : progress >= 100 ? 'reached' : progress >= 75 ? 'on_track' : 'behind',
   };
 }
@@ -202,17 +150,10 @@ function buildComparisonRow({ key, label, target, actual, unit }) {
 function buildComparison(targets, actual) {
   return [
     buildComparisonRow({
-      key: 'companiesSigned',
-      label: 'Entreprises signées',
-      target: targets.companiesSigned,
-      actual: actual.companiesSigned,
-      unit: 'count',
-    }),
-    buildComparisonRow({
-      key: 'companiesOnboarded',
-      label: 'Entreprises onboardées',
-      target: targets.companiesOnboarded,
-      actual: actual.companiesOnboarded,
+      key: 'companies',
+      label: 'Entreprises',
+      target: targets.companies,
+      actual: actual.companies,
       unit: 'count',
     }),
     buildComparisonRow({
@@ -235,6 +176,8 @@ function buildComparison(targets, actual) {
       target: targets.annualRevenue,
       actual: actual.annualRevenue,
       unit: 'money',
+      description:
+        'Total encaissé via la plateforme : commissions HARX, abonnements entreprises, numéros téléphoniques et part HARX sur les transactions REPs.',
     }),
     buildComparisonRow({
       key: 'annualProfit',
@@ -242,13 +185,8 @@ function buildComparison(targets, actual) {
       target: targets.annualProfit,
       actual: actual.annualProfit,
       unit: 'money',
-    }),
-    buildComparisonRow({
-      key: 'mrr',
-      label: 'MRR (abonnements actifs)',
-      target: targets.mrr,
-      actual: actual.mrr,
-      unit: 'money',
+      description:
+        'Marge conservée par HARX : commissions + part HARX sur transactions REPs + abonnements entreprises (hors reversements téléphonie).',
     }),
   ];
 }
@@ -275,9 +213,10 @@ export async function updateHarxObjectives(payload = {}) {
     doc.year = year;
   }
 
-  if ('companiesSigned' in payload) doc.companiesSigned = parseOptionalNumber(payload.companiesSigned, 'Entreprises signées');
-  if ('companiesOnboarded' in payload) {
-    doc.companiesOnboarded = parseOptionalNumber(payload.companiesOnboarded, 'Entreprises onboardées');
+  if ('companies' in payload || 'companiesOnboarded' in payload) {
+    const raw = payload.companies ?? payload.companiesOnboarded;
+    doc.companiesOnboarded = parseOptionalNumber(raw, 'Entreprises');
+    doc.companiesSigned = null;
   }
   if ('repsOnboarded' in payload) doc.repsOnboarded = parseOptionalNumber(payload.repsOnboarded, 'REPs onboardés');
   if ('repsWithActiveSubscription' in payload) {
@@ -288,7 +227,6 @@ export async function updateHarxObjectives(payload = {}) {
   }
   if ('annualRevenue' in payload) doc.annualRevenue = parseOptionalNumber(payload.annualRevenue, 'CA annuel');
   if ('annualProfit' in payload) doc.annualProfit = parseOptionalNumber(payload.annualProfit, 'Profit annuel');
-  if ('mrr' in payload) doc.mrr = parseOptionalNumber(payload.mrr, 'MRR');
   if ('notes' in payload) doc.notes = String(payload.notes || '').trim();
 
   await doc.save();
