@@ -129,7 +129,7 @@ async function getOrCreateTargetsDoc() {
   return doc;
 }
 
-function buildComparisonRow({ key, label, target, actual, unit, description }) {
+function buildComparisonRow({ key, label, target, actual, unit }) {
   const hasTarget = target != null && target > 0;
   const progress = hasTarget ? Math.min(100, Math.round((actual / target) * 100)) : null;
   const gap = hasTarget ? actual - target : null;
@@ -142,7 +142,6 @@ function buildComparisonRow({ key, label, target, actual, unit, description }) {
     progress,
     gap,
     unit,
-    description: description || null,
     status: !hasTarget ? 'no_target' : progress >= 100 ? 'reached' : progress >= 75 ? 'on_track' : 'behind',
   };
 }
@@ -176,8 +175,6 @@ function buildComparison(targets, actual) {
       target: targets.annualRevenue,
       actual: actual.annualRevenue,
       unit: 'money',
-      description:
-        'Total encaissé via la plateforme : commissions HARX, abonnements entreprises, numéros téléphoniques et part HARX sur les transactions REPs.',
     }),
     buildComparisonRow({
       key: 'annualProfit',
@@ -185,8 +182,6 @@ function buildComparison(targets, actual) {
       target: targets.annualProfit,
       actual: actual.annualProfit,
       unit: 'money',
-      description:
-        'Marge conservée par HARX : commissions + part HARX sur transactions REPs + abonnements entreprises (hors reversements téléphonie).',
     }),
   ];
 }
