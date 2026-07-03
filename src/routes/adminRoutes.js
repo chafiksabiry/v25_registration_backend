@@ -14,6 +14,8 @@ import {
   adminUpdateCompanyPlan,
   adminRepPlans,
   adminUpdateRepPlan,
+  adminObjectives,
+  adminUpdateObjectives,
 } from '../controllers/adminController.js';
 import { authenticate } from '../middleware/auth.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
@@ -34,5 +36,7 @@ router.get('/plans/company', authenticate, requireAdmin, adminCompanyPlans);
 router.patch('/plans/company/:planId', authenticate, requireAdmin, adminUpdateCompanyPlan);
 router.get('/plans/rep', authenticate, requireAdmin, adminRepPlans);
 router.patch('/plans/rep/:planId', authenticate, requireAdmin, adminUpdateRepPlan);
+router.get('/objectives', authenticate, requireAdmin, adminObjectives);
+router.patch('/objectives', authenticate, requireAdmin, adminUpdateObjectives);
 
 export default router;
