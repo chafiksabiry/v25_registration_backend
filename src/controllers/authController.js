@@ -4,10 +4,6 @@ import authService from '../services/authService.js';
 export const register = async (req, res) => {
   try {
     const result = await authService.register(req.body, req);
-    console.log("result1", result);
-    console.log("result._id", result.result._id);
-    console.log('Verification code:', result.verificationCode);
-    //res.status(201).json({ message: 'Registration successful' });
     res.status(201).json({
       message: 'Registration successful',
       data: { code: result.verificationCode, _id: result.result._id }
@@ -33,7 +29,6 @@ export const register = async (req, res) => {
 export const login = async (req, res) => {
   try {
     const result = await authService.login(req.body.email, req.body.password, req);
-    console.log('Login verification code:', result.verificationCode);
 
     res.status(201).json({
       message: 'Verification code sent',
@@ -49,7 +44,6 @@ export const login = async (req, res) => {
 export const verifyEmail = async (req, res) => {
   try {
     const result = await authService.verifyEmail(req.body.email, req.body.code);
-    console.log("ResultController", result);
     res.json({ token: result.token, result });
   } catch (error) {
     res.status(400).json({ message: error.message });
@@ -71,14 +65,12 @@ export const linkedInAuth = async (req, res) => {
 // Contrôleur pour envoyer un OTP
 export const sendOTP = async (req, res) => {
   const { userId, phoneNumber } = req.body;
-  console.log("userId in sndotp controller", userId);
   if (!userId || !phoneNumber) {
     return res.status(400).json({ error: 'userId and phoneNumber are required' });
   }
 
   try {
     const result = await authService.sendOTPWithTwilio(userId, phoneNumber);
-    console.log("result in otp controller", result)
     return res.status(200).json(result);
   } catch (error) {
     const status = error.status || 500;
@@ -93,8 +85,6 @@ export const sendOTP = async (req, res) => {
 // Contrôleur pour vérifier un OTP
 export const verifyOTP = async (req, res) => {
   const { userId, otp } = req.body;
-  console.log("userId", userId);
-  console.log("userandotp", otp);
   if (!userId || !otp) {
     return res.status(400).json({ error: 'userId and otp are required' });
   }

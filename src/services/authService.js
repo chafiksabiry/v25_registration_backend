@@ -115,7 +115,7 @@ class AuthService {
   }
 
   async register(userData, req) {
-    console.log("userData", userData);
+    console.log('Register attempt for email:', userData.email);
     const existingUser = await userRepository.findByEmail(userData.email);
     if (existingUser) {
       console.warn("Email already registered");
@@ -141,30 +141,23 @@ class AuthService {
         ...(locationInfo && { locationInfo: locationInfo })
       }]
     });
-    console.log("result2", result);
-
     return { verificationCode, result };
   }
 
   async login(email, password, req) {
-    console.log('we are here');
     const user = await userRepository.findByEmail(email);
-    console.log("user", user);
     if (!user) {
-      console.log('user not found');
       throw new Error('Invalid credentials');
     }
 
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
-      console.log('invalid credentials')
       throw new Error('Invalid credentials');
     }
 
     const verificationCode = this.generateVerificationCode();
     const verificationExpiry = new Date();
     verificationExpiry.setMinutes(verificationExpiry.getMinutes() + 10);
-    console.log("verificationCodeLogin", verificationCode);
 
     const clientIp = getClientIp(req);
     const locationInfo = await this.enrichIPInfo(clientIp);
@@ -195,7 +188,6 @@ class AuthService {
     try {
       // Récupérer l'utilisateur par email
       const user = await userRepository.findByEmail(email);
-      console.log("userInVerifyEmail:", user);
 
       if (!user) {
         throw new Error('User not found');
@@ -207,16 +199,17 @@ class AuthService {
         user.verificationCode.code !== code ||
         user.verificationCode.expiresAt < new Date()
       ) {
-        console.log('Verification failed: invalid or expired code');
         return { error: true, message: 'invalid or expired code. Please try again.' }
 
         // throw new Error('Invalid or expired verification code');
       }
 
-      // Mettre à jour l'utilisateur : retirer le code de vérification
+      // Clear email code only — keep SMS OTP fields if present
       await userRepository.update(user._id, {
-        verificationCode: undefined,
-        // isVerified: true
+        $unset: {
+          'verificationCode.code': '',
+          'verificationCode.expiresAt': '',
+        },
       });
 
       // Générer un token et le retourner avec les informations utilisateur
@@ -296,19 +289,14 @@ class AuthService {
 
       const otp = Math.floor(100000 + Math.random() * 900000);
       const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 min — 30s was too short for SMS delivery + user input
-      console.log("userIdInSendOTPWithTwilio", userId);
-      const result = await userRepository.update(
-        { _id: userId },
-        {
-          $set: {
-            'verificationCode.otp': otp,
-            'verificationCode.otpExpiresAt': expiresAt,
-          },
+      await userRepository.update(userId, {
+        $set: {
+          'verificationCode.otp': otp,
+          'verificationCode.otpExpiresAt': expiresAt,
         },
-        { upsert: true, new: true }
-      );
+      });
       const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-      console.log(`Attempting to send SMS to ${phoneNumber} from ${process.env.TWILIO_PHONE_NUMBER}...`);
+      console.log(`Sending SMS OTP to ${phoneNumber.slice(0, 4)}***`);
       const twilioResponse = await client.messages.create({
         body:
           `HARX TECHNOLOGIES Inc.\n` +
@@ -317,13 +305,16 @@ class AuthService {
         to: phoneNumber,
         from: process.env.TWILIO_PHONE_NUMBER,
       });
-      console.log('Twilio response SID:', twilioResponse.sid);
-      console.log('done');
+      console.log('Twilio SMS sent, SID:', twilioResponse.sid);
       return { success: true, message: 'OTP sent successfully' };
 
     } catch (error) {
-      console.error('Error in sendOTPWithTwilio:', error);
-      const enrichedError = new Error(error?.message || 'Failed to send OTP');
+      console.error('Error in sendOTPWithTwilio:', error.code || error.message);
+      let message = error?.message || 'Failed to send OTP';
+      if (error?.code === 21408) {
+        message = 'SMS verification is not available for this phone region. Please use email verification.';
+      }
+      const enrichedError = new Error(message);
       enrichedError.status = error?.status || error?.statusCode || 500;
       enrichedError.code = error?.code;
       enrichedError.moreInfo = error?.moreInfo;
@@ -334,7 +325,7 @@ class AuthService {
   // Service pour vérifier un OTP
   async verifyOTPTwilio(userId, enteredOtp) {
     try {
-      const user = await userRepository.findById({ _id: userId });
+      const user = await userRepository.findById(userId);
 
       if (!user || !user.verificationCode) {
         throw new Error('User not found or OTP not generated');
@@ -346,17 +337,12 @@ class AuthService {
         throw new Error('OTP has expired. Please request a new one.');
       }
       if (String(otp) === String(enteredOtp)) {
-        console.log("search for otp");
-        await userRepository.update(
-          { _id: user._id },
-          {
-            $set: {
-              'verificationCode.otp': undefined,
-              'verificationCode.otpExpiresAt': undefined,
-            },
+        await userRepository.update(user._id, {
+          $unset: {
+            'verificationCode.otp': '',
+            'verificationCode.otpExpiresAt': '',
           },
-          { upsert: true, new: true }
-        );
+        });
         return {
           token: this.generateToken(user._id, {
             email: user.email,
@@ -380,7 +366,7 @@ class AuthService {
   async verifyAccount(userId) {
     try {
       // Chercher l'utilisateur par son ID
-      const user = await userRepository.findById({ _id: userId });
+      const user = await userRepository.findById(userId);
 
       if (!user) {
         throw new Error('User not found');
@@ -392,15 +378,11 @@ class AuthService {
       }
 
       // Mettre à jour le champ isVerified à true
-      await userRepository.update(
-        { _id: user._id },
-        {
-          $set: {
-            isVerified: true,
-          },
+      await userRepository.update(user._id, {
+        $set: {
+          isVerified: true,
         },
-        { upsert: true, new: true }
-      );
+      });
       return { success: true, message: 'Account verified successfully' };
     } catch (error) {
       console.error('Error in verifyAccount:', error);
@@ -559,7 +541,7 @@ class AuthService {
         throw new Error('Admin role cannot be assigned through this endpoint');
       }
 
-      const user = await userRepository.findById({ _id: userId });
+      const user = await userRepository.findById(userId);
 
       if (!user) {
         throw new Error('User not found');
