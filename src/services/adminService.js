@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import User from '../models/User.js';
 import { formatCompanyOnboarding, formatRepOnboarding } from './adminOnboardingUtils.js';
+import { getHarxObjectives } from './adminObjectivesService.js';
 
 async function loadCompanyProfilesForList(db, users) {
   const companyUserIds = users
@@ -162,13 +163,15 @@ async function enrichUsersWithOnboarding(users) {
 }
 
 export async function getAdminStats() {
-  const [totalUsers, verifiedUsers, companyUsers, repUsers, adminUsers] = await Promise.all([
-    User.countDocuments({}),
-    User.countDocuments({ isVerified: true }),
-    User.countDocuments({ typeUser: 'company' }),
-    User.countDocuments({ typeUser: 'rep' }),
-    User.countDocuments({ typeUser: 'admin' }),
-  ]);
+  const [totalUsers, verifiedUsers, companyUsers, repUsers, adminUsers, objectives] =
+    await Promise.all([
+      User.countDocuments({}),
+      User.countDocuments({ isVerified: true }),
+      User.countDocuments({ typeUser: 'company' }),
+      User.countDocuments({ typeUser: 'rep' }),
+      User.countDocuments({ typeUser: 'admin' }),
+      getHarxObjectives(),
+    ]);
 
   const recentUsers = await User.find({})
     .sort({ createdAt: -1 })
@@ -185,6 +188,7 @@ export async function getAdminStats() {
       admin: adminUsers,
       unassigned: totalUsers - companyUsers - repUsers - adminUsers,
     },
+    objectives,
     recentUsers,
   };
 }
