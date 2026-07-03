@@ -1,10 +1,25 @@
 import mongoose from 'mongoose';
-import User from '../models/User.js';
+import HarxObjectives from '../models/HarxObjectives.js';
 
 const ACTIVE_SUBSCRIPTION_STATUSES = ['active', 'trialing'];
 
+function validationError(message, statusCode = 400) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+}
+
 function startOfYear(year = new Date().getFullYear()) {
   return new Date(Date.UTC(year, 0, 1));
+}
+
+function parseOptionalNumber(value, label) {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw validationError(`${label} : valeur invalide.`);
+  }
+  return parsed;
 }
 
 async function sumCollectionAmount(db, collection, match = {}, field = 'amount') {
@@ -91,62 +106,35 @@ async function computeMrr(db) {
   }, 0);
 }
 
-export async function getHarxObjectives() {
+export async function getHarxActualMetrics() {
   const db = mongoose.connection.db;
   const year = new Date().getFullYear();
   const yearStart = startOfYear(year);
   const yearMatch = { createdAt: { $gte: yearStart } };
 
   const [
-    companiesRegistered,
-    repsRegistered,
-    repsOnboarded,
+    companiesSigned,
     companiesOnboarded,
-    activeSubscriptionStats,
-    repsWithActiveSub,
-    harxWallet,
-    mrr,
-    totalCommissions,
+    repsOnboarded,
+    repsWithActiveSubscription,
     annualCommissions,
-    totalCompanyPayments,
     annualCompanyPayments,
-    totalPhonePayments,
     annualPhonePayments,
-    totalHarxShare,
     annualHarxShare,
-    totalRepWalletBalance,
-    totalCompanyWalletBalance,
-    totalMinutesPurchased,
+    mrr,
   ] = await Promise.all([
-    User.countDocuments({ typeUser: 'company' }),
-    User.countDocuments({ typeUser: 'rep' }),
-    countRepsOnboarded(db),
+    countActiveSubscriptions(db).then((stats) => stats.count),
     countCompaniesOnboarded(db),
-    countActiveSubscriptions(db),
+    countRepsOnboarded(db),
     db.collection('agents').countDocuments({ subscriptionStatus: { $in: ACTIVE_SUBSCRIPTION_STATUSES } }),
-    db.collection('harxwallets').findOne({}),
-    computeMrr(db),
-    sumCollectionAmount(db, 'harxcommissions'),
     sumCollectionAmount(db, 'harxcommissions', yearMatch),
-    sumCollectionAmount(db, 'companypayments', { status: 'succeeded' }, 'amount'),
     sumCollectionAmount(db, 'companypayments', { status: 'succeeded', ...yearMatch }, 'amount'),
-    sumCollectionAmount(db, 'phonenumberpayments', { status: 'succeeded' }, 'amount'),
     sumCollectionAmount(db, 'phonenumberpayments', { status: 'succeeded', ...yearMatch }, 'amount'),
-    sumCollectionAmount(db, 'reptransactions', {}, 'harxShare'),
     sumCollectionAmount(db, 'reptransactions', yearMatch, 'harxShare'),
-    sumCollectionAmount(db, 'agentwallets', {}, 'availableBalance'),
-    sumCollectionAmount(db, 'walletcompanies', {}, 'balance'),
-    sumCollectionAmount(db, 'minutescompanies', {}, 'purchasedMinutes'),
+    computeMrr(db),
   ]);
 
   const centsToEuros = (cents) => (cents || 0) / 100;
-
-  const lifetimeRevenue =
-    (harxWallet?.lifetimeEarnings ?? 0) +
-    totalCommissions +
-    centsToEuros(totalCompanyPayments) +
-    centsToEuros(totalPhonePayments) +
-    totalHarxShare;
 
   const annualRevenue =
     annualCommissions +
@@ -158,34 +146,159 @@ export async function getHarxObjectives() {
 
   return {
     year,
-    growth: {
-      companiesRegistered,
-      companiesSigned: activeSubscriptionStats.count,
-      activeSubscriptions: activeSubscriptionStats.subscriptions,
-      companiesOnboarded,
-      repsRegistered,
-      repsOnboarded,
-      repsWithActiveSubscription: repsWithActiveSub,
-      repsInProgress: Math.max(repsRegistered - repsOnboarded, 0),
-      companiesInProgress: Math.max(companiesRegistered - companiesOnboarded, 0),
-    },
-    financial: {
-      harxWalletBalance: harxWallet?.balance ?? 0,
-      lifetimeRevenue,
-      annualRevenue,
-      annualProfit,
-      mrr,
-      totalCommissions,
-      annualCommissions,
-      companyPaymentsTotal: centsToEuros(totalCompanyPayments),
-      annualCompanyPayments: centsToEuros(annualCompanyPayments),
-      phoneLineRevenue: centsToEuros(totalPhonePayments),
-      annualPhoneLineRevenue: centsToEuros(annualPhonePayments),
-      gigHarxShareTotal: totalHarxShare,
-      annualGigHarxShare: annualHarxShare,
-      totalRepWalletBalance,
-      totalCompanyWalletBalance,
-      totalMinutesPurchased,
-    },
+    companiesSigned,
+    companiesOnboarded,
+    repsOnboarded,
+    repsWithActiveSubscription,
+    annualRevenue,
+    annualProfit,
+    mrr,
+  };
+}
+
+function serializeTargets(doc) {
+  return {
+    year: doc.year,
+    companiesSigned: doc.companiesSigned,
+    companiesOnboarded: doc.companiesOnboarded,
+    repsOnboarded: doc.repsOnboarded,
+    repsWithActiveSubscription: doc.repsWithActiveSubscription,
+    annualRevenue: doc.annualRevenue,
+    annualProfit: doc.annualProfit,
+    mrr: doc.mrr,
+    notes: doc.notes || '',
+    updatedAt: doc.updatedAt?.toISOString?.() || null,
+  };
+}
+
+async function getOrCreateTargetsDoc() {
+  let doc = await HarxObjectives.findOne({ key: 'default' });
+  if (!doc) {
+    doc = await HarxObjectives.create({
+      key: 'default',
+      year: new Date().getFullYear(),
+    });
+  }
+  return doc;
+}
+
+function buildComparisonRow({ key, label, target, actual, unit }) {
+  const hasTarget = target != null && target > 0;
+  const progress = hasTarget ? Math.min(100, Math.round((actual / target) * 100)) : null;
+  const gap = hasTarget ? actual - target : null;
+
+  return {
+    key,
+    label,
+    target,
+    actual,
+    progress,
+    gap,
+    unit,
+    status: !hasTarget ? 'no_target' : progress >= 100 ? 'reached' : progress >= 75 ? 'on_track' : 'behind',
+  };
+}
+
+function buildComparison(targets, actual) {
+  return [
+    buildComparisonRow({
+      key: 'companiesSigned',
+      label: 'Entreprises signées',
+      target: targets.companiesSigned,
+      actual: actual.companiesSigned,
+      unit: 'count',
+    }),
+    buildComparisonRow({
+      key: 'companiesOnboarded',
+      label: 'Entreprises onboardées',
+      target: targets.companiesOnboarded,
+      actual: actual.companiesOnboarded,
+      unit: 'count',
+    }),
+    buildComparisonRow({
+      key: 'repsOnboarded',
+      label: 'REPs onboardés',
+      target: targets.repsOnboarded,
+      actual: actual.repsOnboarded,
+      unit: 'count',
+    }),
+    buildComparisonRow({
+      key: 'repsWithActiveSubscription',
+      label: 'REPs abonnement actif',
+      target: targets.repsWithActiveSubscription,
+      actual: actual.repsWithActiveSubscription,
+      unit: 'count',
+    }),
+    buildComparisonRow({
+      key: 'annualRevenue',
+      label: `Chiffre d'affaires annuel ${actual.year}`,
+      target: targets.annualRevenue,
+      actual: actual.annualRevenue,
+      unit: 'money',
+    }),
+    buildComparisonRow({
+      key: 'annualProfit',
+      label: `Profit HARX annuel ${actual.year}`,
+      target: targets.annualProfit,
+      actual: actual.annualProfit,
+      unit: 'money',
+    }),
+    buildComparisonRow({
+      key: 'mrr',
+      label: 'MRR (abonnements actifs)',
+      target: targets.mrr,
+      actual: actual.mrr,
+      unit: 'money',
+    }),
+  ];
+}
+
+export async function getHarxObjectivesOverview() {
+  const [doc, actual] = await Promise.all([getOrCreateTargetsDoc(), getHarxActualMetrics()]);
+  const targets = serializeTargets(doc);
+
+  return {
+    targets,
+    actual,
+    comparison: buildComparison(targets, actual),
+  };
+}
+
+export async function updateHarxObjectives(payload = {}) {
+  const doc = await getOrCreateTargetsDoc();
+
+  if (payload.year != null) {
+    const year = Number(payload.year);
+    if (!Number.isInteger(year) || year < 2020 || year > 2100) {
+      throw validationError('Année objectif invalide.');
+    }
+    doc.year = year;
+  }
+
+  if ('companiesSigned' in payload) doc.companiesSigned = parseOptionalNumber(payload.companiesSigned, 'Entreprises signées');
+  if ('companiesOnboarded' in payload) {
+    doc.companiesOnboarded = parseOptionalNumber(payload.companiesOnboarded, 'Entreprises onboardées');
+  }
+  if ('repsOnboarded' in payload) doc.repsOnboarded = parseOptionalNumber(payload.repsOnboarded, 'REPs onboardés');
+  if ('repsWithActiveSubscription' in payload) {
+    doc.repsWithActiveSubscription = parseOptionalNumber(
+      payload.repsWithActiveSubscription,
+      'REPs abonnement actif',
+    );
+  }
+  if ('annualRevenue' in payload) doc.annualRevenue = parseOptionalNumber(payload.annualRevenue, 'CA annuel');
+  if ('annualProfit' in payload) doc.annualProfit = parseOptionalNumber(payload.annualProfit, 'Profit annuel');
+  if ('mrr' in payload) doc.mrr = parseOptionalNumber(payload.mrr, 'MRR');
+  if ('notes' in payload) doc.notes = String(payload.notes || '').trim();
+
+  await doc.save();
+
+  const actual = await getHarxActualMetrics();
+  const targets = serializeTargets(doc);
+
+  return {
+    targets,
+    actual,
+    comparison: buildComparison(targets, actual),
   };
 }
