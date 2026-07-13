@@ -24,6 +24,10 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/filemanag
 app.use(cors({
   origin: [
     'http://localhost:5157',
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'http://localhost:5174',
+    'http://localhost:8100',
     'http://38.242.208.242:5175',
     'http://38.242.208.242:5157',
     'https://harx25register.netlify.app:5157',
@@ -31,7 +35,8 @@ app.use(cors({
     'https://harx.ai',
     'https://v25registrationbackend-production.up.railway.app',
     'http://localhost:3000',
-    'https://harx25register.netlify.app',
+    'capacitor://localhost',
+    'ionic://localhost',
     process.env.CORS_ORIGIN
   ].filter(Boolean),
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
