@@ -41,9 +41,19 @@ export const login = async (req, res) => {
     });
   } catch (error) {
     console.error("Login error:", error.message);
+    const code = error.code || (
+      error.message === 'Invalid email' ? 'INVALID_EMAIL' :
+      error.message === 'Invalid password' ? 'INVALID_PASSWORD' :
+      'INVALID_CREDENTIALS'
+    );
+    const message =
+      code === 'INVALID_EMAIL' ? 'Invalid email' :
+      code === 'INVALID_PASSWORD' ? 'Invalid password' :
+      'Invalid credentials';
     res.status(400).json({
-      error: 'Invalid credentials',
-      message: 'Invalid credentials',
+      error: message,
+      message,
+      code,
     });
   }
 };

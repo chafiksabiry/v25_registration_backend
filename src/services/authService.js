@@ -147,12 +147,16 @@ class AuthService {
   async login(email, password, req) {
     const user = await userRepository.findByEmail(email);
     if (!user) {
-      throw new Error('Invalid credentials');
+      const err = new Error('Invalid email');
+      err.code = 'INVALID_EMAIL';
+      throw err;
     }
 
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
-      throw new Error('Invalid credentials');
+      const err = new Error('Invalid password');
+      err.code = 'INVALID_PASSWORD';
+      throw err;
     }
 
     const verificationCode = this.generateVerificationCode();
