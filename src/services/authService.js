@@ -179,7 +179,11 @@ class AuthService {
       }
     });
 
-    return { verificationCode };
+    return {
+      verificationCode,
+      userId: String(user._id),
+      phone: user.phone || '',
+    };
   }
 
 
