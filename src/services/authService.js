@@ -545,8 +545,12 @@ class AuthService {
   }
   async changeUserType(userId, newType) {
     try {
+      const allowed = ['company', 'rep', 'call-center'];
       if (newType === 'admin') {
         throw new Error('Admin role cannot be assigned through this endpoint');
+      }
+      if (!allowed.includes(newType)) {
+        throw new Error(`Invalid user type. Allowed: ${allowed.join(', ')}`);
       }
 
       const user = await userRepository.findById(userId);
@@ -562,7 +566,7 @@ class AuthService {
       return { success: true, message: `User type changed to ${newType}` };
     } catch (error) {
       console.error('Error changing user type:', error);
-      throw new Error('Failed to change user type');
+      throw new Error(error?.message || 'Failed to change user type');
     }
   }
 
