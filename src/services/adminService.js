@@ -203,7 +203,7 @@ export async function listUsers({
   const skip = (safePage - 1) * safeLimit;
 
   const filter = {};
-  const allowedTypes = ['rep', 'company', 'admin'];
+  const allowedTypes = ['rep', 'company', 'admin', 'call-center'];
   const postFilters = Boolean(onboardingStatus || planName);
 
   if (typeUser && allowedTypes.includes(typeUser)) {
