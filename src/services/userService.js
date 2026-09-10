@@ -267,6 +267,10 @@ class UserService {
 
     user.password = newPassword;
     user.pendingChanges.passwordChange = undefined;
+    user.mustChangePassword = false;
+    if (user.employerCompanyId && user.invitationStatus !== 'active') {
+      user.invitationStatus = 'active';
+    }
     await user.save();
 
     return { success: true };
