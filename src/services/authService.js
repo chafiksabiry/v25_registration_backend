@@ -44,7 +44,11 @@ class AuthService {
         email: userInfo.email,
         fullName: userInfo.fullName,
         typeUser: userInfo.typeUser,
-        isVerified: userInfo.isVerified
+        isVerified: userInfo.isVerified,
+        mustChangePassword: Boolean(userInfo.mustChangePassword),
+        employerCompanyId: userInfo.employerCompanyId
+          ? String(userInfo.employerCompanyId)
+          : null,
       },
       process.env.JWT_SECRET,
       { expiresIn: '24h' }
@@ -226,7 +230,9 @@ class AuthService {
           email: user.email,
           fullName: user.fullName,
           typeUser: user.typeUser,
-          isVerified: user.isVerified
+          isVerified: user.isVerified,
+          mustChangePassword: user.mustChangePassword,
+          employerCompanyId: user.employerCompanyId,
         })
       };
     } catch (error) {
@@ -282,7 +288,9 @@ class AuthService {
         email: user.email,
         fullName: user.fullName,
         typeUser: user.typeUser,
-        isVerified: user.isVerified
+        isVerified: user.isVerified,
+        mustChangePassword: user.mustChangePassword,
+        employerCompanyId: user.employerCompanyId,
       })
     };
   }
@@ -356,7 +364,9 @@ class AuthService {
             email: user.email,
             fullName: user.fullName,
             typeUser: user.typeUser,
-            isVerified: user.isVerified
+            isVerified: user.isVerified,
+            mustChangePassword: user.mustChangePassword,
+            employerCompanyId: user.employerCompanyId,
           }),
           success: true,
           message: 'OTP verified successfully'
@@ -433,6 +443,10 @@ class AuthService {
 
     // Mettre à jour le mot de passe
     user.password = newPassword; // Le hook `pre('save')` hash automatiquement le mot de passe
+    user.mustChangePassword = false;
+    if (user.employerCompanyId && user.invitationStatus !== 'active') {
+      user.invitationStatus = 'active';
+    }
     await user.save();
 
     return { success: true, message: 'Mot de passe changé avec succès.' };
@@ -575,7 +589,11 @@ class AuthService {
     if (!user) {
       throw new Error('User not found');
     }
-    return user.typeUser;
+    return {
+      userType: user.typeUser,
+      mustChangePassword: Boolean(user.mustChangePassword),
+      employerCompanyId: user.employerCompanyId ? String(user.employerCompanyId) : null,
+    };
   }
 
   async adminLogin(email, password, req) {

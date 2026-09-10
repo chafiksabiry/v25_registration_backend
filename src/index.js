@@ -11,6 +11,7 @@ import adminRoutes from './routes/adminRoutes.js';
 import plansRoutes from './routes/plansRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import newsletterRoutes from './routes/newsletterRoutes.js';
+import callCenterRoutes from './routes/callCenterRoutes.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
 dotenv.config();
@@ -58,6 +59,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/plans', plansRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/newsletter', newsletterRoutes);
+app.use('/api/call-center', callCenterRoutes);
 
 // Error handling
 app.use(errorHandler);

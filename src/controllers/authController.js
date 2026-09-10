@@ -227,8 +227,17 @@ export const changeUserType = async (req, res) => {
 };
 export const checkUserType = async (req, res) => {
   const { userId } = req.body;
-  const userType = await authService.checkUserType(userId);
-  res.json({ userType });
+  const result = await authService.checkUserType(userId);
+  // Keep legacy `userType` top-level for existing clients; also return full payload.
+  if (result && typeof result === 'object') {
+    return res.json({
+      userType: result.userType,
+      mustChangePassword: result.mustChangePassword,
+      employerCompanyId: result.employerCompanyId,
+      ...result,
+    });
+  }
+  res.json({ userType: result });
 };
 
 

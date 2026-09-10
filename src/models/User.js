@@ -93,7 +93,32 @@ const userSchema = new mongoose.Schema({
   firstTime: {
     type: Boolean,
     default: true
-  }
+  },
+  /** Call-center staff: company that employs this rep. */
+  employerCompanyId: {
+    type: mongoose.Schema.Types.ObjectId,
+    default: null,
+    index: true,
+  },
+  /** Set when a call center provisions the account with a temporary password. */
+  mustChangePassword: {
+    type: Boolean,
+    default: false,
+  },
+  invitationStatus: {
+    type: String,
+    enum: ['none', 'pending', 'invited', 'active'],
+    default: 'none',
+  },
+  invitedAt: {
+    type: Date,
+    default: null,
+  },
+  invitedByUserId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null,
+  },
 });
 
 userSchema.pre('save', async function(next) {
