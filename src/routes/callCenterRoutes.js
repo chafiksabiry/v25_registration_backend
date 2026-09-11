@@ -1,5 +1,5 @@
 import express from 'express';
-import { authenticate } from '../middleware/auth.js';
+import { authenticateCallCenter } from '../middleware/callCenterAuth.js';
 import {
   createCallCenterAgent,
   listCallCenterAgents,
@@ -8,7 +8,7 @@ import {
 
 const router = express.Router();
 
-router.use(authenticate);
+router.use(authenticateCallCenter);
 router.get('/agents', listCallCenterAgents);
 router.post('/agents', createCallCenterAgent);
 router.post('/agents/:userId/resend-invite', resendCallCenterAgentInvite);
