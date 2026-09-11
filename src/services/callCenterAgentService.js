@@ -125,10 +125,14 @@ async function sendInviteEmail({
     throw new Error('Server misconfiguration: Missing email credentials.');
   }
 
-  const loginUrl =
+  const shellBase = (
     process.env.FRONTEND_URL ||
     process.env.VITE_FRONTEND_URL ||
-    'https://v25.harx.ai';
+    'https://harx26harxconnection-dev.netlify.app'
+  ).replace(/\/$/, '');
+  const loginUrl =
+    process.env.AGENT_INVITE_LOGIN_URL ||
+    `${shellBase}/auth/signin`;
 
   const nodemailer = (await import('nodemailer')).default;
   const transporter = nodemailer.createTransport({
