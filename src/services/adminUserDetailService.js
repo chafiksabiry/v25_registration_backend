@@ -131,7 +131,7 @@ async function loadCompanyFinancials(db, company) {
       .collection('tokensusageledgers')
       .find({ companyId })
       .sort({ createdAt: -1 })
-      .limit(LIST_LIMIT)
+      .limit(100)
       .toArray(),
     db
       .collection('walletcompanyentries')
@@ -193,27 +193,82 @@ async function loadCompanyFinancials(db, company) {
     { gross: 0, repShare: 0, harxShare: 0 },
   );
 
-  const aiProviders = {
-    openai: tokens?.aiProviders?.openai !== false,
-    anthropic: tokens?.aiProviders?.anthropic !== false,
-    gemini: tokens?.aiProviders?.gemini !== false,
+  const usageByProviderRows = await db
+    .collection('tokensusageledgers')
+    .aggregate([
+      { $match: { companyId } },
+      {
+        $group: {
+          _id: { $ifNull: ['$provider', 'unknown'] },
+          tokensUsed: { $sum: '$tokensUsed' },
+          requests: { $sum: 1 },
+          inputTokens: { $sum: { $ifNull: ['$inputTokens', 0] } },
+          outputTokens: { $sum: { $ifNull: ['$outputTokens', 0] } },
+          lastUsedAt: { $max: '$createdAt' },
+        },
+      },
+      { $sort: { tokensUsed: -1 } },
+    ])
+    .toArray();
+
+  const emptyProviderStats = () => ({
+    tokensUsed: 0,
+    requests: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    lastUsedAt: null,
+  });
+
+  const tokenUsageByProvider = {
+    openai: emptyProviderStats(),
+    anthropic: emptyProviderStats(),
+    gemini: emptyProviderStats(),
+    estimated: emptyProviderStats(),
+    other: emptyProviderStats(),
+    total: emptyProviderStats(),
   };
+
+  for (const row of usageByProviderRows) {
+    const raw = String(row._id || 'unknown').toLowerCase();
+    let key = 'other';
+    if (raw === 'openai') key = 'openai';
+    else if (raw === 'anthropic' || raw === 'claude') key = 'anthropic';
+    else if (raw === 'gemini' || raw === 'google') key = 'gemini';
+    else if (raw === 'estimated') key = 'estimated';
+
+    const stats = {
+      tokensUsed: row.tokensUsed || 0,
+      requests: row.requests || 0,
+      inputTokens: row.inputTokens || 0,
+      outputTokens: row.outputTokens || 0,
+      lastUsedAt: row.lastUsedAt || null,
+    };
+    tokenUsageByProvider[key] = stats;
+    tokenUsageByProvider.total.tokensUsed += stats.tokensUsed;
+    tokenUsageByProvider.total.requests += stats.requests;
+    tokenUsageByProvider.total.inputTokens += stats.inputTokens;
+    tokenUsageByProvider.total.outputTokens += stats.outputTokens;
+    if (
+      stats.lastUsedAt &&
+      (!tokenUsageByProvider.total.lastUsedAt ||
+        new Date(stats.lastUsedAt) > new Date(tokenUsageByProvider.total.lastUsedAt))
+    ) {
+      tokenUsageByProvider.total.lastUsedAt = stats.lastUsedAt;
+    }
+  }
 
   return serialize({
     wallet,
     minutes,
     tokens: tokens
-      ? {
-          ...tokens,
-          aiProviders,
-        }
+      ? tokens
       : {
           tokens: 0,
           purchasedTokens: 0,
           consumedTokens: 0,
-          aiProviders,
         },
     tokenUsage,
+    tokenUsageByProvider,
     walletEntries,
     payments,
     phoneNumbers,
