@@ -112,6 +112,8 @@ async function loadCompanyFinancials(db, company) {
   const [
     wallet,
     minutes,
+    tokens,
+    tokenUsage,
     walletEntries,
     payments,
     phoneNumbers,
@@ -124,6 +126,13 @@ async function loadCompanyFinancials(db, company) {
   ] = await Promise.all([
     db.collection('walletcompanies').findOne({ companyId }),
     db.collection('minutescompanies').findOne({ companyId }),
+    db.collection('tokenscompanies').findOne({ companyId }),
+    db
+      .collection('tokensusageledgers')
+      .find({ companyId })
+      .sort({ createdAt: -1 })
+      .limit(LIST_LIMIT)
+      .toArray(),
     db
       .collection('walletcompanyentries')
       .find({ companyId })
@@ -184,9 +193,27 @@ async function loadCompanyFinancials(db, company) {
     { gross: 0, repShare: 0, harxShare: 0 },
   );
 
+  const aiProviders = {
+    openai: tokens?.aiProviders?.openai !== false,
+    anthropic: tokens?.aiProviders?.anthropic !== false,
+    gemini: tokens?.aiProviders?.gemini !== false,
+  };
+
   return serialize({
     wallet,
     minutes,
+    tokens: tokens
+      ? {
+          ...tokens,
+          aiProviders,
+        }
+      : {
+          tokens: 0,
+          purchasedTokens: 0,
+          consumedTokens: 0,
+          aiProviders,
+        },
+    tokenUsage,
     walletEntries,
     payments,
     phoneNumbers,
@@ -316,6 +343,76 @@ async function adjustCompanyMinutes(db, companyId, action, amount) {
   return { minutes: newMinutes };
 }
 
+async function ensureTokensCompany(db, companyId) {
+  let tokensDoc = await db.collection('tokenscompanies').findOne({ companyId });
+  if (!tokensDoc) {
+    const now = new Date();
+    await db.collection('tokenscompanies').insertOne({
+      companyId,
+      tokens: 0,
+      purchasedTokens: 0,
+      consumedTokens: 0,
+      chargedUsageIds: [],
+      aiProviders: { openai: true, anthropic: true, gemini: true },
+      createdAt: now,
+      updatedAt: now,
+    });
+    tokensDoc = await db.collection('tokenscompanies').findOne({ companyId });
+  }
+  return tokensDoc;
+}
+
+async function adjustCompanyAiTokens(db, companyId, action, amount) {
+  const tokensDoc = await ensureTokensCompany(db, companyId);
+  const current = tokensDoc.tokens || 0;
+  const delta = Math.round(Number(amount));
+  const newTokens = action === 'set' ? Math.round(Number(amount)) : current + delta;
+
+  if (newTokens < 0) {
+    const error = new Error('AI tokens balance cannot be negative');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const incPurchased =
+    action === 'add' && delta > 0
+      ? { $inc: { purchasedTokens: delta } }
+      : {};
+
+  await db.collection('tokenscompanies').updateOne(
+    { _id: tokensDoc._id },
+    {
+      $set: { tokens: newTokens, updatedAt: new Date() },
+      ...incPurchased,
+    },
+  );
+
+  return {
+    tokens: newTokens,
+    purchasedTokens:
+      action === 'add' && delta > 0
+        ? (tokensDoc.purchasedTokens || 0) + delta
+        : tokensDoc.purchasedTokens || 0,
+    consumedTokens: tokensDoc.consumedTokens || 0,
+  };
+}
+
+async function updateCompanyAiProviders(db, companyId, providers = {}) {
+  const tokensDoc = await ensureTokensCompany(db, companyId);
+  const next = {
+    openai: providers.openai !== false,
+    anthropic: providers.anthropic !== false,
+    gemini: providers.gemini !== false,
+  };
+
+  await db.collection('tokenscompanies').updateOne(
+    { _id: tokensDoc._id },
+    { $set: { aiProviders: next, updatedAt: new Date() } },
+  );
+
+  return { aiProviders: next };
+}
+
 async function adjustCompanyWallet(db, companyId, action, amount, reason) {
   let wallet = await db.collection('walletcompanies').findOne({ companyId });
   if (!wallet) {
@@ -389,10 +486,23 @@ async function adjustRepWallet(db, agentId, action, amount) {
 }
 
 export async function updateUserFinancials(userId, payload = {}) {
-  const { target, action = 'add', amount, reason } = payload;
+  const { target, action = 'add', amount, reason, providers, aiProviders } = payload;
   const numericAmount = Number(amount);
 
-  if (!target || Number.isNaN(numericAmount)) {
+  if (!target) {
+    const error = new Error('Invalid financial update payload');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const db = mongoose.connection.db;
+
+  if (target === 'company_ai_providers') {
+    const company = await ensureCompany(db, userId);
+    return updateCompanyAiProviders(db, company._id, providers || aiProviders || {});
+  }
+
+  if (Number.isNaN(numericAmount)) {
     const error = new Error('Invalid financial update payload');
     error.statusCode = 400;
     throw error;
@@ -404,8 +514,6 @@ export async function updateUserFinancials(userId, payload = {}) {
     throw error;
   }
 
-  const db = mongoose.connection.db;
-
   if (target === 'company_minutes') {
     const company = await ensureCompany(db, userId);
     return adjustCompanyMinutes(db, company._id, action, numericAmount);
@@ -414,6 +522,11 @@ export async function updateUserFinancials(userId, payload = {}) {
   if (target === 'company_wallet') {
     const company = await ensureCompany(db, userId);
     return adjustCompanyWallet(db, company._id, action, numericAmount, reason);
+  }
+
+  if (target === 'company_ai_tokens') {
+    const company = await ensureCompany(db, userId);
+    return adjustCompanyAiTokens(db, company._id, action, numericAmount);
   }
 
   if (target === 'rep_wallet') {
