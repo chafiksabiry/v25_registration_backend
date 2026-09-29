@@ -14,24 +14,6 @@ function publicApiBase() {
   ).replace(/\/$/, '');
 }
 
-function codeDigits(code) {
-  return String(code ?? '')
-    .split('')
-    .map(
-      (digit) =>
-        `<td align="center" style="padding:0 4px;">
-          <table role="presentation" cellpadding="0" cellspacing="0">
-            <tr>
-              <td align="center" bgcolor="#fff1f2" style="width:42px;height:52px;background:#fff1f2;border:1px solid #fecdd3;border-radius:12px;font-family:Segoe UI,Tahoma,sans-serif;font-size:26px;font-weight:800;color:#9f1239;">
-                ${escapeHtml(digit)}
-              </td>
-            </tr>
-          </table>
-        </td>`
-    )
-    .join('');
-}
-
 function harxEmailShell({ eyebrow, title, intro, bodyHtml, footer }) {
   const logoUrl = escapeHtml(`${publicApiBase()}/email/logo-pink.png`);
   return `<!DOCTYPE html>
@@ -84,23 +66,24 @@ export function verificationEmail({ code }) {
       title: 'Vérifiez votre e-mail',
       intro: 'Utilisez ce code pour confirmer votre adresse et continuer sur HARX.',
       bodyHtml: `
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#ffffff" style="background-color:#ffffff;border:1px solid #fecdd3;border-radius:18px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#fff1f2" style="background-color:#fff1f2;border:1px solid #fecdd3;border-radius:18px;">
           <tr>
-            <td align="center" style="padding:22px 12px 8px;font-family:Segoe UI,Tahoma,sans-serif;font-size:11px;font-weight:700;letter-spacing:0.18em;color:#be123c;">
+            <td align="center" style="padding:22px 16px 10px;font-family:Segoe UI,Tahoma,sans-serif;font-size:11px;font-weight:700;letter-spacing:0.18em;color:#be123c;">
               CODE DE VÉRIFICATION
             </td>
           </tr>
           <tr>
-            <td align="center" style="padding:8px 12px 22px;">
-              <table role="presentation" cellpadding="0" cellspacing="0" align="center">
-                <tr>${codeDigits(safeCode)}</tr>
+            <td align="center" style="padding:0 16px 22px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" bgcolor="#ffffff" style="background-color:#ffffff;border:1px solid #fda4af;border-radius:14px;">
+                <tr>
+                  <td align="center" style="padding:16px 32px;font-family:Segoe UI,Tahoma,sans-serif;font-size:32px;font-weight:800;letter-spacing:0.22em;color:#9f1239;">
+                    ${safeCode}
+                  </td>
+                </tr>
               </table>
             </td>
           </tr>
         </table>
-        <p style="margin:16px 0 8px;text-align:center;font-size:13px;line-height:1.5;color:#64748b;">
-          Code complet : <strong style="color:#9f1239;letter-spacing:0.18em;">${safeCode}</strong>
-        </p>
       `,
       footer: 'Ce code expire dans 10 minutes. Ne le partagez avec personne.',
     }),
