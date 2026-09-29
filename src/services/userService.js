@@ -307,8 +307,9 @@ class UserService {
       throw new Error('Server misconfiguration: Missing SMS credentials');
     }
     const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+    const { verificationSms } = await import('../utils/harxMessages.js');
     await client.messages.create({
-      body: `HARX — Your phone verification code is: ${otp}`,
+      body: verificationSms(otp),
       to: trimmed,
       from: process.env.TWILIO_PHONE_NUMBER
     });
