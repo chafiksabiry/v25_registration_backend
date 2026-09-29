@@ -6,6 +6,14 @@ function escapeHtml(value) {
     .replace(/"/g, '&quot;');
 }
 
+function publicApiBase() {
+  return (
+    process.env.PUBLIC_API_URL ||
+    process.env.REGISTRATION_PUBLIC_URL ||
+    'https://v25registrationbackend-production.up.railway.app'
+  ).replace(/\/$/, '');
+}
+
 function codeDigits(code) {
   return String(code ?? '')
     .split('')
@@ -25,6 +33,7 @@ function codeDigits(code) {
 }
 
 function harxEmailShell({ eyebrow, title, intro, bodyHtml, footer }) {
+  const logoUrl = escapeHtml(`${publicApiBase()}/email/logo-pink.png`);
   return `<!DOCTYPE html>
 <html lang="fr">
   <body style="margin:0;padding:0;background-color:#fff1f2;">
@@ -33,9 +42,8 @@ function harxEmailShell({ eyebrow, title, intro, bodyHtml, footer }) {
         <td align="center">
           <table role="presentation" width="560" cellpadding="0" cellspacing="0" bgcolor="#ffffff" style="max-width:560px;width:100%;background-color:#ffffff;border-radius:22px;overflow:hidden;border:1px solid #fecdd3;">
             <tr>
-              <td align="center" bgcolor="#ec4899" style="background-color:#ec4899;background-image:linear-gradient(90deg,#ff4d4d 0%,#ec4899 100%);padding:28px 24px 24px;">
-                <div style="font-family:Segoe UI,Tahoma,sans-serif;font-size:30px;font-weight:800;letter-spacing:0.28em;color:#ffffff;">HARX</div>
-                <div style="font-family:Segoe UI,Tahoma,sans-serif;margin-top:6px;font-size:11px;letter-spacing:0.28em;color:#ffe4e6;">HUMAN GROWTH</div>
+              <td align="center" bgcolor="#ec4899" style="background-color:#ec4899;padding:0;line-height:0;font-size:0;">
+                <img src="${logoUrl}" width="560" alt="HARX" style="display:block;width:100%;max-width:560px;height:auto;border:0;" />
               </td>
             </tr>
             <tr>

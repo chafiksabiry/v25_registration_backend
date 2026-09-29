@@ -1,5 +1,6 @@
 // FORCE UPDATE: Debug logs added
 import { fileURLToPath } from 'url';
+import path from 'path';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -33,6 +34,15 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions)); // Enable pre-flight across-the-board
+
+const logoPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'assets', 'logo-pink.png');
+app.get('/email/logo-pink.png', (_req, res) => {
+  res.set('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Cache-Control', 'public, max-age=86400');
+  res.type('png');
+  res.sendFile(logoPath);
+});
 
 app.use(helmet());
 app.use(express.json());
