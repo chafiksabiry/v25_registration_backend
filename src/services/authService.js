@@ -7,6 +7,7 @@ import twilio from 'twilio';
 import nodemailer from 'nodemailer';
 import { getClientIp } from '../utils/ipHelper.js';
 import ipInfoService from './ipInfoService.js';
+import { verificationEmail, verificationSms } from '../utils/harxMessages.js';
 
 
 // Client initialized lazily inside methods to ensure env vars are loaded
@@ -314,10 +315,7 @@ class AuthService {
       const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
       console.log(`Sending SMS OTP to ${phoneNumber.slice(0, 4)}***`);
       const twilioResponse = await client.messages.create({
-        body:
-          `HARX TECHNOLOGIES Inc.\n` +
-          `Votre code de verification est : ${otp}\n` +
-          `Ce code expire dans 5 minutes. Ne le partagez avec personne.`,
+        body: verificationSms(otp),
         to: phoneNumber,
         from: process.env.TWILIO_PHONE_NUMBER,
       });
@@ -526,16 +524,14 @@ class AuthService {
       });
 
       // Define email options
+      const message = verificationEmail({ code });
       const mailOptions = {
-        from: `"${process.env.SMTP_FROM_NAME || 'Support'}" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER}>`,
-        replyTo: process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER, // Allow replies to go to the desired address
+        from: `"${process.env.SMTP_FROM_NAME || 'HARX'}" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER}>`,
+        replyTo: process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER,
         to: email,
-        subject: 'Email Verification',
-        html: `
-          <h1>Email Verification</h1>
-          <p>Your verification code is: <strong>${code}</strong></p>
-          <p>This code will expire in 10 minutes.</p>
-        `,
+        subject: message.subject,
+        text: message.text,
+        html: message.html,
       };
 
       // Send email
