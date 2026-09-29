@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import mongoose from 'mongoose';
 import User from '../models/User.js';
+import { inviteEmail } from '../utils/harxMessages.js';
 
 function generateTempPassword(length = 12) {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@$%';
@@ -145,33 +146,20 @@ async function sendInviteEmail({
     },
   });
 
-  const safeName = firstName || 'there';
-  const org = companyName || 'your call center';
+  const message = inviteEmail({
+    firstName,
+    email,
+    tempPassword,
+    companyName,
+    loginUrl,
+  });
 
   const info = await transporter.sendMail({
     from: `"${process.env.SMTP_FROM_NAME || 'HARX'}" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER}>`,
     replyTo: process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER,
     to,
-    subject: `You're invited to join ${org} on HARX`,
-    html: `
-      <div style="font-family:Segoe UI,Tahoma,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#0f172a;">
-        <h1 style="font-size:22px;margin:0 0 12px;">Welcome to HARX</h1>
-        <p style="margin:0 0 16px;line-height:1.5;">Hi ${safeName},</p>
-        <p style="margin:0 0 16px;line-height:1.5;">
-          ${org} created an agent account for you. Use the credentials below to sign in, then change your password.
-        </p>
-        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin:0 0 20px;">
-          <p style="margin:0 0 8px;"><strong>Email:</strong> ${email}</p>
-          <p style="margin:0;"><strong>Temporary password:</strong> ${tempPassword}</p>
-        </div>
-        <p style="margin:0 0 20px;">
-          <a href="${loginUrl}" style="display:inline-block;background:#059669;color:#fff;text-decoration:none;padding:10px 16px;border-radius:10px;font-weight:700;">
-            Sign in to HARX
-          </a>
-        </p>
-        <p style="margin:0;font-size:12px;color:#64748b;">For security, change your password after your first login.</p>
-      </div>
-    `,
+    subject: message.subject,
+    html: message.html,
   });
 
   return info;
