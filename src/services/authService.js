@@ -51,8 +51,7 @@ class AuthService {
           ? String(userInfo.employerCompanyId)
           : null,
       },
-      process.env.JWT_SECRET,
-      { expiresIn: '24h' }
+      process.env.JWT_SECRET
     );
   }
 
@@ -497,7 +496,7 @@ class AuthService {
       fullName: user.fullName,
       typeUser: user.typeUser,
       isVerified: user.isVerified
-    }, process.env.JWT_SECRET, { expiresIn: "7d" });
+    }, process.env.JWT_SECRET);
 
     return { token, user };
   };
