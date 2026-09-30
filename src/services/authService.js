@@ -16,26 +16,34 @@ class AuthService {
     return Math.floor(100000 + Math.random() * 900000).toString();
   }
   async generateVerificationCodeForRecovery(email) {
-    const existingUser = await userRepository.findByEmail(email);
-    if (!existingUser) {
-      throw new Error('Email not registered');
+    const normalized = String(email || '').trim().toLowerCase();
+    if (!normalized) {
+      const error = new Error('Email is required');
+      error.statusCode = 400;
+      error.code = 'EMAIL_REQUIRED';
+      throw error;
     }
+
+    const existingUser = await userRepository.findByEmail(normalized);
+    if (!existingUser) {
+      const error = new Error('Email not registered');
+      error.statusCode = 404;
+      error.code = 'EMAIL_NOT_REGISTERED';
+      throw error;
+    }
+
     const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
     const verificationExpiry = new Date();
     verificationExpiry.setMinutes(verificationExpiry.getMinutes() + 10);
 
-    const result = await userRepository.update({ _id: existingUser._id },
-      {
-        $set: {
-          'verificationCode.code': verificationCode,
-          'verificationCode.expiresAt': verificationExpiry,
-        },
+    await userRepository.update(existingUser._id, {
+      $set: {
+        'verificationCode.code': verificationCode,
+        'verificationCode.expiresAt': verificationExpiry,
       },
-      { upsert: true, new: true });
+    });
 
-    console.log("resultrecovery", result);
-
-    return { verificationCode, result };
+    return { verificationCode };
   }
 
   generateToken(userId, userInfo = {}) {
@@ -433,9 +441,12 @@ class AuthService {
 
   async changePassword(email, newPassword) {
     // Recherche de l'utilisateur par email
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email: String(email || '').trim().toLowerCase() });
     if (!user) {
-      throw new Error('Utilisateur non trouvé.');
+      const error = new Error('Email not registered');
+      error.statusCode = 404;
+      error.code = 'EMAIL_NOT_REGISTERED';
+      throw error;
     }
 
     // Mettre à jour le mot de passe
@@ -507,7 +518,10 @@ class AuthService {
     // Check for required SMTP environment variables
     if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
       console.error("🚨 Missing SMTP configuration! Check SMTP_HOST, SMTP_USER, SMTP_PASS.");
-      throw new Error('Server misconfiguration: Missing email credentials.');
+      const error = new Error('Server misconfiguration: Missing email credentials.');
+      error.statusCode = 502;
+      error.code = 'EMAIL_SEND_FAILED';
+      throw error;
     }
 
     try {
@@ -541,7 +555,10 @@ class AuthService {
 
     } catch (error) {
       console.error('❌ Error sending verification email with Nodemailer:', error);
-      throw new Error('Failed to send verification email: ' + error.message);
+      const wrapped = new Error('Failed to send verification email');
+      wrapped.statusCode = 502;
+      wrapped.code = 'EMAIL_SEND_FAILED';
+      throw wrapped;
     }
   }
   async checkFirstLogin(userId) {

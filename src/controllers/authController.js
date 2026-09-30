@@ -1,6 +1,13 @@
 //import { Request, Response } from 'express';
 import authService from '../services/authService.js';
 
+function sendPasswordResetError(res, error, scope) {
+  const status = Number(error?.statusCode) || 500;
+  const code = status >= 500 ? 'PASSWORD_RESET_FAILED' : (error?.code || 'PASSWORD_RESET_FAILED');
+  console.error(`${scope}:`, error?.message || error);
+  return res.status(status).json({ error: code });
+}
+
 export const register = async (req, res) => {
   try {
     const result = await authService.register(req.body, req);
@@ -134,31 +141,29 @@ export async function verifyAccount(req, res) {
 };
 //generer du code pour la verification email 
 export async function generateVerificationCode(req, res) {
-  const { email } = req.body;
-  const result = await authService.generateVerificationCodeForRecovery(email);
-  console.log("resultControllerrecovry", result);
-  return res.status(200).json(result);  // Compte vérifié avec succès
+  try {
+    const { email } = req.body;
+    const result = await authService.generateVerificationCodeForRecovery(email);
+    return res.status(200).json(result);
+  } catch (error) {
+    return sendPasswordResetError(res, error, 'generateVerificationCode');
+  }
 };
 
 //controlleur pour changement de mot de passe
 export async function changePassword(req, res) {
   try {
     const { newPassword } = req.body;
-    const email = req.user.email;
-    console.log("email from token", email);
-    console.log("password", newPassword);
+    const email = req.user?.email;
 
-    // Validation des champs
     if (!newPassword) {
-      return res.status(400).json({ message: 'Nouveau mot de passe requis.' });
+      return res.status(400).json({ error: 'PASSWORD_REQUIRED' });
     }
 
-    // Appel du service pour changer le mot de passe
     const result = await authService.changePassword(email, newPassword);
-
     return res.status(200).json({ message: result });
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    return sendPasswordResetError(res, error, 'changePassword');
   }
 };
 export async function linkedinSignIn(req, res) {
@@ -183,9 +188,7 @@ export async function sendVerificationEmail(req, res) {
     console.log("📩 sendVerificationEmail result:", result);
     res.status(200).json({ message: result });
   } catch (error) {
-    console.error("❌ Controller Error in sendVerificationEmail:", error.message);
-    // Return 500 instead of crashing, handling the CORS/502 issue
-    res.status(500).json({ error: error.message || "Failed to send verification email" });
+    return sendPasswordResetError(res, error, 'sendVerificationEmail');
   }
 }
 export const checkFirstLogin = async (req, res) => {
