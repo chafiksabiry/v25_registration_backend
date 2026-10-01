@@ -134,6 +134,15 @@ class AuthService {
       throw new Error('Email already registered');
     }
 
+    const phone = String(userData.phone || '').trim();
+    if (phone) {
+      const existingPhone = await userRepository.findByPhone(phone);
+      if (existingPhone) {
+        console.warn('Phone already registered');
+        throw new Error('Phone already registered');
+      }
+    }
+
     const verificationCode = this.generateVerificationCode();
     const verificationExpiry = new Date();
     verificationExpiry.setMinutes(verificationExpiry.getMinutes() + 10);
@@ -143,6 +152,7 @@ class AuthService {
 
     const result = await userRepository.create({
       ...userData,
+      phone,
       verificationCode: {
         code: verificationCode,
         expiresAt: verificationExpiry
