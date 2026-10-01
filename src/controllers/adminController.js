@@ -18,6 +18,7 @@ import {
   getHarxObjectivesOverview,
   updateHarxObjectives,
 } from '../services/adminObjectivesService.js';
+import { listOnboardingSatisfaction } from '../services/adminOnboardingSatisfactionService.js';
 
 export const adminLogin = async (req, res) => {
   try {
@@ -172,5 +173,21 @@ export const adminUpdateObjectives = async (req, res) => {
     res.status(200).json({ success: true, data });
   } catch (error) {
     res.status(error.statusCode || 500).json({ message: error.message || 'Failed to update HARX objectives' });
+  }
+};
+
+export const adminOnboardingSatisfaction = async (req, res) => {
+  try {
+    const data = await listOnboardingSatisfaction({
+      page: req.query.page,
+      limit: req.query.limit,
+      search: req.query.search,
+      scoredOnly: req.query.scoredOnly,
+    });
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    res.status(500).json({
+      message: error.message || 'Failed to load onboarding satisfaction',
+    });
   }
 };
