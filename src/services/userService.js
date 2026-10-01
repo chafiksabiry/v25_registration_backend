@@ -2,6 +2,7 @@ import User from '../models/User.js';
 import Timezone from '../models/Timezone.js';
 import bcrypt from 'bcryptjs';
 import authService from './authService.js';
+import userRepository from '../repositories/userRepository.js';
 
 function generate6DigitCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -291,6 +292,11 @@ class UserService {
 
     const user = await User.findById(userId);
     if (!user) throw new Error('User not found');
+
+    const phoneTaken = await userRepository.findByPhone(trimmed);
+    if (phoneTaken && String(phoneTaken._id) !== String(userId)) {
+      throw new Error('Phone already registered');
+    }
 
     const otp = generate6DigitCode();
     const otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 min
