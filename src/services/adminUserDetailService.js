@@ -48,6 +48,7 @@ function sanitizeAgent(agent) {
     achievements: agent.achievements,
     availability: agent.availability,
     onboardingProgress: agent.onboardingProgress,
+    onboardingSatisfaction: agent.onboardingSatisfaction,
     mediaSummary: agent.mediaSummary,
     gigsCount: Array.isArray(agent.gigs) ? agent.gigs.length : 0,
     createdAt: agent.createdAt,
