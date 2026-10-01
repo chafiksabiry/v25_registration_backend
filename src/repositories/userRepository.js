@@ -10,7 +10,9 @@ class UserRepository {
   }
 
   async findByEmail(email) {
-    return User.findOne({ email });
+    const normalized = String(email || '').trim().toLowerCase();
+    if (!normalized) return null;
+    return User.findOne({ email: normalized });
   }
 
   /**
