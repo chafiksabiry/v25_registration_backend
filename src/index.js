@@ -47,24 +47,39 @@ app.get('/email/logo-pink.png', (_req, res) => {
 app.use(helmet());
 app.use(express.json());
 
-// Health Check
+// Health Check (excluded from rate limiting)
 app.get('/', (req, res) => {
   res.status(200).json({ status: 'OK', message: 'Server is running' });
 });
 
-// Configure rate limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+// Global soft limit — high enough that shared proxy IPs don't lock out signup.
+// Auth abuse is handled by a tighter limiter on /api/auth only.
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: Number(process.env.RATE_LIMIT_GLOBAL_MAX || 1000),
   standardHeaders: true,
   legacyHeaders: false,
-  trustProxy: true
+  // With trust proxy = 1 above, req.ip is the real client when X-Forwarded-For is set.
+  skip: (req) => req.path === '/' || req.path === '/health',
 });
 
-app.use(limiter);
+// Stricter on auth endpoints (register/login/OTP) — per real client IP.
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: Number(process.env.RATE_LIMIT_AUTH_MAX || 40),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: 'Too many attempts. Please wait a few minutes and try again.',
+    code: 'RATE_LIMITED',
+  },
+});
+
+app.use(globalLimiter);
 
 // Routes
-app.use('/api/auth', authRoutes);
+app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/plans', plansRoutes);
 app.use('/api/users', userRoutes);
