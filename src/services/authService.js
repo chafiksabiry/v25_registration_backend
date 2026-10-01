@@ -128,7 +128,8 @@ class AuthService {
 
   async register(userData, req) {
     console.log('Register attempt for email:', userData.email);
-    const existingUser = await userRepository.findByEmail(userData.email);
+    const email = String(userData.email || '').trim().toLowerCase();
+    const existingUser = await userRepository.findByEmail(email);
     if (existingUser) {
       console.warn("Email already registered");
       throw new Error('Email already registered');
@@ -152,6 +153,7 @@ class AuthService {
 
     const result = await userRepository.create({
       ...userData,
+      email,
       phone,
       verificationCode: {
         code: verificationCode,
@@ -164,6 +166,24 @@ class AuthService {
       }]
     });
     return { verificationCode, result };
+  }
+
+  async checkEmailAvailable(email) {
+    const normalized = String(email || '').trim().toLowerCase();
+    if (!normalized) {
+      throw new Error('Email is required');
+    }
+    const existingUser = await userRepository.findByEmail(normalized);
+    return { available: !existingUser };
+  }
+
+  async checkPhoneAvailable(phone) {
+    const trimmed = String(phone || '').trim();
+    if (!trimmed) {
+      throw new Error('Phone is required');
+    }
+    const existingPhone = await userRepository.findByPhone(trimmed);
+    return { available: !existingPhone };
   }
 
   async login(email, password, req) {

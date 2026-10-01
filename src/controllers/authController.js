@@ -20,6 +20,30 @@ export const register = async (req, res) => {
   }
 };
 
+export const checkEmail = async (req, res) => {
+  try {
+    const result = await authService.checkEmailAvailable(req.body?.email);
+    if (!result.available) {
+      return res.status(409).json({ available: false, message: 'Email already registered' });
+    }
+    res.status(200).json({ available: true });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+export const checkPhone = async (req, res) => {
+  try {
+    const result = await authService.checkPhoneAvailable(req.body?.phone);
+    if (!result.available) {
+      return res.status(409).json({ available: false, message: 'Phone already registered' });
+    }
+    res.status(200).json({ available: true });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
 /* export const login = async (req, res) => {
   try {
     const result = await authService.login(req.body.email, req.body.password);
