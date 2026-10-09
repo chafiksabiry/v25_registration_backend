@@ -41,6 +41,15 @@ export const inviteCompanyMember = async (req, res) => {
   }
 };
 
+export const touchCompanyMemberPresence = async (req, res) => {
+  try {
+    const data = await companyMemberService.markPresent(callerId(req));
+    return res.json({ success: true, data: data ? { status: data.status, lastSeenAt: data.lastSeenAt } : null });
+  } catch (error) {
+    return fail(res, error, 'Failed to update presence');
+  }
+};
+
 export const reinviteCompanyMember = async (req, res) => {
   try {
     const companyId = req.body?.companyId || req.query.companyId;

@@ -46,6 +46,14 @@ const companyMembershipSchema = new mongoose.Schema({
     type: Date,
     default: null,
   },
+  connectedAt: {
+    type: Date,
+    default: null,
+  },
+  lastSeenAt: {
+    type: Date,
+    default: null,
+  },
 }, { timestamps: true });
 
 companyMembershipSchema.index({ companyId: 1, userId: 1 }, { unique: true });

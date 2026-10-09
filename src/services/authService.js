@@ -8,6 +8,7 @@ import { getClientIp } from '../utils/ipHelper.js';
 import ipInfoService from './ipInfoService.js';
 import { verificationEmail, verificationSms } from '../utils/harxMessages.js';
 import { sendAppEmail } from './brevoMail.js';
+import companyMemberService from './companyMemberService.js';
 
 
 // Client initialized lazily inside methods to ensure env vars are loaded
@@ -486,6 +487,9 @@ class AuthService {
       user.invitationStatus = 'active';
     }
     await user.save();
+    if (user.typeUser === 'company-member') {
+      await companyMemberService.markPresent(user._id);
+    }
 
     return { success: true, message: 'Mot de passe changé avec succès.' };
 

@@ -5,6 +5,7 @@ import {
   getMyCompanyAccess,
   listCompanyMembers,
   inviteCompanyMember,
+  touchCompanyMemberPresence,
   reinviteCompanyMember,
   updateCompanyMember,
   removeCompanyMember,
@@ -17,6 +18,7 @@ router.get('/catalog', getCompanyMemberCatalog);
 router.get('/me', getMyCompanyAccess);
 router.get('/', listCompanyMembers);
 router.post('/', inviteCompanyMember);
+router.post('/presence', touchCompanyMemberPresence);
 router.post('/:userId/reinvite', reinviteCompanyMember);
 router.patch('/:userId', updateCompanyMember);
 router.delete('/:userId', removeCompanyMember);

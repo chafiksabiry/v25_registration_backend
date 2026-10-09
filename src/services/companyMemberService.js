@@ -97,6 +97,14 @@ async function sendInviteEmail({ to, firstName, email, tempPassword, companyName
   });
 }
 
+const ONLINE_WINDOW_MS = 70 * 1000;
+
+function isOnline(date) {
+  if (!date) return false;
+  const time = new Date(date).getTime();
+  return Number.isFinite(time) && Date.now() - time < ONLINE_WINDOW_MS;
+}
+
 function serializeMember(doc, user) {
   return {
     userId: String(doc.userId),
@@ -106,6 +114,9 @@ function serializeMember(doc, user) {
     isOwner: false,
     preset: doc.preset || 'custom',
     status: doc.status || 'pending',
+    online: doc.status === 'active' && isOnline(doc.lastSeenAt),
+    lastSeenAt: doc.lastSeenAt || null,
+    connectedAt: doc.connectedAt || null,
     permissions: sanitizePermissions(doc.permissions),
     invitedAt: doc.invitedAt || null,
     createdAt: doc.createdAt || null,
@@ -142,12 +153,29 @@ class CompanyMemberService {
     if (!membership) {
       return { isOwner: true, companyId: null, permissions: allPermissions(), preset: 'owner' };
     }
+    await this.markPresent(caller._id);
+    const fresh = await CompanyMembership.findById(membership._id);
     return {
       isOwner: false,
       companyId: String(membership.companyId),
       permissions: sanitizePermissions(membership.permissions),
-      preset: membership.preset || 'custom',
+      preset: (fresh || membership).preset || 'custom',
     };
+  }
+
+  async markPresent(userId) {
+    if (!userId) return null;
+    const membership = await CompanyMembership.findOne({ userId }).sort({ createdAt: -1 });
+    if (!membership) return null;
+    const now = new Date();
+    if (membership.status !== 'active' || !membership.connectedAt) {
+      membership.connectedAt = membership.connectedAt || now;
+      membership.status = 'active';
+    }
+    membership.lastSeenAt = now;
+    await membership.save();
+    await User.updateOne({ _id: userId }, { $set: { invitationStatus: 'active' } });
+    return membership;
   }
 
   async list(callerUserId, companyId) {
