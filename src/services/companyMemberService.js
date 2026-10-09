@@ -290,6 +290,86 @@ class CompanyMemberService {
     };
   }
 
+  async reinvite(callerUserId, companyId, memberUserId, payload = {}) {
+    const { company } = await assertCan(callerUserId, companyId, 'members.invite');
+    if (String(company.userId) === String(memberUserId)) {
+      throw httpError('The owner cannot be reinvited', 400);
+    }
+    if (!memberUserId || !mongoose.Types.ObjectId.isValid(memberUserId)) {
+      throw httpError('Valid member userId is required', 400);
+    }
+
+    const membership = await CompanyMembership.findOne({
+      companyId: company._id,
+      userId: memberUserId,
+    });
+    if (!membership) throw httpError('Member not found', 404);
+
+    const user = await User.findById(memberUserId);
+    if (!user) throw httpError('Member not found', 404);
+    if (user.invitationStatus === 'active') {
+      throw httpError('Ce membre a déjà activé son compte.', 409);
+    }
+
+    const requestedEmail = payload?.email ? normalizeEmail(payload.email) : '';
+    const currentEmail = normalizeEmail(user.email || membership.email);
+    const targetEmail = requestedEmail || currentEmail;
+    if (!targetEmail || !targetEmail.includes('@')) {
+      throw httpError('Valid email is required', 400);
+    }
+
+    if (targetEmail !== currentEmail) {
+      const takenUser = await User.findOne({ email: targetEmail, _id: { $ne: user._id } }).select('_id');
+      const takenMembership = await CompanyMembership.findOne({
+        email: targetEmail,
+        userId: { $ne: user._id },
+      }).select('_id');
+      if (takenUser || takenMembership) {
+        throw httpError('Cet e-mail existe déjà. Invitation impossible.', 409);
+      }
+      user.email = targetEmail;
+      membership.email = targetEmail;
+    }
+
+    const tempPassword = generateTempPassword();
+    const firstName = String(user.fullName || membership.fullName || '').trim().split(/\s+/)[0] || '';
+    user.password = tempPassword;
+    user.mustChangePassword = true;
+    user.firstTime = true;
+    user.invitationStatus = 'pending';
+    membership.status = 'pending';
+    await user.save();
+    await membership.save();
+
+    let emailSent = false;
+    let emailError = null;
+    try {
+      await sendInviteEmail({
+        to: targetEmail,
+        firstName,
+        email: targetEmail,
+        tempPassword,
+        companyName: companyLabel(company),
+      });
+      emailSent = true;
+      membership.status = 'invited';
+      membership.invitedAt = new Date();
+      user.invitationStatus = 'invited';
+      user.invitedAt = new Date();
+      await user.save();
+      await membership.save();
+    } catch (e) {
+      emailError = e.message || 'Failed to send invitation email';
+    }
+
+    return {
+      member: serializeMember(membership, user),
+      emailSent,
+      emailError,
+      temporaryPassword: emailSent ? undefined : tempPassword,
+    };
+  }
+
   async update(callerUserId, companyId, memberUserId, payload) {
     await assertCan(callerUserId, companyId, 'members.edit');
     const company = await findCompany(companyId);

@@ -5,6 +5,7 @@ import {
   getMyCompanyAccess,
   listCompanyMembers,
   inviteCompanyMember,
+  reinviteCompanyMember,
   updateCompanyMember,
   removeCompanyMember,
 } from '../controllers/companyMemberController.js';
@@ -16,6 +17,7 @@ router.get('/catalog', getCompanyMemberCatalog);
 router.get('/me', getMyCompanyAccess);
 router.get('/', listCompanyMembers);
 router.post('/', inviteCompanyMember);
+router.post('/:userId/reinvite', reinviteCompanyMember);
 router.patch('/:userId', updateCompanyMember);
 router.delete('/:userId', removeCompanyMember);
 

@@ -41,6 +41,21 @@ export const inviteCompanyMember = async (req, res) => {
   }
 };
 
+export const reinviteCompanyMember = async (req, res) => {
+  try {
+    const companyId = req.body?.companyId || req.query.companyId;
+    const data = await companyMemberService.reinvite(
+      callerId(req),
+      companyId,
+      req.params.userId,
+      req.body
+    );
+    return res.json({ success: true, data });
+  } catch (error) {
+    return fail(res, error, 'Failed to resend invitation');
+  }
+};
+
 export const updateCompanyMember = async (req, res) => {
   try {
     const companyId = req.body?.companyId || req.query.companyId;
