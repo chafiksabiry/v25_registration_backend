@@ -7,7 +7,7 @@ import twilio from 'twilio';
 import { getClientIp } from '../utils/ipHelper.js';
 import ipInfoService from './ipInfoService.js';
 import { verificationEmail, verificationSms } from '../utils/harxMessages.js';
-import { sendBrevoEmail } from './brevoMail.js';
+import { sendAppEmail } from './brevoMail.js';
 
 
 // Client initialized lazily inside methods to ensure env vars are loaded
@@ -545,7 +545,7 @@ class AuthService {
   async sendVerificationEmail(email, code) {
     const message = verificationEmail({ code });
     try {
-      const info = await sendBrevoEmail({
+      const info = await sendAppEmail({
         to: email,
         subject: message.subject,
         text: message.text,

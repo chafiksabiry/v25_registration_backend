@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 import User from '../models/User.js';
 import CompanyMembership from '../models/CompanyMembership.js';
 import { companyMemberInviteEmail } from '../utils/harxMessages.js';
-import { sendBrevoEmail } from './brevoMail.js';
+import { sendAppEmail } from './brevoMail.js';
 import {
   allPermissions,
   emptyPermissions,
@@ -95,7 +95,7 @@ async function sendInviteEmail({ to, firstName, email, tempPassword, companyName
     companyName,
     loginUrl,
   });
-  await sendBrevoEmail({
+  await sendAppEmail({
     to,
     subject: message.subject,
     html: message.html,

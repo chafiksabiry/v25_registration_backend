@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import mongoose from 'mongoose';
 import User from '../models/User.js';
 import { inviteEmail } from '../utils/harxMessages.js';
-import { sendBrevoEmail } from './brevoMail.js';
+import { sendAppEmail } from './brevoMail.js';
 
 function generateTempPassword(length = 12) {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@$%';
@@ -140,7 +140,7 @@ async function sendInviteEmail({
     loginUrl,
   });
 
-  return sendBrevoEmail({
+  return sendAppEmail({
     to,
     subject: message.subject,
     html: message.html,
