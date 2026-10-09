@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 import User from '../models/User.js';
 import CompanyMembership from '../models/CompanyMembership.js';
 import { companyMemberInviteEmail } from '../utils/harxMessages.js';
-import { sendAppEmail } from './brevoMail.js';
+import { appLoginUrl, sendAppEmail } from './brevoMail.js';
 import {
   allPermissions,
   emptyPermissions,
@@ -82,12 +82,7 @@ function companyLabel(company) {
 }
 
 async function sendInviteEmail({ to, firstName, email, tempPassword, companyName }) {
-  const shellBase = (
-    process.env.FRONTEND_URL ||
-    process.env.VITE_FRONTEND_URL ||
-    'https://harx.ai'
-  ).replace(/\/$/, '');
-  const loginUrl = process.env.AGENT_INVITE_LOGIN_URL || `${shellBase}/auth/signin`;
+  const loginUrl = appLoginUrl();
   const message = companyMemberInviteEmail({
     firstName,
     email,

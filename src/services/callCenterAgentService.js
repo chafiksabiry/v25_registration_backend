@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import mongoose from 'mongoose';
 import User from '../models/User.js';
 import { inviteEmail } from '../utils/harxMessages.js';
-import { sendAppEmail } from './brevoMail.js';
+import { appLoginUrl, sendAppEmail } from './brevoMail.js';
 
 function generateTempPassword(length = 12) {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@$%';
@@ -123,14 +123,7 @@ async function sendInviteEmail({
   tempPassword,
   companyName,
 }) {
-  const shellBase = (
-    process.env.FRONTEND_URL ||
-    process.env.VITE_FRONTEND_URL ||
-    'https://harx26harxconnection-dev.netlify.app'
-  ).replace(/\/$/, '');
-  const loginUrl =
-    process.env.AGENT_INVITE_LOGIN_URL ||
-    `${shellBase}/auth/signin`;
+  const loginUrl = appLoginUrl();
 
   const message = inviteEmail({
     firstName,
