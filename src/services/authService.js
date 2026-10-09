@@ -4,10 +4,10 @@ import userRepository from '../repositories/userRepository.js';
 import User from '../models/User.js'; // Modèle utilisateur
 import Timezone from '../models/Timezone.js';
 import twilio from 'twilio';
-import nodemailer from 'nodemailer';
 import { getClientIp } from '../utils/ipHelper.js';
 import ipInfoService from './ipInfoService.js';
 import { verificationEmail, verificationSms } from '../utils/harxMessages.js';
+import { sendBrevoEmail } from './brevoMail.js';
 
 
 // Client initialized lazily inside methods to ensure env vars are loaded
@@ -543,48 +543,17 @@ class AuthService {
   };
 
   async sendVerificationEmail(email, code) {
-    console.log("sendVerificationEmail: Starting Nodemailer process...");
-
-    // Check for required SMTP environment variables
-    if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
-      console.error("🚨 Missing SMTP configuration! Check SMTP_HOST, SMTP_USER, SMTP_PASS.");
-      const error = new Error('Server misconfiguration: Missing email credentials.');
-      error.statusCode = 502;
-      error.code = 'EMAIL_SEND_FAILED';
-      throw error;
-    }
-
+    const message = verificationEmail({ code });
     try {
-      // Create Nodemailer transporter
-      const transporter = nodemailer.createTransport({
-        host: process.env.SMTP_HOST,
-        port: process.env.SMTP_PORT || 587,
-        secure: false, // true for 465, false for other ports
-        auth: {
-          user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS,
-        },
-      });
-
-      // Define email options
-      const message = verificationEmail({ code });
-      const mailOptions = {
-        from: `"${process.env.SMTP_FROM_NAME || 'HARX'}" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER}>`,
-        replyTo: process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER,
+      const info = await sendBrevoEmail({
         to: email,
         subject: message.subject,
         text: message.text,
         html: message.html,
-      };
-
-      // Send email
-      const info = await transporter.sendMail(mailOptions);
-      console.log('✅ Email sent successfully:', info.messageId);
-
+      });
       return { success: true, message: 'Verification email sent successfully', data: info };
-
     } catch (error) {
-      console.error('❌ Error sending verification email with Nodemailer:', error);
+      console.error('Error sending verification email with Brevo:', error.message);
       const wrapped = new Error('Failed to send verification email');
       wrapped.statusCode = 502;
       wrapped.code = 'EMAIL_SEND_FAILED';

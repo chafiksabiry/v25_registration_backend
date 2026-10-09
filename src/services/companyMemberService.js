@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import User from '../models/User.js';
 import CompanyMembership from '../models/CompanyMembership.js';
 import { companyMemberInviteEmail } from '../utils/harxMessages.js';
+import { sendBrevoEmail } from './brevoMail.js';
 import {
   allPermissions,
   emptyPermissions,
@@ -81,25 +82,12 @@ function companyLabel(company) {
 }
 
 async function sendInviteEmail({ to, firstName, email, tempPassword, companyName }) {
-  if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
-    throw new Error('Server misconfiguration: Missing email credentials.');
-  }
   const shellBase = (
     process.env.FRONTEND_URL ||
     process.env.VITE_FRONTEND_URL ||
     'https://harx.ai'
   ).replace(/\/$/, '');
   const loginUrl = process.env.AGENT_INVITE_LOGIN_URL || `${shellBase}/auth/signin`;
-  const nodemailer = (await import('nodemailer')).default;
-  const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: process.env.SMTP_PORT || 587,
-    secure: false,
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-  });
   const message = companyMemberInviteEmail({
     firstName,
     email,
@@ -107,9 +95,7 @@ async function sendInviteEmail({ to, firstName, email, tempPassword, companyName
     companyName,
     loginUrl,
   });
-  await transporter.sendMail({
-    from: `"${process.env.SMTP_FROM_NAME || 'HARX'}" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER}>`,
-    replyTo: process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER,
+  await sendBrevoEmail({
     to,
     subject: message.subject,
     html: message.html,
