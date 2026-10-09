@@ -116,6 +116,39 @@ export function inviteEmail({ firstName, email, tempPassword, companyName, login
   };
 }
 
+export function companyMemberInviteEmail({ firstName, email, tempPassword, companyName, loginUrl }) {
+  const safeName = escapeHtml(firstName || '');
+  const org = escapeHtml(companyName || 'HARX');
+  const safeEmail = escapeHtml(email);
+  const safePassword = tempPassword ? escapeHtml(tempPassword) : '';
+  const safeUrl = escapeHtml(loginUrl);
+  const credentials = safePassword
+    ? `
+        <div style="background:#fff1f2;border:1px solid #fecdd3;border-radius:16px;padding:16px 18px;margin:0 0 22px;">
+          <p style="margin:0 0 8px;font-size:14px;color:#1e293b;"><strong>E-mail :</strong> ${safeEmail}</p>
+          <p style="margin:0;font-size:14px;color:#1e293b;"><strong>Mot de passe temporaire :</strong> ${safePassword}</p>
+        </div>`
+    : `
+        <p style="margin:0 0 22px;font-size:14px;color:#1e293b;">Connectez-vous avec votre e-mail <strong>${safeEmail}</strong> et votre mot de passe habituel.</p>`;
+  return {
+    subject: `HARX — Invitation à rejoindre ${companyName || 'une entreprise'}`,
+    html: harxEmailShell({
+      eyebrow: 'INVITATION',
+      title: 'Vous rejoignez une entreprise HARX',
+      intro: `Bonjour ${safeName}, ${org} vous invite à accéder à son espace. Vos droits sont limités à ce que l'administrateur a choisi.`,
+      footer: safePassword
+        ? 'Pour votre sécurité, changez ce mot de passe dès la première connexion.'
+        : 'Si vous n\'êtes pas à l\'origine de cette invitation, ignorez ce message.',
+      bodyHtml: `
+        ${credentials}
+        <p style="margin:0;text-align:center;">
+          <a href="${safeUrl}" style="display:inline-block;background-color:#ec4899;background-image:linear-gradient(90deg,#ff4d4d 0%,#ec4899 100%);color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:12px;font-weight:700;">Se connecter</a>
+        </p>
+      `,
+    }),
+  };
+}
+
 export function verificationSms(code) {
   return (
     `HARX\n` +
