@@ -178,6 +178,34 @@ class CompanyMemberService {
     return membership;
   }
 
+  async markAway(userId) {
+    if (!userId) return null;
+    const membership = await CompanyMembership.findOne({ userId }).sort({ createdAt: -1 });
+    if (!membership) return null;
+    membership.lastSeenAt = null;
+    await membership.save();
+    return membership;
+  }
+
+  async openPresence(userId, companyId) {
+    const caller = await loadCaller(userId);
+    const company = await findCompany(companyId);
+    if (isOwner(company, caller._id)) {
+      return { role: 'owner', companyId: String(company._id) };
+    }
+    const membership = await CompanyMembership.findOne({
+      companyId: company._id,
+      userId: caller._id,
+    });
+    if (!membership) throw httpError('You do not have permission to view this company team', 403);
+    const fresh = await this.markPresent(caller._id);
+    return {
+      role: 'member',
+      companyId: String(company._id),
+      status: fresh?.status || 'active',
+    };
+  }
+
   async list(callerUserId, companyId) {
     const { company } = await assertCan(callerUserId, companyId, 'members.view');
     const owner = await User.findById(company.userId).select('fullName email phone');

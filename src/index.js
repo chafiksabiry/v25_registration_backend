@@ -15,6 +15,7 @@ import newsletterRoutes from './routes/newsletterRoutes.js';
 import callCenterRoutes from './routes/callCenterRoutes.js';
 import companyMemberRoutes from './routes/companyMemberRoutes.js';
 import { errorHandler } from './middleware/errorHandler.js';
+import { attachTeamPresence } from './realtime/teamPresence.js';
 
 dotenv.config();
 
@@ -110,11 +111,12 @@ const shouldStartServer = !!process.env.PORT || isMainModule;
 console.log('shouldStartServer:', shouldStartServer);
 
 if (shouldStartServer) {
-  app.listen(PORT, '0.0.0.0', () => {
+  const server = app.listen(PORT, '0.0.0.0', () => {
     console.log('--- SERVER STARTED ---');
     console.log(`Server running on port ${PORT}`);
     console.log('----------------------');
   });
+  attachTeamPresence(server);
 } else {
   console.log('Server not started (Serverless mode or missing PORT).');
 }
