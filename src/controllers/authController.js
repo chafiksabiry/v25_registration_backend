@@ -186,7 +186,13 @@ export async function changePassword(req, res) {
     }
 
     const result = await authService.changePassword(email, newPassword);
-    return res.status(200).json({ message: result });
+    // The caller's JWT still carries mustChangePassword:true (JWTs are
+    // immutable) — mint a fresh one now the flag is cleared, so the
+    // authenticate middleware's PASSWORD_CHANGE_REQUIRED block doesn't
+    // lock the user out of their own next request.
+    const { user, ...message } = result;
+    const token = user ? authService.generateToken(user._id, user) : undefined;
+    return res.status(200).json({ message, ...(token ? { token } : {}) });
   } catch (error) {
     return sendPasswordResetError(res, error, 'changePassword');
   }
