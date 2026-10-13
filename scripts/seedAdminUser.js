@@ -3,10 +3,13 @@
  * Bootstrap the platform admin account.
  *
  * Usage:
- *   MONGODB_URI="mongodb://..." node scripts/seedAdminUser.js
+ *   MONGODB_URI="mongodb://..." ADMIN_EMAIL="..." ADMIN_PASSWORD="..." node scripts/seedAdminUser.js
  *
+ * Required env vars (no defaults — this script must never ship a
+ * guessable, real-looking credential in source control):
+ *   ADMIN_EMAIL, ADMIN_PASSWORD
  * Optional env overrides:
- *   ADMIN_FULL_NAME, ADMIN_EMAIL, ADMIN_PASSWORD, ADMIN_PHONE
+ *   ADMIN_FULL_NAME, ADMIN_PHONE
  */
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
@@ -15,9 +18,9 @@ import User from '../src/models/User.js';
 dotenv.config();
 
 const ADMIN = {
-  fullName: process.env.ADMIN_FULL_NAME || 'Chafik Sabiry',
-  email: (process.env.ADMIN_EMAIL || 'chafiksabiryadmin@yopmail.com').toLowerCase().trim(),
-  password: process.env.ADMIN_PASSWORD || 'P@str@mi@2026&',
+  fullName: process.env.ADMIN_FULL_NAME || 'HARX Admin',
+  email: (process.env.ADMIN_EMAIL || '').toLowerCase().trim(),
+  password: process.env.ADMIN_PASSWORD || '',
   phone: process.env.ADMIN_PHONE || '+33600000000',
 };
 
@@ -27,6 +30,11 @@ async function main() {
     console.error('MONGODB_URI is required.');
     console.error('Create a .env file in this folder (see .env.example) or run:');
     console.error('  MONGODB_URI="mongodb://..." npm run seed:admin');
+    process.exit(1);
+  }
+  if (!ADMIN.email || !ADMIN.password) {
+    console.error('ADMIN_EMAIL and ADMIN_PASSWORD are required (no built-in default credential).');
+    console.error('  ADMIN_EMAIL="..." ADMIN_PASSWORD="..." MONGODB_URI="mongodb://..." npm run seed:admin');
     process.exit(1);
   }
 
