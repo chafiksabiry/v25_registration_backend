@@ -501,7 +501,7 @@ class AuthService {
       await companyMemberService.markPresent(user._id);
     }
 
-    return { success: true, message: 'Mot de passe changé avec succès.' };
+    return { success: true, message: 'Mot de passe changé avec succès.', user };
 
   }
 
