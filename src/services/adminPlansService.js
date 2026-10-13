@@ -58,6 +58,8 @@ function serializeRepPlan(doc) {
     isActive: doc.isActive === undefined || doc.isActive === null ? true : parseBoolean(doc.isActive),
     isPopular: parseBoolean(doc.isPopular),
     sortOrder: typeof doc.sortOrder === 'number' ? doc.sortOrder : 0,
+    maxActiveGigs: typeof doc.maxActiveGigs === 'number' ? doc.maxActiveGigs : null,
+    maxMonthlyEarnings: typeof doc.maxMonthlyEarnings === 'number' ? doc.maxMonthlyEarnings : null,
     updatedAt: doc.updatedAt || doc.createdAt || null,
   };
 }
@@ -223,6 +225,28 @@ export async function updateRepPlan(planId, payload = {}) {
     const sortOrder = Number(payload.sortOrder);
     if (!Number.isFinite(sortOrder)) throw validationError('Ordre invalide.');
     update.sortOrder = Math.round(sortOrder);
+  }
+  if (payload.maxActiveGigs !== undefined) {
+    if (payload.maxActiveGigs === null) {
+      update.maxActiveGigs = null;
+    } else {
+      const maxActiveGigs = Number(payload.maxActiveGigs);
+      if (!Number.isFinite(maxActiveGigs) || maxActiveGigs < 0) {
+        throw validationError('maxActiveGigs invalide.');
+      }
+      update.maxActiveGigs = Math.round(maxActiveGigs);
+    }
+  }
+  if (payload.maxMonthlyEarnings !== undefined) {
+    if (payload.maxMonthlyEarnings === null) {
+      update.maxMonthlyEarnings = null;
+    } else {
+      const maxMonthlyEarnings = Number(payload.maxMonthlyEarnings);
+      if (!Number.isFinite(maxMonthlyEarnings) || maxMonthlyEarnings < 0) {
+        throw validationError('maxMonthlyEarnings invalide.');
+      }
+      update.maxMonthlyEarnings = maxMonthlyEarnings;
+    }
   }
 
   await db.collection('plans').updateOne({ _id: objectId }, { $set: update });
