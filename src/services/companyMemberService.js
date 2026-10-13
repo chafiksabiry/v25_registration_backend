@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import mongoose from 'mongoose';
 import User from '../models/User.js';
 import CompanyMembership from '../models/CompanyMembership.js';
+import CompanyRole from '../models/CompanyRole.js';
 import { companyMemberInviteEmail } from '../utils/harxMessages.js';
 import { appLoginUrl, sendAppEmail } from './brevoMail.js';
 import {
@@ -113,6 +114,8 @@ function serializeMember(doc, user) {
     phone: user?.phone || '',
     isOwner: false,
     preset: doc.preset || 'custom',
+    roleId: doc.roleId ? String(doc.roleId) : null,
+    roleName: doc.roleName || '',
     status: doc.status || 'pending',
     online: doc.status === 'active' && isOnline(doc.lastSeenAt),
     lastSeenAt: doc.lastSeenAt || null,
@@ -257,7 +260,14 @@ class CompanyMemberService {
     if (!givenName) throw httpError('First name is required', 400);
 
     const resolvedPreset = presetPermissions(preset) ? String(preset).toLowerCase() : 'custom';
-    const base = presetPermissions(preset) || emptyPermissions();
+    let role = null;
+    if (payload?.roleId) {
+      role = await CompanyRole.findOne({ _id: payload.roleId, companyId: company._id });
+      if (!role) throw httpError('Role not found', 404);
+    }
+    const base = role
+      ? sanitizePermissions(role.permissions)
+      : (presetPermissions(preset) || emptyPermissions());
     const rights = permissions ? sanitizePermissions({ ...base, ...permissions }) : base;
     if (!Object.values(rights).some(Boolean)) {
       throw httpError('Select at least one permission', 400);
@@ -291,7 +301,9 @@ class CompanyMemberService {
       email: normalizedEmail,
       fullName: user.fullName || `${givenName} ${familyName}`.trim(),
       permissions: rights,
-      preset: resolvedPreset,
+      preset: role ? 'custom' : resolvedPreset,
+      roleId: role?._id || null,
+      roleName: role?.name || '',
       status: 'pending',
       invitedByUserId: caller._id,
     });
@@ -420,13 +432,25 @@ class CompanyMemberService {
     if (!membership) throw httpError('Member not found', 404);
 
     const preset = payload?.preset;
-    const base = presetPermissions(preset) || sanitizePermissions(membership.permissions);
+    let role = null;
+    if (payload?.roleId) {
+      role = await CompanyRole.findOne({ _id: payload.roleId, companyId: company._id });
+      if (!role) throw httpError('Role not found', 404);
+    }
+    const base = role
+      ? sanitizePermissions(role.permissions)
+      : (presetPermissions(preset) || sanitizePermissions(membership.permissions));
     membership.permissions = payload?.permissions
       ? sanitizePermissions({ ...base, ...payload.permissions })
       : base;
-    membership.preset = presetPermissions(preset)
-      ? String(preset).toLowerCase()
-      : 'custom';
+    membership.preset = role || !presetPermissions(preset) ? 'custom' : String(preset).toLowerCase();
+    if (role) {
+      membership.roleId = role._id;
+      membership.roleName = role.name;
+    } else if (presetPermissions(preset)) {
+      membership.roleId = null;
+      membership.roleName = '';
+    }
     await membership.save();
     const user = await User.findById(memberUserId).select('fullName email phone');
     return serializeMember(membership, user);
@@ -444,6 +468,86 @@ class CompanyMemberService {
     });
     if (!deleted) throw httpError('Member not found', 404);
     return { userId: String(memberUserId) };
+  }
+
+  async listRoles(callerUserId, companyId) {
+    const { company } = await assertCan(callerUserId, companyId, 'members.view');
+    const roles = await CompanyRole.find({ companyId: company._id }).sort({ name: 1 });
+    return roles.map((role) => ({
+      _id: String(role._id),
+      name: role.name,
+      permissions: sanitizePermissions(role.permissions),
+    }));
+  }
+
+  async createRole(callerUserId, payload) {
+    const { company, caller } = await assertCan(callerUserId, payload?.companyId, 'members.edit');
+    const name = String(payload?.name || '').trim();
+    if (name.length < 2) throw httpError('Role name is required', 400);
+    const permissions = sanitizePermissions(payload?.permissions);
+    if (!Object.values(permissions).some(Boolean)) {
+      throw httpError('Select at least one permission', 400);
+    }
+    try {
+      const role = await CompanyRole.create({
+        companyId: company._id,
+        name,
+        permissions,
+        createdByUserId: caller._id,
+      });
+      return {
+        _id: String(role._id),
+        name: role.name,
+        permissions: sanitizePermissions(role.permissions),
+      };
+    } catch (error) {
+      if (error?.code === 11000) throw httpError('A role with this name already exists', 409);
+      throw error;
+    }
+  }
+
+  async updateRole(callerUserId, companyId, roleId, payload) {
+    const { company } = await assertCan(callerUserId, companyId, 'members.edit');
+    const role = await CompanyRole.findOne({ _id: roleId, companyId: company._id });
+    if (!role) throw httpError('Role not found', 404);
+    if (payload?.name != null) {
+      const name = String(payload.name || '').trim();
+      if (name.length < 2) throw httpError('Role name is required', 400);
+      role.name = name;
+    }
+    if (payload?.permissions) {
+      const permissions = sanitizePermissions(payload.permissions);
+      if (!Object.values(permissions).some(Boolean)) {
+        throw httpError('Select at least one permission', 400);
+      }
+      role.permissions = permissions;
+    }
+    try {
+      await role.save();
+    } catch (error) {
+      if (error?.code === 11000) throw httpError('A role with this name already exists', 409);
+      throw error;
+    }
+    await CompanyMembership.updateMany(
+      { companyId: company._id, roleId: role._id },
+      { $set: { roleName: role.name, permissions: role.permissions } }
+    );
+    return {
+      _id: String(role._id),
+      name: role.name,
+      permissions: sanitizePermissions(role.permissions),
+    };
+  }
+
+  async deleteRole(callerUserId, companyId, roleId) {
+    const { company } = await assertCan(callerUserId, companyId, 'members.edit');
+    const role = await CompanyRole.findOneAndDelete({ _id: roleId, companyId: company._id });
+    if (!role) throw httpError('Role not found', 404);
+    await CompanyMembership.updateMany(
+      { companyId: company._id, roleId: role._id },
+      { $set: { roleId: null } }
+    );
+    return { _id: String(role._id) };
   }
 }
 

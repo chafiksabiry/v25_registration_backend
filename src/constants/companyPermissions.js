@@ -27,11 +27,59 @@ export const PERMISSION_GROUPS = [
   },
   {
     id: 'training',
-    actions: ['view', 'edit'],
+    actions: ['view', 'create', 'edit', 'delete'],
   },
   {
     id: 'calls',
-    actions: ['view', 'listen', 'validate'],
+    actions: ['view', 'listen', 'validate', 'export'],
+  },
+  {
+    id: 'dashboard',
+    actions: ['view'],
+  },
+  {
+    id: 'agents',
+    actions: ['view', 'create', 'edit', 'remove'],
+  },
+  {
+    id: 'planning',
+    actions: ['view', 'create', 'edit', 'delete'],
+  },
+  {
+    id: 'emails',
+    actions: ['view', 'create', 'send'],
+  },
+  {
+    id: 'chat',
+    actions: ['view', 'reply'],
+  },
+  {
+    id: 'voice',
+    actions: ['view', 'edit'],
+  },
+  {
+    id: 'activation',
+    actions: ['view', 'edit'],
+  },
+  {
+    id: 'quality',
+    actions: ['view', 'review'],
+  },
+  {
+    id: 'operations',
+    actions: ['view'],
+  },
+  {
+    id: 'analytics',
+    actions: ['view'],
+  },
+  {
+    id: 'wallet',
+    actions: ['view', 'deposit', 'withdraw'],
+  },
+  {
+    id: 'subscription',
+    actions: ['view', 'change'],
   },
   {
     id: 'billing',

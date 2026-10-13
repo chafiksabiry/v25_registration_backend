@@ -89,3 +89,46 @@ export const removeCompanyMember = async (req, res) => {
     return fail(res, error, 'Failed to remove member');
   }
 };
+
+export const listCompanyRoles = async (req, res) => {
+  try {
+    const data = await companyMemberService.listRoles(callerId(req), req.query.companyId);
+    return res.json({ success: true, data });
+  } catch (error) {
+    return fail(res, error, 'Failed to list roles');
+  }
+};
+
+export const createCompanyRole = async (req, res) => {
+  try {
+    const data = await companyMemberService.createRole(callerId(req), req.body);
+    return res.status(201).json({ success: true, data });
+  } catch (error) {
+    return fail(res, error, 'Failed to create role');
+  }
+};
+
+export const updateCompanyRole = async (req, res) => {
+  try {
+    const companyId = req.body?.companyId || req.query.companyId;
+    const data = await companyMemberService.updateRole(
+      callerId(req),
+      companyId,
+      req.params.roleId,
+      req.body
+    );
+    return res.json({ success: true, data });
+  } catch (error) {
+    return fail(res, error, 'Failed to update role');
+  }
+};
+
+export const deleteCompanyRole = async (req, res) => {
+  try {
+    const companyId = req.body?.companyId || req.query.companyId;
+    const data = await companyMemberService.deleteRole(callerId(req), companyId, req.params.roleId);
+    return res.json({ success: true, data });
+  } catch (error) {
+    return fail(res, error, 'Failed to delete role');
+  }
+};

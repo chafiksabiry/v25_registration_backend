@@ -32,6 +32,15 @@ const companyMembershipSchema = new mongoose.Schema({
     enum: ['admin', 'operator', 'readonly', 'custom'],
     default: 'custom',
   },
+  roleId: {
+    type: mongoose.Schema.Types.ObjectId,
+    default: null,
+  },
+  roleName: {
+    type: String,
+    default: '',
+    trim: true,
+  },
   status: {
     type: String,
     enum: ['pending', 'invited', 'active'],
