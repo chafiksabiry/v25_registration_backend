@@ -60,12 +60,10 @@ export const checkPhone = async (req, res) => {
 export const login = async (req, res) => {
   try {
     const result = await authService.login(req.body.email, req.body.password, req);
-    console.log('Login verification code:', result.verificationCode);
 
     res.status(201).json({
       message: 'Verification code sent',
       data: {
-        code: result.verificationCode,
         userId: result.userId,
         phone: result.phone || '',
       },
@@ -77,6 +75,9 @@ export const login = async (req, res) => {
       error.message === 'Invalid password' ? 'INVALID_PASSWORD' :
       'INVALID_CREDENTIALS'
     );
+    if (code === 'ACCOUNT_NOT_VERIFIED') {
+      return res.status(403).json({ message: 'Account not verified', code });
+    }
     const message =
       code === 'INVALID_EMAIL' ? 'Invalid email' :
       code === 'INVALID_PASSWORD' ? 'Invalid password' :
