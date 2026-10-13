@@ -129,6 +129,11 @@ class AuthService {
 
   async register(userData, req) {
     console.log('Register attempt for email:', userData.email);
+    const password = String(userData.password || '');
+    if (!(password.length >= 8 && /[A-Za-z]/.test(password) && /[0-9]/.test(password))) {
+      throw new Error('Password must be at least 8 characters with letters and numbers');
+    }
+
     const email = String(userData.email || '').trim().toLowerCase();
     const existingUser = await userRepository.findByEmail(email);
     if (existingUser) {
