@@ -202,6 +202,12 @@ class AuthService {
       throw err;
     }
 
+    if (!user.isVerified) {
+      const err = new Error('Account not verified');
+      err.code = 'ACCOUNT_NOT_VERIFIED';
+      throw err;
+    }
+
     const verificationCode = this.generateVerificationCode();
     const verificationExpiry = new Date();
     verificationExpiry.setMinutes(verificationExpiry.getMinutes() + 10);
@@ -227,8 +233,12 @@ class AuthService {
       }
     });
 
+    // The code is a 2FA secret — it must reach the user only by email, never
+    // echoed back in the API response (that would let anyone with the
+    // password skip 2FA entirely).
+    await this.sendVerificationEmail(user.email, verificationCode);
+
     return {
-      verificationCode,
       userId: String(user._id),
       phone: user.phone || '',
     };
