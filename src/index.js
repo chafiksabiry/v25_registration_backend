@@ -54,15 +54,20 @@ app.get('/', (req, res) => {
   res.status(200).json({ status: 'OK', message: 'Server is running' });
 });
 
-// Global soft limit — high enough that shared proxy IPs don't lock out signup.
-// Auth abuse is handled by a tighter limiter on /api/auth only.
+// Global soft limit for the rest of the API. Login and signup are not counted
+// here: a busy shared IP was filling this bucket and blocking /api/auth with 429
+// before the password was checked. Auth abuse stays on authLimiter.
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: Number(process.env.RATE_LIMIT_GLOBAL_MAX || 1000),
+  max: Number(process.env.RATE_LIMIT_GLOBAL_MAX || 10000),
   standardHeaders: true,
   legacyHeaders: false,
   // With trust proxy = 1 above, req.ip is the real client when X-Forwarded-For is set.
-  skip: (req) => req.path === '/' || req.path === '/health',
+  skip: (req) =>
+    req.method === 'OPTIONS' ||
+    req.path === '/' ||
+    req.path === '/health' ||
+    req.path.startsWith('/api/auth'),
 });
 
 // Stricter on auth endpoints (register/login/OTP) — per real client IP.
