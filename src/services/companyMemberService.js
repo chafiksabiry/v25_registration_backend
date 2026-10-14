@@ -251,6 +251,10 @@ class CompanyMemberService {
     } = payload || {};
 
     const { caller, company } = await assertCan(callerUserId, companyId, 'members.invite');
+    const roleCount = await CompanyRole.countDocuments({ companyId: company._id });
+    if (roleCount === 0) {
+      throw httpError('Créez un rôle avant d’inviter un membre.', 400);
+    }
     const normalizedEmail = normalizeEmail(email);
     if (!normalizedEmail || !normalizedEmail.includes('@')) {
       throw httpError('Valid email is required', 400);
