@@ -207,13 +207,76 @@ const KEY_LABELS = {
   'members.edit': 'Modifier les droits',
 };
 
-export function describeGrantedAccess(permissions) {
+const GROUP_LABELS_EN = {
+  gigs: 'Gigs',
+  leads: 'Prospects',
+  telephony: 'Telephony',
+  scripts: 'Scripts',
+  knowledge: 'Knowledge base',
+  matching: 'Matching / REPs',
+  training: 'Training',
+  calls: 'Calls',
+  dashboard: 'Dashboard',
+  agents: 'Agents',
+  planning: 'Planning',
+  emails: 'Emails',
+  chat: 'Chat',
+  voice: 'Voice assistant',
+  activation: 'Gig activation',
+  quality: 'Quality',
+  operations: 'Operations',
+  analytics: 'Analytics',
+  wallet: 'Wallet',
+  subscription: 'Subscription',
+  billing: 'Tokens and billing',
+  members: 'Team',
+  settings: 'Settings',
+};
+
+const ACTION_LABELS_EN = {
+  view: 'View',
+  create: 'Create',
+  edit: 'Edit',
+  delete: 'Delete',
+  activate: 'Activate / pause',
+  import: 'Import',
+  archive: 'Archive',
+  export: 'Export',
+  search: 'Search',
+  buy: 'Buy',
+  assign: 'Assign',
+  terminate: 'Terminate',
+  test: 'Test call',
+  invite: 'Invite',
+  decide: 'Accept / decline',
+  listen: 'Listen',
+  validate: 'Validate',
+  remove: 'Remove',
+  send: 'Send',
+  reply: 'Reply',
+  review: 'Review',
+  deposit: 'Deposit',
+  withdraw: 'Withdraw',
+  change: 'Change plan',
+};
+
+const KEY_LABELS_EN = {
+  'knowledge.create': 'Add',
+  'voice.edit': 'Configure',
+  'members.edit': 'Edit rights',
+};
+
+export function describeGrantedAccess(permissions, lang = 'fr') {
+  const english = lang === 'en';
+  const groupLabels = english ? GROUP_LABELS_EN : GROUP_LABELS;
+  const actionLabels = english ? ACTION_LABELS_EN : ACTION_LABELS;
+  const keyLabels = english ? KEY_LABELS_EN : KEY_LABELS;
   const lines = [];
   for (const group of PERMISSION_GROUPS) {
     const granted = group.actions.filter((action) => permissions?.[`${group.id}.${action}`] === true);
     if (!granted.length) continue;
-    const actions = granted.map((action) => KEY_LABELS[`${group.id}.${action}`] || ACTION_LABELS[action] || action);
-    lines.push(`${GROUP_LABELS[group.id] || group.id} : ${actions.join(', ')}`);
+    const actions = granted.map((action) => keyLabels[`${group.id}.${action}`] || actionLabels[action] || action);
+    lines.push(`${groupLabels[group.id] || group.id} : ${actions.join(', ')}`);
   }
   return lines;
 }

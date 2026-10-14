@@ -116,17 +116,21 @@ export function inviteEmail({ firstName, email, tempPassword, companyName, login
   };
 }
 
-export function companyMemberInviteEmail({ firstName, email, tempPassword, companyName, loginUrl, roleName, accessLines }) {
+export function companyMemberInviteEmail({ firstName, email, tempPassword, companyName, loginUrl, roleName, accessLines, accessLinesEn }) {
   const safeName = escapeHtml(firstName || '');
   const org = escapeHtml(companyName || 'HARX');
   const safeEmail = escapeHtml(email);
   const safePassword = tempPassword ? escapeHtml(tempPassword) : '';
   const safeUrl = escapeHtml(loginUrl);
   const safeRole = escapeHtml(roleName || 'Membre');
-  const lines = Array.isArray(accessLines) ? accessLines.map((line) => String(line || '').trim()).filter(Boolean) : [];
-  const accessHtml = lines.length
-    ? `<ul style="margin:8px 0 0;padding:0 0 0 18px;color:#1e293b;font-size:14px;line-height:1.6;">${lines.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}</ul>`
-    : `<p style="margin:8px 0 0;font-size:14px;color:#1e293b;">Aucun accès n'est ouvert pour le moment.</p>`;
+  const toList = (items, empty) => {
+    const lines = Array.isArray(items) ? items.map((line) => String(line || '').trim()).filter(Boolean) : [];
+    return lines.length
+      ? `<ul style="margin:8px 0 0;padding:0 0 0 18px;color:#1e293b;font-size:14px;line-height:1.6;">${lines.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}</ul>`
+      : `<p style="margin:8px 0 0;font-size:14px;color:#1e293b;">${empty}</p>`;
+  };
+  const accessHtml = toList(accessLines, 'Aucun accès n\'est ouvert pour le moment.');
+  const accessHtmlEn = toList(accessLinesEn, 'No access is open yet.');
   const credentials = safePassword
     ? `
         <div style="background:#fff1f2;border:1px solid #fecdd3;border-radius:16px;padding:16px 18px;margin:0 0 22px;">
@@ -140,7 +144,7 @@ export function companyMemberInviteEmail({ firstName, email, tempPassword, compa
     html: harxEmailShell({
       eyebrow: 'INVITATION',
       title: 'Vous rejoignez une entreprise HARX',
-      intro: `Bonjour ${safeName}, ${org} vous invite à accéder à son espace avec le rôle ${safeRole}. Voici ce que vous pouvez ouvrir.`,
+      intro: `Bonjour ${safeName}, ${org} vous invite à accéder à son espace avec le rôle ${safeRole}. Voici ce que vous pouvez ouvrir.<br><br>Hello ${safeName}, ${org} invites you to its workspace with the role ${safeRole}. Here is what you can open.`,
       footer: safePassword
         ? 'Pour votre sécurité, changez ce mot de passe dès la première connexion.'
         : 'Si vous n\'êtes pas à l\'origine de cette invitation, ignorez ce message.',
@@ -149,6 +153,9 @@ export function companyMemberInviteEmail({ firstName, email, tempPassword, compa
           <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:0.08em;color:#e11d48;">VOTRE RÔLE</p>
           <p style="margin:6px 0 0;font-size:16px;font-weight:700;color:#0f172a;">${safeRole}</p>
           ${accessHtml}
+          <p style="margin:16px 0 0;font-size:12px;font-weight:700;letter-spacing:0.08em;color:#e11d48;">YOUR ROLE</p>
+          <p style="margin:6px 0 0;font-size:16px;font-weight:700;color:#0f172a;">${safeRole}</p>
+          ${accessHtmlEn}
         </div>
         ${credentials}
         <p style="margin:0;text-align:center;">

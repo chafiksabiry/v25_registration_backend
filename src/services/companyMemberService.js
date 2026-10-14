@@ -92,7 +92,8 @@ async function sendInviteEmail({ to, firstName, email, tempPassword, companyName
     companyName,
     loginUrl,
     roleName,
-    accessLines: describeGrantedAccess(permissions),
+    accessLines: describeGrantedAccess(permissions, 'fr'),
+    accessLinesEn: describeGrantedAccess(permissions, 'en'),
   });
   await sendAppEmail({
     to,
