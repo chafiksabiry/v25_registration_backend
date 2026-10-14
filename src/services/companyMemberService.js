@@ -8,6 +8,7 @@ import { appLoginUrl, sendAppEmail } from './brevoMail.js';
 import {
   allPermissions,
   emptyPermissions,
+  describeGrantedAccess,
   presetPermissions,
   sanitizePermissions,
   PERMISSION_GROUPS,
@@ -82,7 +83,7 @@ function companyLabel(company) {
   return company.name || company.companyName || company.title || 'HARX';
 }
 
-async function sendInviteEmail({ to, firstName, email, tempPassword, companyName }) {
+async function sendInviteEmail({ to, firstName, email, tempPassword, companyName, roleName, permissions }) {
   const loginUrl = appLoginUrl();
   const message = companyMemberInviteEmail({
     firstName,
@@ -90,6 +91,8 @@ async function sendInviteEmail({ to, firstName, email, tempPassword, companyName
     tempPassword,
     companyName,
     loginUrl,
+    roleName,
+    accessLines: describeGrantedAccess(permissions),
   });
   await sendAppEmail({
     to,
@@ -322,6 +325,8 @@ class CompanyMemberService {
           email: normalizedEmail,
           tempPassword,
           companyName: companyLabel(company),
+          roleName: role?.name || '',
+          permissions: rights,
         });
         emailSent = true;
         membership.status = 'invited';
@@ -403,6 +408,8 @@ class CompanyMemberService {
         email: targetEmail,
         tempPassword,
         companyName: companyLabel(company),
+        roleName: membership.roleName || '',
+        permissions: membership.permissions,
       });
       emailSent = true;
       membership.status = 'invited';

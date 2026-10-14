@@ -116,12 +116,17 @@ export function inviteEmail({ firstName, email, tempPassword, companyName, login
   };
 }
 
-export function companyMemberInviteEmail({ firstName, email, tempPassword, companyName, loginUrl }) {
+export function companyMemberInviteEmail({ firstName, email, tempPassword, companyName, loginUrl, roleName, accessLines }) {
   const safeName = escapeHtml(firstName || '');
   const org = escapeHtml(companyName || 'HARX');
   const safeEmail = escapeHtml(email);
   const safePassword = tempPassword ? escapeHtml(tempPassword) : '';
   const safeUrl = escapeHtml(loginUrl);
+  const safeRole = escapeHtml(roleName || 'Membre');
+  const lines = Array.isArray(accessLines) ? accessLines.map((line) => String(line || '').trim()).filter(Boolean) : [];
+  const accessHtml = lines.length
+    ? `<ul style="margin:8px 0 0;padding:0 0 0 18px;color:#1e293b;font-size:14px;line-height:1.6;">${lines.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}</ul>`
+    : `<p style="margin:8px 0 0;font-size:14px;color:#1e293b;">Aucun accès n'est ouvert pour le moment.</p>`;
   const credentials = safePassword
     ? `
         <div style="background:#fff1f2;border:1px solid #fecdd3;border-radius:16px;padding:16px 18px;margin:0 0 22px;">
@@ -131,15 +136,20 @@ export function companyMemberInviteEmail({ firstName, email, tempPassword, compa
     : `
         <p style="margin:0 0 22px;font-size:14px;color:#1e293b;">Connectez-vous avec votre e-mail <strong>${safeEmail}</strong> et votre mot de passe habituel.</p>`;
   return {
-    subject: `HARX — Invitation à rejoindre ${companyName || 'une entreprise'}`,
+    subject: `HARX — ${companyName || 'Une entreprise'} vous invite comme ${roleName || 'membre'}`,
     html: harxEmailShell({
       eyebrow: 'INVITATION',
       title: 'Vous rejoignez une entreprise HARX',
-      intro: `Bonjour ${safeName}, ${org} vous invite à accéder à son espace. Vos droits sont limités à ce que l'administrateur a choisi.`,
+      intro: `Bonjour ${safeName}, ${org} vous invite à accéder à son espace avec le rôle ${safeRole}. Voici ce que vous pouvez ouvrir.`,
       footer: safePassword
         ? 'Pour votre sécurité, changez ce mot de passe dès la première connexion.'
         : 'Si vous n\'êtes pas à l\'origine de cette invitation, ignorez ce message.',
       bodyHtml: `
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:16px;padding:16px 18px;margin:0 0 22px;">
+          <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:0.08em;color:#e11d48;">VOTRE RÔLE</p>
+          <p style="margin:6px 0 0;font-size:16px;font-weight:700;color:#0f172a;">${safeRole}</p>
+          ${accessHtml}
+        </div>
         ${credentials}
         <p style="margin:0;text-align:center;">
           <a href="${safeUrl}" style="display:inline-block;background-color:#ec4899;background-image:linear-gradient(90deg,#ff4d4d 0%,#ec4899 100%);color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:12px;font-weight:700;">Se connecter</a>

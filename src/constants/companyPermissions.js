@@ -148,6 +148,76 @@ export function presetPermissions(preset) {
   return null;
 }
 
+const GROUP_LABELS = {
+  gigs: 'Gigs',
+  leads: 'Prospects',
+  telephony: 'Téléphonie',
+  scripts: 'Scripts',
+  knowledge: 'Base de connaissances',
+  matching: 'Matching / REPs',
+  training: 'Formation',
+  calls: 'Appels',
+  dashboard: 'Tableau de bord',
+  agents: 'Agents',
+  planning: 'Planification',
+  emails: 'E-mails',
+  chat: 'Chat',
+  voice: 'Assistant vocal',
+  activation: 'Activation des gigs',
+  quality: 'Qualité',
+  operations: 'Opérations',
+  analytics: 'Analytique',
+  wallet: 'Portefeuille',
+  subscription: 'Abonnement',
+  billing: 'Tokens et facturation',
+  members: 'Équipe',
+  settings: 'Réglages',
+};
+
+const ACTION_LABELS = {
+  view: 'Voir',
+  create: 'Créer',
+  edit: 'Modifier',
+  delete: 'Supprimer',
+  activate: 'Activer / pause',
+  import: 'Importer',
+  archive: 'Archiver',
+  export: 'Exporter',
+  search: 'Rechercher',
+  buy: 'Acheter',
+  assign: 'Affecter',
+  terminate: 'Résilier',
+  test: 'Appel test',
+  invite: 'Inviter',
+  decide: 'Accepter / refuser',
+  listen: 'Écouter',
+  validate: 'Valider',
+  remove: 'Retirer',
+  send: 'Envoyer',
+  reply: 'Répondre',
+  review: 'Contrôler',
+  deposit: 'Déposer',
+  withdraw: 'Retirer',
+  change: 'Changer de plan',
+};
+
+const KEY_LABELS = {
+  'knowledge.create': 'Ajouter',
+  'voice.edit': 'Configurer',
+  'members.edit': 'Modifier les droits',
+};
+
+export function describeGrantedAccess(permissions) {
+  const lines = [];
+  for (const group of PERMISSION_GROUPS) {
+    const granted = group.actions.filter((action) => permissions?.[`${group.id}.${action}`] === true);
+    if (!granted.length) continue;
+    const actions = granted.map((action) => KEY_LABELS[`${group.id}.${action}`] || ACTION_LABELS[action] || action);
+    lines.push(`${GROUP_LABELS[group.id] || group.id} : ${actions.join(', ')}`);
+  }
+  return lines;
+}
+
 export function sanitizePermissions(input) {
   const out = emptyPermissions();
   if (!input || typeof input !== 'object') return out;
