@@ -50,10 +50,6 @@ export const PERMISSION_GROUPS = [
     actions: ['view', 'create', 'send'],
   },
   {
-    id: 'chat',
-    actions: ['view', 'reply'],
-  },
-  {
     id: 'voice',
     actions: ['view', 'edit'],
   },
@@ -161,7 +157,6 @@ const GROUP_LABELS = {
   agents: 'Agents',
   planning: 'Planification',
   emails: 'E-mails',
-  chat: 'Chat',
   voice: 'Assistant vocal',
   activation: 'Activation des gigs',
   quality: 'Qualité',
@@ -220,7 +215,6 @@ const GROUP_LABELS_EN = {
   agents: 'Agents',
   planning: 'Planning',
   emails: 'Emails',
-  chat: 'Chat',
   voice: 'Voice assistant',
   activation: 'Gig activation',
   quality: 'Quality',
