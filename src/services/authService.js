@@ -142,13 +142,6 @@ class AuthService {
     }
 
     const phone = String(userData.phone || '').trim();
-    if (phone) {
-      const existingPhone = await userRepository.findByPhone(phone);
-      if (existingPhone) {
-        console.warn('Phone already registered');
-        throw new Error('Phone already registered');
-      }
-    }
 
     const verificationCode = this.generateVerificationCode();
     const verificationExpiry = new Date();
@@ -183,13 +176,15 @@ class AuthService {
     return { available: !existingUser };
   }
 
+  // Phone numbers are not required to be unique (décidé le 14/10) — only
+  // the email is. Kept as a no-op available:true so the frontend's
+  // check-phone step still has something to call.
   async checkPhoneAvailable(phone) {
     const trimmed = String(phone || '').trim();
     if (!trimmed) {
       throw new Error('Phone is required');
     }
-    const existingPhone = await userRepository.findByPhone(trimmed);
-    return { available: !existingPhone };
+    return { available: true };
   }
 
   async login(email, password, req) {
