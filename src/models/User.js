@@ -119,6 +119,21 @@ const userSchema = new mongoose.Schema({
     ref: 'User',
     default: null,
   },
+  /** Set by scripts/importV1Reps.js for accounts migrated from HARX v1. */
+  source: {
+    type: String,
+    default: null,
+  },
+  importBatch: {
+    type: String,
+    default: null,
+    index: true,
+  },
+  /** Profile data carried over from HARX v1 (segment, languages, activities...). */
+  legacyV1: {
+    type: mongoose.Schema.Types.Mixed,
+    default: null,
+  },
 });
 
 userSchema.pre('save', async function(next) {
