@@ -13,6 +13,7 @@
  *   --limit <n>          stop after n eligible reps (use for a pilot batch)
  *   --batch-id <id>      label stored on each imported user (default: v1-reps-<yyyy-mm>)
  *   --apply              actually write (omit for a dry-run)
+ *   --expect-db <name>   required with --apply: refuses to write unless the connected database has this exact name
  *   --rollback <id>      delete the users imported under that batch id that have not signed in since
  *
  * Rules:
@@ -40,6 +41,7 @@ const FILE = opt('--file');
 const ROLLBACK = opt('--rollback');
 const SEGMENTS = new Set((opt('--segments', 'A,C,D') || '').split(',').map((s) => s.trim().toUpperCase()));
 const LIMIT = Number(opt('--limit', 0)) || Infinity;
+const EXPECT_DB = opt('--expect-db');
 const BATCH_ID = opt('--batch-id', `v1-reps-${new Date().toISOString().slice(0, 7)}`);
 const CHUNK = 500;
 const SOURCE = 'harx_v1_import';
@@ -106,6 +108,13 @@ async function main() {
   await mongoose.connect(uri);
   const db = mongoose.connection.db;
   console.log(`Connected to database "${db.databaseName}" (${APPLY ? 'APPLY' : 'DRY RUN'})`);
+  if (APPLY && db.databaseName !== EXPECT_DB) {
+    console.error(
+      `Refusing to write: connected to "${db.databaseName}" but --expect-db is ${EXPECT_DB ? `"${EXPECT_DB}"` : 'missing'}.`
+    );
+    await mongoose.disconnect();
+    process.exit(1);
+  }
 
   if (ROLLBACK) {
     await rollback(db);
