@@ -1,2 +1,7 @@
 node_modules/
 .env
+# HARX v1 migration: personal data and login links, never commit
+out/
+reps_clean.*
+reps_excluded.csv
+tokens_*.csv
