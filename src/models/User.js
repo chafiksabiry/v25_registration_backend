@@ -119,6 +119,30 @@ const userSchema = new mongoose.Schema({
     ref: 'User',
     default: null,
   },
+  /** Set by scripts/importV1Reps.js for accounts migrated from HARX v1. */
+  source: {
+    type: String,
+    default: null,
+  },
+  importBatch: {
+    type: String,
+    default: null,
+    index: true,
+  },
+  /**
+   * One-click link sent to migrated HARX v1 reps. Only the SHA-256 of the token is stored;
+   * the link stays valid until expiresAt so mail-scanner prefetches and re-visits keep working.
+   */
+  reengagement: {
+    tokenHash: { type: String, default: null, index: true },
+    expiresAt: { type: Date, default: null },
+    lastUsedAt: { type: Date, default: null },
+  },
+  /** Profile data carried over from HARX v1 (segment, languages, activities...). */
+  legacyV1: {
+    type: mongoose.Schema.Types.Mixed,
+    default: null,
+  },
 });
 
 userSchema.pre('save', async function(next) {

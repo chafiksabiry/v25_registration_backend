@@ -9,6 +9,7 @@ import ipInfoService from './ipInfoService.js';
 import { verificationEmail, verificationSms } from '../utils/harxMessages.js';
 import { sendAppEmail } from './brevoMail.js';
 import companyMemberService from './companyMemberService.js';
+import { hashReengagementToken } from '../utils/reengagementToken.js';
 
 
 // Client initialized lazily inside methods to ensure env vars are loaded
@@ -234,6 +235,59 @@ class AuthService {
     };
   }
 
+
+  /**
+   * Exchange the token from a re-engagement e-mail link for a session JWT.
+   * Clicking the link proves control of the mailbox, so the account is marked verified.
+   */
+  async reengageLogin(rawToken, req) {
+    const token = String(rawToken || '').trim();
+    const fail = (message, code, statusCode) => {
+      const error = new Error(message);
+      error.code = code;
+      error.statusCode = statusCode;
+      return error;
+    };
+    if (token.length < 32 || token.length > 128) {
+      throw fail('Invalid link', 'INVALID_LINK', 400);
+    }
+
+    const user = await User.findOne({ 'reengagement.tokenHash': hashReengagementToken(token) });
+    if (!user || user.typeUser !== 'rep') {
+      throw fail('Invalid link', 'INVALID_LINK', 400);
+    }
+    const expiresAt = user.reengagement?.expiresAt;
+    if (!expiresAt || expiresAt < new Date()) {
+      throw fail('This link has expired', 'LINK_EXPIRED', 410);
+    }
+
+    const clientIp = getClientIp(req);
+    const locationInfo = await this.enrichIPInfo(clientIp);
+
+    await userRepository.update(user._id, {
+      isVerified: true,
+      firstTime: false,
+      'reengagement.lastUsedAt': new Date(),
+      $push: {
+        ipHistory: {
+          ip: clientIp,
+          action: 'login',
+          ...(locationInfo && { locationInfo }),
+        },
+      },
+    });
+
+    return {
+      token: this.generateToken(user._id, {
+        email: user.email,
+        fullName: user.fullName,
+        typeUser: user.typeUser,
+        isVerified: true,
+        mustChangePassword: user.mustChangePassword,
+        employerCompanyId: user.employerCompanyId,
+      }),
+    };
+  }
 
   async verifyEmail(email, code) {
     try {
