@@ -14,6 +14,9 @@
  *   --batch-id <id>      label stored on each imported user (default: v1-reps-<yyyy-mm>)
  *   --apply              actually write (omit for a dry-run)
  *   --expect-db <name>   required with --apply: refuses to write unless the connected database has this exact name
+ *   --tokens-out <path>  required with --apply: CSV (email,token) of one-click login links for the mailer.
+ *                        Contains secrets: created with mode 600, never commit it.
+ *   --token-days <n>     validity of the one-click links (default 90)
  *   --rollback <id>      delete the users imported under that batch id that have not signed in since
  *
  * Rules:
@@ -26,6 +29,7 @@ import dotenv from 'dotenv';
 import fs from 'fs';
 import readline from 'readline';
 import mongoose from 'mongoose';
+import { generateReengagementToken, hashReengagementToken } from '../src/utils/reengagementToken.js';
 
 dotenv.config();
 
@@ -42,11 +46,13 @@ const ROLLBACK = opt('--rollback');
 const SEGMENTS = new Set((opt('--segments', 'A,C,D') || '').split(',').map((s) => s.trim().toUpperCase()));
 const LIMIT = Number(opt('--limit', 0)) || Infinity;
 const EXPECT_DB = opt('--expect-db');
+const TOKENS_OUT = opt('--tokens-out');
+const TOKEN_DAYS = Number(opt('--token-days', 90)) || 90;
 const BATCH_ID = opt('--batch-id', `v1-reps-${new Date().toISOString().slice(0, 7)}`);
 const CHUNK = 500;
 const SOURCE = 'harx_v1_import';
 
-function buildUser(rep, now) {
+function buildUser(rep, now, token) {
   return {
     email: rep.email,
     fullName: rep.fullName,
@@ -59,6 +65,11 @@ function buildUser(rep, now) {
     source: SOURCE,
     importBatch: BATCH_ID,
     createdAt: now,
+    reengagement: {
+      tokenHash: hashReengagementToken(token),
+      expiresAt: new Date(now.getTime() + TOKEN_DAYS * 24 * 60 * 60 * 1000),
+      lastUsedAt: null,
+    },
     legacyV1: {
       segment: rep.segment,
       onboardingCompleted: rep.v1OnboardingCompleted,
@@ -104,6 +115,10 @@ async function main() {
     console.error('--file <reps_clean.jsonl> is required.');
     process.exit(1);
   }
+  if (APPLY && !ROLLBACK && !TOKENS_OUT) {
+    console.error('--tokens-out <path> is required with --apply (the mailer needs the login links).');
+    process.exit(1);
+  }
 
   await mongoose.connect(uri);
   const db = mongoose.connection.db;
@@ -123,6 +138,7 @@ async function main() {
   }
 
   const users = db.collection('users');
+  if (APPLY && !fs.existsSync(TOKENS_OUT)) fs.writeFileSync(TOKENS_OUT, 'email,token\n', { mode: 0o600 });
   const totals = { read: 0, filtered: 0, existing: 0, toInsert: 0, inserted: 0, errors: 0 };
   const bySegment = {};
   let chunk = [];
@@ -140,8 +156,15 @@ async function main() {
 
     if (APPLY && fresh.length) {
       const now = new Date();
+      const tokens = fresh.map(() => generateReengagementToken());
+      // Written before the insert so a token is never lost; an unused token matches no user.
+      fs.appendFileSync(
+        TOKENS_OUT,
+        fresh.map((r, i) => `${r.email},${tokens[i]}\n`).join(''),
+        { mode: 0o600 }
+      );
       try {
-        const res = await users.insertMany(fresh.map((r) => buildUser(r, now)), { ordered: false });
+        const res = await users.insertMany(fresh.map((r, i) => buildUser(r, now, tokens[i])), { ordered: false });
         totals.inserted += res.insertedCount;
       } catch (error) {
         // ordered:false keeps going; count what landed and what failed (e.g. duplicate e-mail race)

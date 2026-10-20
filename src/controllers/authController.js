@@ -100,6 +100,18 @@ export const verifyEmail = async (req, res) => {
   }
 };
 
+export const reengageLogin = async (req, res) => {
+  try {
+    const result = await authService.reengageLogin(req.body?.token, req);
+    res.json(result);
+  } catch (error) {
+    res.status(error.statusCode || 400).json({
+      message: error.message,
+      code: error.code || 'INVALID_LINK',
+    });
+  }
+};
+
 export const linkedInAuth = async (req, res) => {
   console.log("code", req.body.code);
   try {
