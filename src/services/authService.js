@@ -142,13 +142,6 @@ class AuthService {
     }
 
     const phone = String(userData.phone || '').trim();
-    if (phone) {
-      const existingPhone = await userRepository.findByPhone(phone);
-      if (existingPhone) {
-        console.warn('Phone already registered');
-        throw new Error('Phone already registered');
-      }
-    }
 
     const verificationCode = this.generateVerificationCode();
     const verificationExpiry = new Date();
@@ -188,8 +181,7 @@ class AuthService {
     if (!trimmed) {
       throw new Error('Phone is required');
     }
-    const existingPhone = await userRepository.findByPhone(trimmed);
-    return { available: !existingPhone };
+    return { available: true };
   }
 
   async login(email, password, req) {

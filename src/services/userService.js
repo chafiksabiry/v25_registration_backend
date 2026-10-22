@@ -293,11 +293,6 @@ class UserService {
     const user = await User.findById(userId);
     if (!user) throw new Error('User not found');
 
-    const phoneTaken = await userRepository.findByPhone(trimmed);
-    if (phoneTaken && String(phoneTaken._id) !== String(userId)) {
-      throw new Error('Phone already registered');
-    }
-
     const otp = generate6DigitCode();
     const otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 min
 
