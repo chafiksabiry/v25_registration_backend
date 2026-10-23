@@ -69,3 +69,15 @@ Paliers prévus : 300, 1 000, 2 500, puis 4 000 par jour au maximum. Entre deux 
 ## À savoir
 - Le contrôle automatique lit les compteurs publiés dans CloudWatch par le jeu de configuration. Cette lecture n'a pas pu être testée contre un vrai compte AWS : à vérifier au premier palier (les logs affichent `Preflight rates` et `After n`).
 - Les statistiques CloudWatch ont quelques minutes de retard : le contrôle ne remplace pas la surveillance du tableau de bord.
+
+## Langues (fr / en / bilingue)
+
+Trois versions du même e-mail : français, anglais, bilingue (FR puis EN dans le même message, pied de page avec les deux mentions STOP).
+`--lang auto` (défaut) choisit par destinataire à partir de `--file` (reps_clean.jsonl) :
+
+1. langues déclarées : français + anglais → bilingue ; français seul → fr ; anglais seul → en ;
+2. sinon le pays : pays francophones → fr ; pays anglophones → en ;
+3. sinon (pays inconnu ou autre) → bilingue. Sans `--file`, tout est bilingue.
+
+`--lang fr|en|bi` force une version. Le dry-run affiche la répartition (`byLang`) ; le ledger enregistre la langue envoyée.
+`--preview-out p.html` écrit `p-fr.html`, `p-en.html`, `p-bi.html`.
