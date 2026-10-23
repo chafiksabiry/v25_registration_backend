@@ -44,7 +44,12 @@ class AuthService {
       },
     });
 
-    return { verificationCode };
+    // This code resets the account's password — it must never be readable
+    // off the wire by anyone who merely knows the victim's email. Same rule
+    // as login()/register(): send it by email server-side only.
+    await this.sendVerificationEmail(normalized, verificationCode);
+
+    return { success: true };
   }
 
   generateToken(userId, userInfo = {}) {
@@ -164,7 +169,14 @@ class AuthService {
         ...(locationInfo && { locationInfo: locationInfo })
       }]
     });
-    return { verificationCode, result };
+
+    // Same rule as login(): the code is only ever delivered by email, never
+    // echoed back in the API response — otherwise anyone who can call this
+    // endpoint can read the verification code off the wire without needing
+    // the registrant's inbox.
+    await this.sendVerificationEmail(email, verificationCode);
+
+    return { result };
   }
 
   async checkEmailAvailable(email) {
