@@ -1,5 +1,5 @@
 import express from 'express';
-import { register, login, verifyEmail, linkedInAuth, sendOTP, sendVerificationEmail, checkUserType, verifyOTP, verifyAccount, generateVerificationCode, changePassword, linkedinSignIn, checkFirstLogin, changeUserType, resendVerification, checkEmail, checkPhone } from '../controllers/authController.js';
+import { register, login, verifyEmail, linkedInAuth, sendOTP, sendVerificationEmail, checkUserType, verifyOTP, verifyAccount, generateVerificationCode, changePassword, linkedinSignIn, checkFirstLogin, changeUserType, resendVerification, checkEmail, checkPhone, reengageLogin } from '../controllers/authController.js';
 import { authenticate } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -9,6 +9,7 @@ router.post('/check-email', checkEmail);
 router.post('/check-phone', checkPhone);
 router.post('/login', login);
 router.post('/verify-email', verifyEmail);
+router.post('/reengage-login', reengageLogin);
 router.post('/linkedin', linkedInAuth);
 router.post("/signin/linkedin", linkedinSignIn);
 
