@@ -36,3 +36,10 @@ export function maskEmail(email) {
   const [local = '', domain = ''] = String(email).split('@');
   return `${local.slice(0, 1)}***@${domain.slice(0, 1)}***${domain.slice(domain.lastIndexOf('.'))}`;
 }
+
+/** Error text safe for logs: e-mail addresses (also inside ARNs) are masked, length capped. */
+export function safeMessage(err) {
+  return String(err?.message || '')
+    .replace(/[a-z0-9._%+\-]+@[a-z0-9\-]+(\.[a-z0-9\-]+)+/gi, (m) => maskEmail(m))
+    .slice(0, 300);
+}
