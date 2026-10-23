@@ -17,6 +17,9 @@ cd scripts/reengagementMailer && npm install && npm test   # 12 tests, aucun app
 - Aucun suivi d'ouverture ni de clic : le lien pointe directement vers la page de connexion.
 - En-tête `List-Unsubscribe` de type `mailto:` + consigne « répondez STOP ». Les adresses ayant répondu STOP vont dans le fichier `--exclude`.
 
+## Habillage de l'e-mail
+Bandeau HARX (logo + « We inspire growth ») servi par le backend d'inscription : `GET /email/harx-banner.jpg` (fichier `src/assets/harx-email-banner.jpg`, 17 Ko, dérivé de `logo-pink.png`). Couleurs de `src/lib/harxBrand.ts` du front. `--asset-base` indique le backend qui sert l'image (production par défaut) ; avec `--apply`, le script refuse d'envoyer si l'image ne répond pas 200. **Déployer le backend d'inscription avant le premier envoi réel.**
+
 ## Mise en place unique (console AWS, région Paris)
 1. **Jeu de configuration** : SES > Configuration > Jeux de configurations > (celui de l'assistant, ou en créer un) > *Event destinations* > Ajouter > **Amazon CloudWatch**. Événements : Sends, Hard bounces, Complaints, Deliveries. Dimension : nom `campaign`, source *Message tag*, valeur par défaut `reps-reengagement`.
 2. **Utilisateur IAM dédié** à l'envoi (pas de droits d'administration), avec cette politique (remplacer `<CONFIG_SET>`) :

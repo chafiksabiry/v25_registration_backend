@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { renderEmail, buildLink, SUBJECT } from '../lib/template.js';
+import { renderEmail, buildLink, buildBannerUrl, SUBJECT } from '../lib/template.js';
 import { parseTokens, maskEmail, safeMessage } from '../lib/csv.js';
 import { readLedger, appendLedger } from '../lib/ledger.js';
 import { evaluateRates } from '../lib/guard.js';
@@ -14,7 +14,7 @@ const mkTokens = (n, prefix = 'rep') =>
   'email,token\n' + Array.from({ length: n }, (_, i) => `${prefix}${i}@example.com,${TOKEN}${i}`).join('\n') + '\n';
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'mailer-'));
 
-function makeDeps({ counts = { send: 0, bounce: 0, complaint: 0 }, files = {}, failOn = null, account = '111' } = {}) {
+function makeDeps({ counts = { send: 0, bounce: 0, complaint: 0 }, files = {}, failOn = null, account = '111', assetOk = { ok: true } } = {}) {
   const sent = [];
   const logs = [];
   const writes = {};
@@ -25,6 +25,7 @@ function makeDeps({ counts = { send: 0, bounce: 0, complaint: 0 }, files = {}, f
     loadSegments: () => new Map(),
     sleep: async () => {},
     log: (m) => logs.push(m),
+    checkAsset: async () => assetOk,
     getAccountId: async () => account,
     fetchCounts: async () => (typeof counts === 'function' ? counts(sent.length) : counts),
     send: async (m) => {
@@ -38,7 +39,7 @@ function makeDeps({ counts = { send: 0, bounce: 0, complaint: 0 }, files = {}, f
 test('template: link, code, plan, deadline, postal address, STOP, no undefined', () => {
   const link = buildLink('https://harx.ai/', 'tok+/=');
   assert.equal(link, 'https://harx.ai/auth/reactivate?t=tok%2B%2F%3D');
-  const { subject, text, html } = renderEmail({ link });
+  const { subject, text, html } = renderEmail({ link, bannerUrl: 'https://api.harx.ai/email/harx-banner.jpg' });
   assert.equal(subject, SUBJECT);
   for (const body of [text, html]) {
     assert.ok(body.includes('REPS2027'));
@@ -50,6 +51,14 @@ test('template: link, code, plan, deadline, postal address, STOP, no undefined',
   }
   assert.ok(text.includes(link));
   assert.ok(html.includes('IN THE RICH MAN&#39;S WORLD'));
+  assert.ok(html.includes('<img src="https://api.harx.ai/email/harx-banner.jpg"'));
+  assert.ok(html.includes('alt="HARX - We inspire growth"'));
+  assert.ok(html.includes('#E6188D') && html.includes('#ED1C24'));
+  assert.ok(html.includes('bgcolor="#E6188D"'), 'solid fallback color for clients without gradients');
+  assert.ok(text.includes('6 MOIS OFFERTS'));
+  assert.equal(buildBannerUrl('https://api.harx.ai/'), 'https://api.harx.ai/email/harx-banner.jpg');
+  assert.throws(() => buildBannerUrl('http://x'));
+  assert.throws(() => renderEmail({ link }));
   assert.throws(() => buildLink('http://harx.ai', 'x'));
 });
 
@@ -177,4 +186,30 @@ test('failure log keeps the AWS reason but masks e-mail addresses (also inside A
   assert.ok(failedLine.includes('ses:SendEmail'));
   assert.ok(!failedLine.includes('john@gmail.com'));
   assert.ok(fs.readFileSync(path.join(dir, 'l.jsonl'), 'utf8').includes('"detail"'));
+});
+
+test('apply: refuses to send when the banner is not reachable', async () => {
+  const dir = tmp();
+  const deps = makeDeps({ files: { t: mkTokens(2) }, assetOk: { ok: false, reason: 'HTTP 404' } });
+  const o = parseArgs(['node', 's', '--tokens', 't', '--link-base', 'https://harx.ai', '--limit', '2', '--apply', '--expect-account', '111', '--config-set', 'c', '--ledger', path.join(dir, 'l')]);
+  const r = await runCampaign(o, deps);
+  assert.equal(r.exitCode, 1);
+  assert.equal(deps.sent.length, 0);
+  assert.ok(deps.logs.some((l) => l.includes('banner') && l.includes('not reachable')));
+});
+
+test('dry run reports an unreachable banner without failing', async () => {
+  const deps = makeDeps({ files: { t: mkTokens(2) }, assetOk: { ok: false, reason: 'HTTP 404' } });
+  const o = parseArgs(['node', 's', '--tokens', 't', '--link-base', 'https://harx.ai', '--limit', '2']);
+  const r = await runCampaign(o, deps);
+  assert.equal(r.exitCode, 0);
+  assert.ok(deps.logs.some((l) => l.includes('NOT reachable')));
+});
+
+test('sent e-mails carry the banner url of --asset-base', async () => {
+  const dir = tmp();
+  const deps = makeDeps({ files: { t: mkTokens(1) } });
+  const o = parseArgs(['node', 's', '--tokens', 't', '--link-base', 'https://harx.ai', '--asset-base', 'https://api.harx.ai', '--limit', '1', '--apply', '--expect-account', '111', '--config-set', 'c', '--ledger', path.join(dir, 'l')]);
+  await runCampaign(o, deps);
+  assert.ok(deps.sent[0].html.includes('https://api.harx.ai/email/harx-banner.jpg'));
 });

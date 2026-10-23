@@ -30,13 +30,15 @@
  *   --max-bounce <ratio>    default 0.02     --max-complaint <ratio> default 0.001
  *   --min-sample <n>        sends needed before the rates count, default 100
  *   --campaign-tag <v>      message tag / CloudWatch dimension value, default reps-reengagement
+ *   --asset-base <https>    where /email/harx-banner.jpg is served (registration backend); default production.
+ *                           With --apply the banner must answer 200, otherwise nothing is sent.
  *   --preview-out <html>    write the rendered e-mail (placeholder link) for review
  */
 import fs from 'fs';
 import { pathToFileURL } from 'url';
 import { SESv2Client, SendEmailCommand } from '@aws-sdk/client-sesv2';
 import { STSClient, GetCallerIdentityCommand } from '@aws-sdk/client-sts';
-import { buildLink, renderEmail, SUPPORT_ADDRESS } from './lib/template.js';
+import { buildLink, buildBannerUrl, renderEmail, SUPPORT_ADDRESS } from './lib/template.js';
 import { parseTokens, parseEmailList, maskEmail, safeMessage } from './lib/csv.js';
 import { readLedger, appendLedger } from './lib/ledger.js';
 import { evaluateRates, fetchCampaignCounts, DEFAULT_LIMITS } from './lib/guard.js';
@@ -74,6 +76,7 @@ export function parseArgs(argv) {
       minSample: Number(opt('--min-sample', DEFAULT_LIMITS.minSample)),
     },
     campaignTag: opt('--campaign-tag', 'reps-reengagement'),
+    assetBase: opt('--asset-base', 'https://v25registrationbackend-production.up.railway.app'),
     previewOut: opt('--preview-out'),
   };
 }
@@ -131,12 +134,20 @@ export async function runCampaign(o, deps) {
 
   log(`Link base: ${o.linkBase}`);
   log(JSON.stringify(stats));
+  const bannerUrl = buildBannerUrl(o.assetBase);
   if (o.previewOut && selected[0]) {
-    const sample = renderEmail({ link: buildLink(o.linkBase, 'PREVIEW-TOKEN-NOT-A-REAL-LINK-0000000000') });
+    const sample = renderEmail({
+      link: buildLink(o.linkBase, 'PREVIEW-TOKEN-NOT-A-REAL-LINK-0000000000'),
+      bannerUrl: deps.previewBanner ? deps.previewBanner() || bannerUrl : bannerUrl,
+    });
     deps.writeFile(o.previewOut, sample.html);
     log(`Preview written to ${o.previewOut} (placeholder link)`);
   }
   if (!o.apply) {
+    if (deps.checkAsset) {
+      const a = await deps.checkAsset(bannerUrl);
+      log(`Banner ${bannerUrl}: ${a.ok ? 'reachable' : `NOT reachable (${a.reason}) - deploy the registration backend before sending`}`);
+    }
     log(`[DRY RUN] would send ${selected.length} e-mail(s). First recipients: ${selected.slice(0, 3).map((r) => maskEmail(r.email)).join(', ') || '(none)'}`);
     log('Dry run only. Re-run with --apply to send.');
     return { exitCode: 0, dryRun: true, stats, selected: selected.length };
@@ -145,6 +156,12 @@ export async function runCampaign(o, deps) {
   const account = await deps.getAccountId();
   if (account !== o.expectAccount) {
     log(`Refusing to send: connected to AWS account ${account} but --expect-account is ${o.expectAccount}.`);
+    return { exitCode: 1 };
+  }
+
+  const asset = await deps.checkAsset(bannerUrl);
+  if (!asset.ok) {
+    log(`Refusing to send: banner ${bannerUrl} is not reachable (${asset.reason}). Deploy the registration backend first.`);
     return { exitCode: 1 };
   }
 
@@ -161,7 +178,7 @@ export async function runCampaign(o, deps) {
   let consecutiveFailures = 0;
 
   for (const [i, r] of selected.entries()) {
-    const email = renderEmail({ link: buildLink(o.linkBase, r.token) });
+    const email = renderEmail({ link: buildLink(o.linkBase, r.token), bannerUrl });
     let attempt = 0;
     for (;;) {
       try {
@@ -226,6 +243,19 @@ function realDeps(o) {
     loadSegments,
     sleep,
     log: console.log,
+    previewBanner: () => {
+      const f = new URL('../../src/assets/harx-email-banner.jpg', import.meta.url);
+      return fs.existsSync(f) ? `data:image/jpeg;base64,${fs.readFileSync(f).toString('base64')}` : null;
+    },
+    checkAsset: async (url) => {
+      try {
+        const res = await fetch(url, { method: 'HEAD', signal: AbortSignal.timeout(10000) });
+        const type = res.headers.get('content-type') || '';
+        return res.ok && type.startsWith('image/') ? { ok: true } : { ok: false, reason: `HTTP ${res.status} ${type}`.trim() };
+      } catch (e) {
+        return { ok: false, reason: e?.name || 'network error' };
+      }
+    },
     getAccountId: async () => (await sts.send(new GetCallerIdentityCommand({}))).Account,
     fetchCounts: (g) => fetchCampaignCounts(g),
     send: async (m) => {
