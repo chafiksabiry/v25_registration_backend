@@ -73,7 +73,7 @@ Paliers prévus : 300, 1 000, 2 500, puis 4 000 par jour au maximum. Entre deux 
 ## Langues (fr / en / bilingue)
 
 Trois versions du même e-mail : français, anglais, bilingue (EN puis FR dans le même message, pied de page avec les deux mentions STOP).
-`--lang auto` (défaut) choisit par destinataire à partir de `--file` (reps_clean.jsonl) :
+**Par défaut (`--lang bi`), tout le monde reçoit la version bilingue** (décision du 23/10/2026). `--lang auto` choisit par destinataire à partir de `--file` (reps_clean.jsonl) :
 
 1. langues déclarées : français + anglais → bilingue ; français seul → fr ; anglais seul → en ;
 2. sinon le pays : pays francophones → fr ; pays anglophones → en ;

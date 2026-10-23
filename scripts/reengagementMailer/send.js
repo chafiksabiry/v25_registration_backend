@@ -16,7 +16,8 @@
  *   --link-base <https url> where the one-click page lives (required): recette host or https://harx.ai
  *   --file <jsonl>          cleaned reps file (segment, languages, country): needed for --segments and for
  *                           the automatic language choice; without it every e-mail is the bilingual version
- *   --lang auto|fr|en|bi    auto (default): declared languages, then country, else bilingual; or force one version
+ *   --lang bi|auto|fr|en    bi (default): bilingual English + French for everyone; auto: declared languages, then
+ *                           country, else bilingual; fr / en: force one version
  *   --segments A,C,D        send only to these v1 segments (needs --file)
  *   --exclude <txt>         one e-mail per line never to mail (opt-outs, bounces)
  *   --limit <n>             max recipients this run (required with --apply: one stage per run)
@@ -61,7 +62,7 @@ export function parseArgs(argv) {
     tokens: opt('--tokens'),
     linkBase: opt('--link-base'),
     file: opt('--file'),
-    lang: opt('--lang', 'auto'),
+    lang: opt('--lang', 'bi'),
     segments: opt('--segments') ? new Set(opt('--segments').split(',').map((s) => s.trim().toUpperCase())) : null,
     exclude: opt('--exclude'),
     limit: Number(opt('--limit', 0)) || 0,
@@ -89,7 +90,7 @@ export function validate(o) {
   const errors = [];
   if (!o.tokens) errors.push('--tokens <csv> is required');
   if (!o.linkBase) errors.push('--link-base <https url> is required');
-  if (o.lang !== 'auto' && !LANGS.includes(o.lang)) errors.push('--lang must be auto, fr, en or bi');
+  if (o.lang !== 'auto' && !LANGS.includes(o.lang)) errors.push('--lang must be bi, auto, fr or en');
   if (o.segments && !o.file) errors.push('--segments needs --file <reps_clean.jsonl>');
   if (o.apply) {
     if (!o.limit) errors.push('--limit <n> is required with --apply (one stage per run)');
