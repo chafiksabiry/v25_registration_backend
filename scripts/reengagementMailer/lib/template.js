@@ -20,6 +20,7 @@ const COPY = {
     title: 'Votre espace HARX vous attend',
     hello: 'Bonjour,',
     intro: 'Vous vous étiez inscrit(e) sur HARX, la plateforme qui met en relation des professionnels de la relation client à distance avec des entreprises. Votre compte a été transféré sur la nouvelle plateforme.',
+    why: "Pourquoi HARX ? Pour gagner de l'argent en travaillant à distance sur des missions de relation client : en complément de vos revenus actuels ou comme activité principale, à votre rythme, selon les créneaux que vous indiquez.",
     offerEyebrow: 'OFFRE REPS',
     offerTitle: '6 mois offerts',
     offerWith: `avec la formule « ${PLAN_NAME} »`,
@@ -50,6 +51,7 @@ const COPY = {
     title: 'Your HARX space is waiting for you',
     hello: 'Hello,',
     intro: 'You signed up on HARX, the platform that connects remote customer-service professionals with companies. Your account has been moved to our new platform.',
+    why: 'Why HARX? To earn money by working remotely on customer-service missions: on top of your current income or as your main activity, at your own pace, based on the availability you set.',
     offerEyebrow: 'REPS OFFER',
     offerTitle: '6 months free',
     offerWith: `with the "${PLAN_NAME}" plan`,
@@ -75,8 +77,8 @@ const COPY = {
   },
 };
 
-const SUBJECT_BI = 'Votre espace HARX vous attend · Your HARX space awaits';
-const PREHEADER_BI = '6 mois offerts · 6 months free - avant le 31 décembre 2026 · before 31 December 2026';
+const SUBJECT_BI = 'Your HARX space awaits · Votre espace HARX vous attend';
+const PREHEADER_BI = '6 months free · 6 mois offerts - before 31 December 2026 · avant le 31 décembre 2026';
 
 export const SUBJECTS = { fr: COPY.fr.subject, en: COPY.en.subject, bi: SUBJECT_BI };
 export const SUBJECT = COPY.fr.subject;
@@ -105,6 +107,8 @@ function textSection(c, link) {
     c.hello,
     '',
     c.intro,
+    '',
+    c.why,
     '',
     c.textOffer,
     c.textValid,
@@ -135,6 +139,7 @@ function htmlSection(c, safeLink) {
 <h1 style="margin:0 0 14px 0;font-size:28px;line-height:1.2;color:#0f172a;font-weight:800;">${escapeHtml(c.title)}</h1>
 <p style="margin:0 0 10px 0;font-size:16px;line-height:1.6;color:#475569;">${escapeHtml(c.hello)}</p>
 <p style="margin:0;font-size:16px;line-height:1.6;color:#475569;">${escapeHtml(c.intro)}</p>
+<p style="margin:14px 0 0 0;font-size:16px;line-height:1.6;color:#475569;">${escapeHtml(c.why)}</p>
 </td></tr>
 
 <tr><td style="padding:24px 36px 8px 36px;">
@@ -185,7 +190,7 @@ export function renderEmail({ link, bannerUrl, lang = 'fr' }) {
   if (!bannerUrl) throw new Error('bannerUrl is required');
   if (!['fr', 'en', 'bi'].includes(lang)) throw new Error(`unknown lang: ${lang}`);
 
-  const langs = lang === 'bi' ? ['fr', 'en'] : [lang];
+  const langs = lang === 'bi' ? ['en', 'fr'] : [lang];
   const subject = SUBJECTS[lang];
   const preheader = lang === 'bi' ? PREHEADER_BI : COPY[lang].preheader;
   const safeLink = escapeHtml(link);
@@ -201,11 +206,11 @@ export function renderEmail({ link, bannerUrl, lang = 'fr' }) {
     ].join('\n') + '\n';
 
   const body = langs
-    .map((l, i) => (i === 0 ? '' : dividerRow('ENGLISH VERSION') + '\n') + htmlSection(COPY[l], safeLink))
+    .map((l, i) => (i === 0 ? '' : dividerRow(l === 'fr' ? 'VERSION FRANÇAISE' : 'ENGLISH VERSION') + '\n') + htmlSection(COPY[l], safeLink))
     .join('\n');
 
   const html = `<!doctype html>
-<html lang="${lang === 'en' ? 'en' : 'fr'}">
+<html lang="${lang === 'fr' ? 'fr' : 'en'}">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>${escapeHtml(subject)}</title></head>
 <body style="margin:0;padding:0;background-color:#fff1f2;">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:#fff1f2;">${escapeHtml(preheader)}</div>

@@ -239,8 +239,9 @@ test('template: fr, en and bi variants are complete, with code, address, STOP an
   assert.ok(/offerts/i.test(fr.subject) && !/free/i.test(fr.subject));
   assert.ok(/free/i.test(en.subject) && !/offerts/i.test(en.subject));
   assert.ok(fr.text.includes('STOP') && en.text.includes('STOP'));
-  assert.ok(bi.html.includes('ENGLISH VERSION') && bi.html.includes('Get my account back') && bi.text.includes('6 MOIS OFFERTS'));
-  assert.ok(!en.html.includes('ENGLISH VERSION') && !/MOIS/.test(en.html));
+  assert.ok(bi.html.includes('VERSION FRANÇAISE') && !bi.html.includes('ENGLISH VERSION') && bi.html.indexOf('Get my account back') < bi.html.indexOf('Reprendre mon compte') && bi.text.includes('6 MOIS OFFERTS'));
+  assert.ok(!/VERSION/.test(en.html) && !/MOIS/.test(en.html));
+  assert.ok(/earn money/.test(en.text) && /gagner de l'argent/.test(fr.text));
   for (const m of [fr, en, bi]) {
     for (const body of [m.text, m.html]) {
       assert.ok(body.includes('REPS2027') && body.includes('Lewes') && body.includes('abc'));
@@ -263,7 +264,7 @@ test('send: language per recipient from --file, bilingual when unknown, recorded
   assert.deepEqual(r.stats.byLang, { fr: 1, en: 1, bi: 1 });
   assert.ok(/offerts/i.test(deps.sent[0].subject));
   assert.ok(/free/i.test(deps.sent[1].subject));
-  assert.ok(deps.sent[2].html.includes('ENGLISH VERSION'));
+  assert.ok(deps.sent[2].html.includes('VERSION FRANÇAISE'));
   assert.ok(fs.readFileSync(ledger, 'utf8').includes('"lang":"en"'));
   const forced = parseArgs(['node', 's', '--tokens', 't', '--link-base', 'https://harx.ai', '--lang', 'en']);
   assert.equal((await runCampaign(forced, makeDeps({ files: { t: mkTokens(2) } }))).stats.byLang.en, 2);
