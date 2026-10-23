@@ -37,7 +37,7 @@ import { pathToFileURL } from 'url';
 import { SESv2Client, SendEmailCommand } from '@aws-sdk/client-sesv2';
 import { STSClient, GetCallerIdentityCommand } from '@aws-sdk/client-sts';
 import { buildLink, renderEmail, SUPPORT_ADDRESS } from './lib/template.js';
-import { parseTokens, parseEmailList, maskEmail } from './lib/csv.js';
+import { parseTokens, parseEmailList, maskEmail, safeMessage } from './lib/csv.js';
 import { readLedger, appendLedger } from './lib/ledger.js';
 import { evaluateRates, fetchCampaignCounts, DEFAULT_LIMITS } from './lib/guard.js';
 
@@ -191,10 +191,10 @@ export async function runCampaign(o, deps) {
           await deps.sleep(2000 * attempt);
           continue;
         }
-        appendLedger(o.ledger, { email: r.email, status: 'failed', error: name, at: new Date().toISOString() });
+        appendLedger(o.ledger, { email: r.email, status: 'failed', error: name, detail: safeMessage(err), at: new Date().toISOString() });
         result.failed += 1;
         consecutiveFailures += 1;
-        log(`Failed ${maskEmail(r.email)}: ${name}`);
+        log(`Failed ${maskEmail(r.email)}: ${name} - ${safeMessage(err)}`);
         break;
       }
     }

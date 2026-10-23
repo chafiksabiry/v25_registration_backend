@@ -4,7 +4,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { renderEmail, buildLink, SUBJECT } from '../lib/template.js';
-import { parseTokens, maskEmail } from '../lib/csv.js';
+import { parseTokens, maskEmail, safeMessage } from '../lib/csv.js';
 import { readLedger, appendLedger } from '../lib/ledger.js';
 import { evaluateRates } from '../lib/guard.js';
 import { runCampaign, validate, parseArgs } from '../send.js';
@@ -162,4 +162,19 @@ test('apply: a paused or suspended account aborts immediately', async () => {
   const o = parseArgs(['node', 's', '--tokens', 't', '--link-base', 'https://harx.ai', '--limit', '5', '--apply', '--expect-account', '111', '--config-set', 'c', '--ledger', path.join(dir, 'l')]);
   const r = await runCampaign(o, deps);
   assert.equal(r.exitCode, 2);
+});
+
+test('failure log keeps the AWS reason but masks e-mail addresses (also inside ARNs)', async () => {
+  const dir = tmp();
+  const msg = 'User: arn:aws:iam::1:user/m is not authorized to perform: ses:SendEmail on resource: arn:aws:ses:eu-west-3:1:identity/john@gmail.com';
+  assert.ok(!safeMessage({ message: msg }).includes('john@gmail.com'));
+  assert.ok(safeMessage({ message: msg }).includes('ses:SendEmail'));
+  const deps = makeDeps({ files: { t: mkTokens(1) }, failOn: () => 'AccessDeniedException' });
+  deps.send = async () => { const e = new Error(msg); e.name = 'AccessDeniedException'; throw e; };
+  const o = parseArgs(['node', 's', '--tokens', 't', '--link-base', 'https://harx.ai', '--limit', '1', '--apply', '--expect-account', '111', '--config-set', 'c', '--ledger', path.join(dir, 'l.jsonl')]);
+  await runCampaign(o, deps);
+  const failedLine = deps.logs.find((l) => l.startsWith('Failed'));
+  assert.ok(failedLine.includes('ses:SendEmail'));
+  assert.ok(!failedLine.includes('john@gmail.com'));
+  assert.ok(fs.readFileSync(path.join(dir, 'l.jsonl'), 'utf8').includes('"detail"'));
 });
