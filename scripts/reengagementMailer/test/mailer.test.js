@@ -258,7 +258,7 @@ test('send: language per recipient from --file, bilingual when unknown, recorded
   ]);
   const deps = makeDeps({ files: { t: mkTokens(3) } });
   deps.loadMeta = () => meta;
-  const o = parseArgs(['node', 's', '--tokens', 't', '--file', 'f', '--link-base', 'https://harx.ai', '--apply', '--expect-account', '111', '--config-set', 'cs', '--ledger', ledger, '--limit', '3', '--check-every', '1000']);
+  const o = parseArgs(['node', 's', '--tokens', 't', '--file', 'f', '--link-base', 'https://harx.ai', '--apply', '--expect-account', '111', '--config-set', 'cs', '--ledger', ledger, '--limit', '3', '--check-every', '1000', '--lang', 'auto']);
   const r = await runCampaign(o, deps);
   assert.equal(r.sent, 3);
   assert.deepEqual(r.stats.byLang, { fr: 1, en: 1, bi: 1 });
@@ -269,4 +269,11 @@ test('send: language per recipient from --file, bilingual when unknown, recorded
   const forced = parseArgs(['node', 's', '--tokens', 't', '--link-base', 'https://harx.ai', '--lang', 'en']);
   assert.equal((await runCampaign(forced, makeDeps({ files: { t: mkTokens(2) } }))).stats.byLang.en, 2);
   assert.ok(validate(parseArgs(['node', 's', '--tokens', 't', '--link-base', 'h', '--lang', 'de'])).length > 0);
+});
+
+test('send: bilingual is the default for every recipient', async () => {
+  const deps = makeDeps({ files: { t: mkTokens(2) } });
+  deps.loadMeta = () => new Map([['rep0@example.com', { segment: 'A', languages: ['French'], country: 'France' }]]);
+  const o = parseArgs(['node', 's', '--tokens', 't', '--file', 'f', '--link-base', 'https://harx.ai']);
+  assert.deepEqual((await runCampaign(o, deps)).stats.byLang, { fr: 0, en: 0, bi: 2 });
 });
