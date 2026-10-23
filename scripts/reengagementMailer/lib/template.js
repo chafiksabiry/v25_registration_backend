@@ -2,7 +2,6 @@ export const SUBJECT = 'Votre espace HARX vous attend : 6 mois offerts';
 export const PREHEADER = 'Reprenez votre compte en un clic et activez votre formule avant le 31 décembre 2026.';
 export const PLAN_NAME = "IN THE RICH MAN'S WORLD";
 export const PROMO_CODE = 'REPS2027';
-export const PRICE_AFTER = '59,99 €';
 export const DEADLINE = '31 décembre 2026';
 export const POSTAL_ADDRESS = 'HARX Technologies Inc., 16192 Coastal Highway, Lewes, Delaware 19958, USA';
 export const SUPPORT_ADDRESS = 'reps-support@harx.ai';
@@ -65,7 +64,7 @@ export function renderEmail({ link, bannerUrl }) {
     'En 5 étapes :',
     ...STEPS.map((s, i) => `${i + 1}. ${s}`),
     '',
-    `Aucune carte bancaire n'est demandée à l'activation. Au-delà des 6 mois offerts, la formule est facturée ${PRICE_AFTER} par mois.`,
+    "Aucune carte bancaire n'est demandée à l'activation.",
     'Ce lien est personnel : ne le transférez pas.',
     '',
     'Vous recevez cet e-mail car vous avez créé un compte sur HARX. Pour ne plus en recevoir, répondez STOP à ce message.',
@@ -124,7 +123,7 @@ ${stepsHtml}
 </td></tr>
 
 <tr><td style="padding:4px 36px 28px 36px;font-family:${FONT};">
-<p style="margin:0;font-size:13px;line-height:1.6;color:#64748b;">Aucune carte bancaire n'est demandée à l'activation. Au-delà des 6 mois offerts, la formule est facturée ${escapeHtml(PRICE_AFTER)} par mois.<br>Ce lien est personnel : ne le transférez pas. Le bouton ne fonctionne pas ? Copiez cette adresse dans votre navigateur :<br><span style="word-break:break-all;color:${MAGENTA_DEEP};">${safeLink}</span></p>
+<p style="margin:0;font-size:13px;line-height:1.6;color:#64748b;">Aucune carte bancaire n'est demandée à l'activation.<br>Ce lien est personnel : ne le transférez pas. Le bouton ne fonctionne pas ? Copiez cette adresse dans votre navigateur :<br><span style="word-break:break-all;color:${MAGENTA_DEEP};">${safeLink}</span></p>
 </td></tr>
 
 <tr><td bgcolor="${MAGENTA_DARK}" style="background-color:${MAGENTA_DARK};padding:22px 36px;font-family:${FONT};">

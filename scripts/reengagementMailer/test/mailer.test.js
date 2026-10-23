@@ -56,6 +56,10 @@ test('template: link, code, plan, deadline, postal address, STOP, no undefined',
   assert.ok(html.includes('#E6188D') && html.includes('#ED1C24'));
   assert.ok(html.includes('bgcolor="#E6188D"'), 'solid fallback color for clients without gradients');
   assert.ok(text.includes('6 MOIS OFFERTS'));
+  for (const body of [text, html]) {
+    assert.ok(!/59[,.]99/.test(body), 'the plan price must not appear');
+    assert.ok(!body.includes('facturée'));
+  }
   assert.equal(buildBannerUrl('https://api.harx.ai/'), 'https://api.harx.ai/email/harx-banner.jpg');
   assert.throws(() => buildBannerUrl('http://x'));
   assert.throws(() => renderEmail({ link }));
