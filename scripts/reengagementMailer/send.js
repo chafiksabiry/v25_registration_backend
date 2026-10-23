@@ -14,7 +14,9 @@
  * Options:
  *   --tokens <csv>          email,token file written by importV1Reps.js --tokens-out (required)
  *   --link-base <https url> where the one-click page lives (required): recette host or https://harx.ai
- *   --file <jsonl>          cleaned reps file, only needed with --segments
+ *   --file <jsonl>          cleaned reps file (segment, languages, country): needed for --segments and for
+ *                           the automatic language choice; without it every e-mail is the bilingual version
+ *   --lang auto|fr|en|bi    auto (default): declared languages, then country, else bilingual; or force one version
  *   --segments A,C,D        send only to these v1 segments (needs --file)
  *   --exclude <txt>         one e-mail per line never to mail (opt-outs, bounces)
  *   --limit <n>             max recipients this run (required with --apply: one stage per run)
@@ -32,13 +34,14 @@
  *   --campaign-tag <v>      message tag / CloudWatch dimension value, default reps-reengagement
  *   --asset-base <https>    where /email/harx-banner.jpg is served (registration backend); default production.
  *                           With --apply the banner must answer 200, otherwise nothing is sent.
- *   --preview-out <html>    write the rendered e-mail (placeholder link) for review
+ *   --preview-out <html>    write the rendered e-mails (placeholder link) for review: <name>-fr.html, -en.html, -bi.html
  */
 import fs from 'fs';
 import { pathToFileURL } from 'url';
 import { SESv2Client, SendEmailCommand } from '@aws-sdk/client-sesv2';
 import { STSClient, GetCallerIdentityCommand } from '@aws-sdk/client-sts';
 import { buildLink, buildBannerUrl, renderEmail, SUPPORT_ADDRESS } from './lib/template.js';
+import { chooseLanguage, LANGS } from './lib/lang.js';
 import { parseTokens, parseEmailList, maskEmail, safeMessage } from './lib/csv.js';
 import { readLedger, appendLedger } from './lib/ledger.js';
 import { evaluateRates, fetchCampaignCounts, DEFAULT_LIMITS } from './lib/guard.js';
@@ -58,6 +61,7 @@ export function parseArgs(argv) {
     tokens: opt('--tokens'),
     linkBase: opt('--link-base'),
     file: opt('--file'),
+    lang: opt('--lang', 'auto'),
     segments: opt('--segments') ? new Set(opt('--segments').split(',').map((s) => s.trim().toUpperCase())) : null,
     exclude: opt('--exclude'),
     limit: Number(opt('--limit', 0)) || 0,
@@ -85,6 +89,7 @@ export function validate(o) {
   const errors = [];
   if (!o.tokens) errors.push('--tokens <csv> is required');
   if (!o.linkBase) errors.push('--link-base <https url> is required');
+  if (o.lang !== 'auto' && !LANGS.includes(o.lang)) errors.push('--lang must be auto, fr, en or bi');
   if (o.segments && !o.file) errors.push('--segments needs --file <reps_clean.jsonl>');
   if (o.apply) {
     if (!o.limit) errors.push('--limit <n> is required with --apply (one stage per run)');
@@ -95,29 +100,37 @@ export function validate(o) {
   return errors;
 }
 
-function loadSegments(file) {
+/** email -> { segment, languages, country } from the cleaned reps file. */
+function loadMeta(file) {
   const map = new Map();
   for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
     if (!line.trim()) continue;
     const r = JSON.parse(line);
-    map.set(String(r.email).toLowerCase(), r.segment);
+    map.set(String(r.email).toLowerCase(), { segment: r.segment, languages: r.languages, country: r.country });
   }
   return map;
 }
 
+/** Language of the e-mail for one recipient. Without metadata the bilingual version is safe. */
+export function languageFor(o, meta) {
+  if (o.lang !== 'auto') return o.lang;
+  return meta ? chooseLanguage(meta) : 'bi';
+}
+
 /** Build the recipient list for this run (pure, no network). */
-export function selectRecipients(o, { tokensContent, excludeContent, ledgerState, segmentMap }) {
+export function selectRecipients(o, { tokensContent, excludeContent, ledgerState, metaMap }) {
   const { rows, invalid } = parseTokens(tokensContent);
   const excluded = excludeContent ? parseEmailList(excludeContent) : new Set();
-  const stats = { read: rows.length, invalidLines: invalid.length, excluded: 0, alreadySent: 0, wrongSegment: 0 };
+  const stats = { read: rows.length, invalidLines: invalid.length, excluded: 0, alreadySent: 0, wrongSegment: 0, byLang: { fr: 0, en: 0, bi: 0 } };
   const out = [];
   for (const r of rows) {
     if (excluded.has(r.email)) { stats.excluded += 1; continue; }
     if (ledgerState?.get(r.email)?.status === 'sent') { stats.alreadySent += 1; continue; }
-    if (o.segments && !o.segments.has(segmentMap?.get(r.email))) { stats.wrongSegment += 1; continue; }
+    if (o.segments && !o.segments.has(metaMap?.get(r.email)?.segment)) { stats.wrongSegment += 1; continue; }
     out.push(r);
   }
-  const selected = o.limit ? out.slice(0, o.limit) : out;
+  const selected = (o.limit ? out.slice(0, o.limit) : out).map((r) => ({ ...r, lang: languageFor(o, metaMap?.get(r.email)) }));
+  for (const r of selected) stats.byLang[r.lang] += 1;
   return { selected, stats: { ...stats, eligible: out.length, selected: selected.length } };
 }
 
@@ -129,19 +142,20 @@ export async function runCampaign(o, deps) {
   const tokensContent = deps.readFile(o.tokens);
   const excludeContent = o.exclude ? deps.readFile(o.exclude) : null;
   const ledgerState = o.ledger ? readLedger(o.ledger) : new Map();
-  const segmentMap = o.segments ? deps.loadSegments(o.file) : null;
-  const { selected, stats } = selectRecipients(o, { tokensContent, excludeContent, ledgerState, segmentMap });
+  const metaMap = o.file ? deps.loadMeta(o.file) : null;
+  const { selected, stats } = selectRecipients(o, { tokensContent, excludeContent, ledgerState, metaMap });
 
   log(`Link base: ${o.linkBase}`);
   log(JSON.stringify(stats));
   const bannerUrl = buildBannerUrl(o.assetBase);
   if (o.previewOut && selected[0]) {
-    const sample = renderEmail({
-      link: buildLink(o.linkBase, 'PREVIEW-TOKEN-NOT-A-REAL-LINK-0000000000'),
-      bannerUrl: deps.previewBanner ? deps.previewBanner() || bannerUrl : bannerUrl,
-    });
-    deps.writeFile(o.previewOut, sample.html);
-    log(`Preview written to ${o.previewOut} (placeholder link)`);
+    const previewBanner = deps.previewBanner ? deps.previewBanner() || bannerUrl : bannerUrl;
+    const base = o.previewOut.replace(/\.html?$/i, '');
+    for (const lang of LANGS) {
+      const sample = renderEmail({ link: buildLink(o.linkBase, 'PREVIEW-TOKEN-NOT-A-REAL-LINK-0000000000'), bannerUrl: previewBanner, lang });
+      deps.writeFile(`${base}-${lang}.html`, sample.html);
+    }
+    log(`Previews written to ${base}-fr.html, -en.html, -bi.html (placeholder link)`);
   }
   if (!o.apply) {
     if (deps.checkAsset) {
@@ -178,7 +192,7 @@ export async function runCampaign(o, deps) {
   let consecutiveFailures = 0;
 
   for (const [i, r] of selected.entries()) {
-    const email = renderEmail({ link: buildLink(o.linkBase, r.token), bannerUrl });
+    const email = renderEmail({ link: buildLink(o.linkBase, r.token), bannerUrl, lang: r.lang });
     let attempt = 0;
     for (;;) {
       try {
@@ -193,7 +207,7 @@ export async function runCampaign(o, deps) {
           campaignTag: o.campaignTag,
           listUnsubscribe: `<mailto:${o.replyTo}?subject=STOP>`,
         });
-        appendLedger(o.ledger, { email: r.email, status: 'sent', messageId: res.messageId, at: new Date().toISOString() });
+        appendLedger(o.ledger, { email: r.email, status: 'sent', lang: r.lang, messageId: res.messageId, at: new Date().toISOString() });
         result.sent += 1;
         consecutiveFailures = 0;
         break;
@@ -240,7 +254,7 @@ function realDeps(o) {
   return {
     readFile: (p) => fs.readFileSync(p, 'utf8'),
     writeFile: (p, c) => fs.writeFileSync(p, c),
-    loadSegments,
+    loadMeta,
     sleep,
     log: console.log,
     previewBanner: () => {

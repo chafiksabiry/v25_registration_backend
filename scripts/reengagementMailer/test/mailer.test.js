@@ -1,3 +1,4 @@
+import { chooseLanguage } from '../lib/lang.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'fs';
@@ -22,7 +23,7 @@ function makeDeps({ counts = { send: 0, bounce: 0, complaint: 0 }, files = {}, f
     sent, logs, writes,
     readFile: (p) => files[p] ?? '',
     writeFile: (p, c) => { writes[p] = c; },
-    loadSegments: () => new Map(),
+    loadMeta: () => new Map(),
     sleep: async () => {},
     log: (m) => logs.push(m),
     checkAsset: async () => assetOk,
@@ -105,8 +106,10 @@ test('dry run sends nothing and writes the preview', async () => {
   assert.equal(r.dryRun, true);
   assert.equal(r.selected, 3);
   assert.equal(deps.sent.length, 0);
-  assert.ok(deps.writes['p.html'].includes('PREVIEW-TOKEN'));
-  assert.ok(!deps.writes['p.html'].includes(TOKEN));
+  for (const l of ['fr', 'en', 'bi']) {
+    assert.ok(deps.writes[`p-${l}.html`].includes('PREVIEW-TOKEN'));
+    assert.ok(!deps.writes[`p-${l}.html`].includes(TOKEN));
+  }
 });
 
 test('apply: refuses another AWS account', async () => {
@@ -216,4 +219,53 @@ test('sent e-mails carry the banner url of --asset-base', async () => {
   const o = parseArgs(['node', 's', '--tokens', 't', '--link-base', 'https://harx.ai', '--asset-base', 'https://api.harx.ai', '--limit', '1', '--apply', '--expect-account', '111', '--config-set', 'c', '--ledger', path.join(dir, 'l')]);
   await runCampaign(o, deps);
   assert.ok(deps.sent[0].html.includes('https://api.harx.ai/email/harx-banner.jpg'));
+});
+
+test('lang: declared languages first, then country, else bilingual', () => {
+  assert.equal(chooseLanguage({ languages: ['French'], country: 'Nigeria' }), 'fr');
+  assert.equal(chooseLanguage({ languages: ['English'], country: 'France' }), 'en');
+  assert.equal(chooseLanguage({ languages: ['Arabic', 'English', 'French'] }), 'bi');
+  assert.equal(chooseLanguage({ languages: [], country: 'Morocco' }), 'fr');
+  assert.equal(chooseLanguage({ languages: [], country: 'Nigeria' }), 'en');
+  assert.equal(chooseLanguage({ languages: [], country: 'Cameroon' }), 'bi');
+  assert.equal(chooseLanguage({}), 'bi');
+});
+
+test('template: fr, en and bi variants are complete, with code, address, STOP and no price', () => {
+  const args = { link: 'https://harx.ai/auth/reactivate?t=abc', bannerUrl: 'https://x/b.jpg' };
+  const fr = renderEmail({ ...args, lang: 'fr' });
+  const en = renderEmail({ ...args, lang: 'en' });
+  const bi = renderEmail({ ...args, lang: 'bi' });
+  assert.ok(/offerts/i.test(fr.subject) && !/free/i.test(fr.subject));
+  assert.ok(/free/i.test(en.subject) && !/offerts/i.test(en.subject));
+  assert.ok(fr.text.includes('STOP') && en.text.includes('STOP'));
+  assert.ok(bi.html.includes('ENGLISH VERSION') && bi.html.includes('Get my account back') && bi.text.includes('6 MOIS OFFERTS'));
+  assert.ok(!en.html.includes('ENGLISH VERSION') && !/MOIS/.test(en.html));
+  for (const m of [fr, en, bi]) {
+    for (const body of [m.text, m.html]) {
+      assert.ok(body.includes('REPS2027') && body.includes('Lewes') && body.includes('abc'));
+      assert.ok(!/undefined|\$|€|USD|EUR/.test(body.replace(/\$\{/g, '')));
+    }
+  }
+});
+
+test('send: language per recipient from --file, bilingual when unknown, recorded in the ledger', async () => {
+  const dir = tmp(); const ledger = path.join(dir, 'l.jsonl');
+  const meta = new Map([
+    ['rep0@example.com', { segment: 'A', languages: ['French'], country: null }],
+    ['rep1@example.com', { segment: 'A', languages: [], country: 'Nigeria' }],
+  ]);
+  const deps = makeDeps({ files: { t: mkTokens(3) } });
+  deps.loadMeta = () => meta;
+  const o = parseArgs(['node', 's', '--tokens', 't', '--file', 'f', '--link-base', 'https://harx.ai', '--apply', '--expect-account', '111', '--config-set', 'cs', '--ledger', ledger, '--limit', '3', '--check-every', '1000']);
+  const r = await runCampaign(o, deps);
+  assert.equal(r.sent, 3);
+  assert.deepEqual(r.stats.byLang, { fr: 1, en: 1, bi: 1 });
+  assert.ok(/offerts/i.test(deps.sent[0].subject));
+  assert.ok(/free/i.test(deps.sent[1].subject));
+  assert.ok(deps.sent[2].html.includes('ENGLISH VERSION'));
+  assert.ok(fs.readFileSync(ledger, 'utf8').includes('"lang":"en"'));
+  const forced = parseArgs(['node', 's', '--tokens', 't', '--link-base', 'https://harx.ai', '--lang', 'en']);
+  assert.equal((await runCampaign(forced, makeDeps({ files: { t: mkTokens(2) } }))).stats.byLang.en, 2);
+  assert.ok(validate(parseArgs(['node', 's', '--tokens', 't', '--link-base', 'h', '--lang', 'de'])).length > 0);
 });
