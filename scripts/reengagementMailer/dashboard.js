@@ -56,7 +56,7 @@ export function validate(o) {
   return errors;
 }
 
-const METRICS = [['send', 'Send'], ['delivery', 'Delivery'], ['bounce', 'Bounce'], ['complaint', 'Complaint'], ['reject', 'Reject']];
+const METRICS = [['send', 'Send'], ['delivery', 'Delivery'], ['bounce', 'Bounce'], ['complaint', 'Complaint'], ['reject', 'Reject'], ['open', 'Open'], ['click', 'Click']];
 
 export async function fetchSesDays({ region, tag, days, client }) {
   const cw = client || new CloudWatchClient({ region });
@@ -78,7 +78,7 @@ export async function fetchSesDays({ region, tag, days, client }) {
       );
       for (const d of res.Datapoints || []) {
         const day = d.Timestamp.toISOString().slice(0, 10);
-        const row = byDay.get(day) || { day, send: 0, delivery: 0, bounce: 0, complaint: 0, reject: 0 };
+        const row = byDay.get(day) || { day, send: 0, delivery: 0, bounce: 0, complaint: 0, reject: 0, open: 0, click: 0 };
         row[key] += d.Sum || 0;
         byDay.set(day, row);
       }
@@ -147,8 +147,8 @@ export async function runDashboard(o, deps) {
     try {
       sesDays = await deps.fetchSesDays({ region: o.region, tag: o.campaignTag, days: o.days });
       const sum = (k) => sesDays.reduce((a, d) => a + d[k], 0);
-      ses = deliveryHealth({ send: sum('send'), delivery: sum('delivery'), bounce: sum('bounce'), complaint: sum('complaint'), reject: sum('reject') }, o.limits);
-      notes.push(`Compteurs SES : ${o.days} derniers jours, étiquette « ${o.campaignTag} ». Les ouvertures et clics ne sont pas suivis (choix de confidentialité).`);
+      ses = deliveryHealth({ send: sum('send'), delivery: sum('delivery'), bounce: sum('bounce'), complaint: sum('complaint'), reject: sum('reject'), open: sum('open'), click: sum('click') }, o.limits);
+      notes.push(`Compteurs SES : ${o.days} derniers jours, étiquette « ${o.campaignTag} ». Ouvertures et clics : événements OPEN et CLICK de la configuration SES (0 tant qu'ils ne sont pas activés dans le jeu de configuration).`);
     } catch (e) {
       notes.push(`Compteurs SES indisponibles (${e?.name || 'erreur'}).`);
       log(`SES counters unavailable: ${e?.name || 'error'}`);
@@ -160,7 +160,7 @@ export async function runDashboard(o, deps) {
     const uri = deps.mongoUri;
     if (!uri) return { exitCode: 1, errors: ['MONGODB_URI is required with --batch-ids'] };
     funnel = buildFunnel(await deps.fetchFunnelData({ uri, expectDb: o.expectDb, batchIds: o.batchIds }));
-    notes.push('« CV importé » = expérience ajoutée au profil ; « Formule choisie » = abonnement en essai ou actif (le code REPS2027 lui-même n\'est lisible que dans Stripe).');
+    notes.push('« Ont cliqué » = connexion réelle par le lien (lue en base, plus fiable que les clics SES). « CV importé » = expérience ajoutée au profil ; « Formule choisie » = abonnement en essai ou actif (le code REPS2027 lui-même n\'est lisible que dans Stripe).');
   }
 
   const html = renderDashboard({ generatedAt: deps.now().toISOString().replace('T', ' ').slice(0, 16) + ' UTC', campaign: o.campaignTag, ledger, ses, sesDays, funnel, notes, limits: o.limits });
