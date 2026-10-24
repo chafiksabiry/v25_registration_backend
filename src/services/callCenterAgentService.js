@@ -181,11 +181,8 @@ class CallCenterAgentService {
       err.statusCode = 400;
       throw err;
     }
-    if (!String(phone || '').trim()) {
-      const err = new Error('Phone number is required');
-      err.statusCode = 400;
-      throw err;
-    }
+    // The phone number is optional for an invitation by email: the agent adds it when they first sign in.
+    const phoneValue = String(phone || '').trim();
 
     const existing = await User.findOne({ email: normalizedEmail });
     if (existing) {
@@ -208,7 +205,7 @@ class CallCenterAgentService {
     const user = new User({
       email: normalizedEmail,
       fullName,
-      phone: String(phone).trim(),
+      phone: phoneValue,
       password: tempPassword,
       typeUser: 'rep',
       isVerified: true,
@@ -224,7 +221,7 @@ class CallCenterAgentService {
       firstName,
       lastName,
       email: normalizedEmail,
-      phone: String(phone).trim(),
+      phone: phoneValue,
       companyId,
     });
 
