@@ -161,8 +161,8 @@ class CallCenterAgentService {
   async createAndInvite(callerUserId, payload) {
     const {
       companyId,
-      firstName,
-      lastName,
+      firstName: givenFirstName,
+      lastName: givenLastName,
       email,
       phone,
       sendEmail = true,
@@ -176,11 +176,9 @@ class CallCenterAgentService {
       err.statusCode = 400;
       throw err;
     }
-    if (!String(firstName || '').trim() || !String(lastName || '').trim()) {
-      const err = new Error('First name and last name are required');
-      err.statusCode = 400;
-      throw err;
-    }
+    // An invitation by email may come without names (the agent completes them later): use the part before the @.
+    const firstName = String(givenFirstName || '').trim() || normalizedEmail.split('@')[0];
+    const lastName = String(givenLastName || '').trim();
     // The phone number is optional for an invitation by email: the agent adds it when they first sign in.
     const phoneValue = String(phone || '').trim();
 
