@@ -22,8 +22,9 @@ const userSchema = new mongoose.Schema({
   },
   phone: {
     type: String,
+    // Staff invited by email (employerCompanyId) add their phone number later.
     required: function() {
-      return !this.linkedInId;
+      return !this.linkedInId && !this.employerCompanyId;
     }
   },
   linkedInId: {
