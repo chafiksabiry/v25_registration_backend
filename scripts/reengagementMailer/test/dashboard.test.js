@@ -46,13 +46,19 @@ test('funnel: counts per step and per segment', () => {
   assert.equal(f.steps.find((s) => s.key === 'plan').ofClicked, 1 / 3);
 });
 
+test('health: open and click rates are relative to delivered', () => {
+  const h = deliveryHealth({ send: 1000, delivery: 900, bounce: 5, open: 450, click: 90 });
+  assert.equal(h.openRate, 0.5);
+  assert.equal(h.clickRate, 0.1);
+});
+
 test('render: self-contained, no address, shows state and funnel', () => {
   const html = renderDashboard({
     generatedAt: 'x', campaign: 'reps-reengagement', ledger: summarizeLedger(entries),
     ses: deliveryHealth({ send: 1000, delivery: 990, bounce: 5, complaint: 0 }), sesDays: [{ day: '2026-11-02', send: 1, delivery: 1, bounce: 0, complaint: 0, reject: 0 }],
     funnel: buildFunnel({ users, agents, subs }), notes: ['n'], limits: { maxBounce: 0.02, maxComplaint: 0.001 },
   });
-  assert.ok(html.includes('Santé de la campagne : OK') && html.includes('Parcours des REPS'));
+  assert.ok(html.includes('Ouvertures (SES)') && html.includes('Clics (SES)') && html.includes('Santé de la campagne : OK') && html.includes('Parcours des REPS'));
   assert.ok(!/example\.com|https?:\/\//.test(html));
 });
 

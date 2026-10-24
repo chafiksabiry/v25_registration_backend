@@ -96,5 +96,11 @@ node dashboard.js --ledger ~/HARX_reengagement/ledger.jsonl \
 - **Envois** : envoyés / échecs du journal, puis délivrés, rebonds et plaintes lus dans CloudWatch (étiquette `reps-reengagement`, 14 jours par défaut), avec l'état de santé par rapport aux seuils d'arrêt (rebonds 2 %, plaintes 0,1 %).
 - **Par jour** : journal et SES côte à côte (UTC).
 - **Parcours** (avec `--batch-ids` et `MONGODB_URI`) : importés, connectés par le lien, profil créé, CV (expérience ajoutée), profil validé, photo, créneaux, formule choisie (essai ou abonnement), plus le taux de connexion par segment v1. `--expect-db` est obligatoire : le script refuse de lire une autre base.
-- Ouvertures et clics ne sont pas suivis. Le code REPS2027 n'est lisible que dans Stripe.
+- **Ouvertures et clics** : lus dans CloudWatch (événements OPEN et CLICK). Ils ne comptent que si le jeu de configuration SES les publie (voir ci-dessous). Les ouvertures sont surestimées (préchargement Apple Mail, proxy Gmail). La vraie mesure d'engagement est « connecté par le lien », lue en base. Le code REPS2027 n'est lisible que dans Stripe.
 - `--no-ses` ignore CloudWatch ; sans `--batch-ids`, pas de parcours. Plusieurs journaux : `--ledger a.jsonl,b.jsonl`.
+
+### Activer le suivi des ouvertures et des clics (console SES, une fois)
+
+1. SES (eu-west-3) > Configuration sets > `my-first-configuration-set` > Event destinations > la destination CloudWatch > Edit : cocher **Opens** et **Clicks** en plus des événements existants.
+2. Recommandé avant les envois réels : onglet Tracking domain, domaine de redirection personnalisé (par exemple `track.mail.harx.ai`, enregistrement CNAME à créer dans Cloudflare, en gris/DNS only). Sans cela SES réécrit les liens vers un domaine `awstrack.me`, ce qui peut dégrader la délivrabilité.
+3. SES réécrit tous les liens du HTML, y compris le lien de connexion en un clic (il transite alors par le domaine de redirection). Le test d'envoi doit confirmer que le lien fonctionne encore.

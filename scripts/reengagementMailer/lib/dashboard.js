@@ -33,7 +33,7 @@ export function summarizeLedger(entries) {
 }
 
 /** SES counters (sum over the period) -> rates and health against the limits used by the mailer guard. */
-export function deliveryHealth({ send = 0, delivery = 0, bounce = 0, complaint = 0, reject = 0 }, limits) {
+export function deliveryHealth({ send = 0, delivery = 0, bounce = 0, complaint = 0, reject = 0, open = 0, click = 0 }, limits) {
   const { maxBounce = 0.02, maxComplaint = 0.001, minSample = 100 } = limits || {};
   const bounceRate = pct(bounce, send);
   const complaintRate = pct(complaint, send);
@@ -49,7 +49,7 @@ export function deliveryHealth({ send = 0, delivery = 0, bounce = 0, complaint =
     state = 'warn';
     message = 'proche des limites';
   }
-  return { send, delivery, bounce, complaint, reject, deliveryRate: pct(delivery, send), bounceRate, complaintRate, state, message };
+  return { send, delivery, bounce, complaint, reject, open, click, openRate: pct(open, delivery), clickRate: pct(click, delivery), deliveryRate: pct(delivery, send), bounceRate, complaintRate, state, message };
 }
 
 /**
@@ -115,6 +115,8 @@ export function renderDashboard({ generatedAt, campaign, ledger, ses, sesDays, f
     parts.push(tile('Délivrés (SES)', fmtInt(ses.delivery), `taux ${fmtPct(ses.deliveryRate)}`));
     parts.push(tile('Rebonds', fmtInt(ses.bounce), `${fmtPct(ses.bounceRate, 2)} · arrêt à ${fmtPct(limits.maxBounce)}`));
     parts.push(tile('Plaintes', fmtInt(ses.complaint), `${fmtPct(ses.complaintRate, 3)} · arrêt à ${fmtPct(limits.maxComplaint, 2)}`));
+    parts.push(tile('Ouvertures (SES)', fmtInt(ses.open), `${fmtPct(ses.openRate)} des délivrés · surestimé (Apple Mail, Gmail)`));
+    parts.push(tile('Clics (SES)', fmtInt(ses.click), `${fmtPct(ses.clickRate)} des délivrés`));
     parts.push(`</div><p class="state" style="color:${color}"><strong>Santé de la campagne : ${label}</strong> (${escapeHtml(ses.message)})</p>`);
   } else {
     parts.push(`</div><p class="muted">Compteurs SES non lus.</p>`);
@@ -125,11 +127,11 @@ export function renderDashboard({ generatedAt, campaign, ledger, ses, sesDays, f
     const sesMap = new Map((sesDays || []).map((d) => [d.day, d]));
     const ledMap = new Map((ledger?.days || []).map((d) => [d.day, d]));
     const days = [...new Set([...sesMap.keys(), ...ledMap.keys()])].sort();
-    parts.push(`<section><h2>Par jour (UTC)</h2><table><thead><tr><th>Jour</th><th>Journal : envoyés</th><th>Échecs</th><th>SES : envoyés</th><th>Délivrés</th><th>Rebonds</th><th>Plaintes</th></tr></thead><tbody>`);
+    parts.push(`<section><h2>Par jour (UTC)</h2><table><thead><tr><th>Jour</th><th>Journal : envoyés</th><th>Échecs</th><th>SES : envoyés</th><th>Délivrés</th><th>Rebonds</th><th>Plaintes</th><th>Ouvertures</th><th>Clics</th></tr></thead><tbody>`);
     for (const day of days) {
       const l = ledMap.get(day) || {};
       const s = sesMap.get(day) || {};
-      parts.push(`<tr><td>${day}</td><td>${fmtInt(l.sent ?? 0)}</td><td>${fmtInt(l.failed ?? 0)}</td><td>${fmtInt(s.send ?? 0)}</td><td>${fmtInt(s.delivery ?? 0)}</td><td>${fmtInt(s.bounce ?? 0)}</td><td>${fmtInt(s.complaint ?? 0)}</td></tr>`);
+      parts.push(`<tr><td>${day}</td><td>${fmtInt(l.sent ?? 0)}</td><td>${fmtInt(l.failed ?? 0)}</td><td>${fmtInt(s.send ?? 0)}</td><td>${fmtInt(s.delivery ?? 0)}</td><td>${fmtInt(s.bounce ?? 0)}</td><td>${fmtInt(s.complaint ?? 0)}</td><td>${fmtInt(s.open ?? 0)}</td><td>${fmtInt(s.click ?? 0)}</td></tr>`);
     }
     parts.push(`</tbody></table></section>`);
   }
