@@ -81,3 +81,20 @@ Trois versions du même e-mail : français, anglais, bilingue (EN puis FR dans l
 
 `--lang fr|en|bi` force une version. Le dry-run affiche la répartition (`byLang`) ; le ledger enregistre la langue envoyée.
 `--preview-out p.html` écrit `p-fr.html`, `p-en.html`, `p-bi.html`.
+
+## Tableau de bord de suivi
+
+`dashboard.js` produit une page HTML autonome et privée (aucune adresse e-mail, aucun jeton, rien n'est publié). Lecture seule : il n'envoie rien, n'écrit pas dans Mongo, ne modifie pas AWS.
+
+```
+# clés AWS et URI Mongo en saisie cachée (read -s), jamais en argument
+node dashboard.js --ledger ~/HARX_reengagement/ledger.jsonl \
+     --batch-ids v1-reps-2026-10 --expect-db harx_recette \
+     --out ~/HARX_reengagement/dashboard.html
+```
+
+- **Envois** : envoyés / échecs du journal, puis délivrés, rebonds et plaintes lus dans CloudWatch (étiquette `reps-reengagement`, 14 jours par défaut), avec l'état de santé par rapport aux seuils d'arrêt (rebonds 2 %, plaintes 0,1 %).
+- **Par jour** : journal et SES côte à côte (UTC).
+- **Parcours** (avec `--batch-ids` et `MONGODB_URI`) : importés, connectés par le lien, profil créé, CV (expérience ajoutée), profil validé, photo, créneaux, formule choisie (essai ou abonnement), plus le taux de connexion par segment v1. `--expect-db` est obligatoire : le script refuse de lire une autre base.
+- Ouvertures et clics ne sont pas suivis. Le code REPS2027 n'est lisible que dans Stripe.
+- `--no-ses` ignore CloudWatch ; sans `--batch-ids`, pas de parcours. Plusieurs journaux : `--ledger a.jsonl,b.jsonl`.
