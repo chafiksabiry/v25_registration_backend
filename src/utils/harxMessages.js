@@ -116,6 +116,23 @@ export function inviteEmail({ firstName, email, tempPassword, companyName, login
   };
 }
 
+export function countryWaitlistEmail({ countryName, locale }) {
+  const en = String(locale || '').toLowerCase().startsWith('en');
+  const country = escapeHtml(countryName);
+  return {
+    subject: en ? `HARX Call Centre — you are on the list for ${countryName}` : `HARX Centre d'appels — vous êtes sur la liste pour ${countryName}`,
+    html: harxEmailShell({
+      eyebrow: en ? 'WAITING LIST' : 'LISTE D\'ATTENTE',
+      title: en ? 'Thank you, we noted your interest' : 'Merci, votre demande est enregistrée',
+      intro: en
+        ? `HARX Call Centre is not yet open in ${country}. We have registered your address and will write to you once it is available. Nothing is billed and no account has been created.`
+        : `HARX Centre d'appels n'est pas encore ouvert en ${country}. Nous avons enregistré votre adresse et vous écrirons dès l'ouverture. Rien n'est facturé et aucun compte n'a été créé.`,
+      footer: en ? 'If you did not make this request, simply ignore this message.' : 'Si vous n\'êtes pas à l\'origine de cette demande, ignorez simplement ce message.',
+      bodyHtml: '',
+    }),
+  };
+}
+
 export function agentInvitationNoticeEmail({ firstName, companyName, loginUrl }) {
   const safeName = escapeHtml(firstName || '');
   const org = escapeHtml(companyName || 'un centre d\'appels');
