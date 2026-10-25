@@ -34,3 +34,21 @@ export function authenticateCallCenter(req, res, next) {
     message: 'Authentication required. Sign in again or refresh the page.',
   });
 }
+
+/** Signed-in person only: a valid Bearer JWT is required (no header or body fallback). */
+export function authenticateUserJwt(req, res, next) {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+  if (token) {
+    try {
+      const payload = jwt.verify(token, process.env.JWT_SECRET);
+      if (payload?.userId) {
+        req.user = payload;
+        return next();
+      }
+    } catch {
+      // handled below
+    }
+  }
+  return res.status(401).json({ message: 'Authentication required. Sign in again.' });
+}

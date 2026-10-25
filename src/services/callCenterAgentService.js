@@ -1,7 +1,8 @@
 import crypto from 'crypto';
 import mongoose from 'mongoose';
 import User from '../models/User.js';
-import { inviteEmail } from '../utils/harxMessages.js';
+import AgentInvitation from '../models/AgentInvitation.js';
+import { agentInvitationNoticeEmail, inviteEmail } from '../utils/harxMessages.js';
 import { appLoginUrl, sendAppEmail } from './brevoMail.js';
 
 function generateTempPassword(length = 12) {
@@ -140,6 +141,16 @@ async function sendInviteEmail({
   });
 }
 
+async function sendInvitationNotice({ user, company }) {
+  const firstName = (user.fullName || '').trim().split(/\s+/)[0] || '';
+  const message = agentInvitationNoticeEmail({
+    firstName,
+    companyName: company?.name || company?.companyName || company?.title,
+    loginUrl: appLoginUrl(),
+  });
+  return sendAppEmail({ to: user.email, subject: message.subject, html: message.html });
+}
+
 function serializeAgentUser(user, agentId = null) {
   return {
     userId: String(user._id),
@@ -184,17 +195,14 @@ class CallCenterAgentService {
 
     const existing = await User.findOne({ email: normalizedEmail });
     if (existing) {
-      if (
-        existing.employerCompanyId &&
-        String(existing.employerCompanyId) === String(companyId)
-      ) {
+      if (existing.employerCompanyId && String(existing.employerCompanyId) === String(companyId)) {
         const err = new Error('This agent is already on your team');
         err.statusCode = 409;
         throw err;
       }
-      const err = new Error('Email already registered');
-      err.statusCode = 409;
-      throw err;
+      // An address has at most one HARX account but can be invited by any number of call centres:
+      // the person accepts after signing in, so nothing about the account is created or changed here.
+      return this.inviteExistingAccount({ caller, company, companyId, existing, sendEmail });
     }
 
     const tempPassword = generateTempPassword();
@@ -254,6 +262,56 @@ class CallCenterAgentService {
     };
   }
 
+  async inviteExistingAccount({ caller, company, companyId, existing, sendEmail }) {
+    const email = normalizeEmail(existing.email);
+    let invitation = await AgentInvitation.findOne({ companyId, email });
+    if (invitation && invitation.status === 'accepted') {
+      const err = new Error('This agent is already on your team');
+      err.statusCode = 409;
+      throw err;
+    }
+    if (invitation) {
+      invitation.status = 'pending';
+      invitation.invitedAt = new Date();
+      invitation.respondedAt = undefined;
+      invitation.userId = existing._id;
+      invitation.invitedByUserId = caller._id;
+      await invitation.save();
+    } else {
+      invitation = await AgentInvitation.create({
+        companyId,
+        email,
+        userId: existing._id,
+        invitedByUserId: caller._id,
+      });
+    }
+
+    let emailSent = false;
+    let emailError = null;
+    if (sendEmail) {
+      try {
+        await sendInvitationNotice({ user: existing, company });
+        emailSent = true;
+      } catch (e) {
+        emailError = e.message || 'Failed to send invitation email';
+      }
+    }
+
+    return {
+      agent: {
+        ...serializeAgentUser(existing),
+        employerCompanyId: null,
+        invitationStatus: 'invited',
+        invitedAt: invitation.invitedAt,
+        existingAccount: true,
+      },
+      invitationId: String(invitation._id),
+      existingAccount: true,
+      emailSent,
+      emailError,
+    };
+  }
+
   async listAgents(callerUserId, companyId) {
     await resolveCallerCompany(callerUserId, companyId);
     const users = await User.find({
@@ -272,7 +330,68 @@ class CallCenterAgentService {
       .toArray();
     const agentByUser = new Map(agents.map((a) => [String(a.userId), String(a._id)]));
 
-    return users.map((u) => serializeAgentUser(u, agentByUser.get(String(u._id)) || null));
+    const staff = users.map((u) => serializeAgentUser(u, agentByUser.get(String(u._id)) || null));
+
+    // People who already had a HARX account are linked through an invitation they accept after signing in.
+    const invitations = await AgentInvitation.find({ companyId, status: { $in: ['pending', 'accepted'] } }).sort({ invitedAt: -1 });
+    const invitedUsers = await User.find({ _id: { $in: invitations.map((i) => i.userId).filter(Boolean) } }).select(
+      '-password -verificationCode -pendingChanges'
+    );
+    const userById = new Map(invitedUsers.map((u) => [String(u._id), u]));
+    const invited = invitations
+      .filter((i) => i.userId && userById.has(String(i.userId)))
+      .map((i) => ({
+        ...serializeAgentUser(userById.get(String(i.userId))),
+        employerCompanyId: i.status === 'accepted' ? String(companyId) : null,
+        invitationStatus: i.status === 'accepted' ? 'active' : 'invited',
+        invitedAt: i.invitedAt,
+        existingAccount: true,
+      }));
+    return [...staff, ...invited];
+  }
+
+  /** Pending invitations addressed to the signed-in person's e-mail. */
+  async listMyInvitations(userId) {
+    const user = await User.findById(userId).select('email');
+    if (!user) {
+      const err = new Error('User not found');
+      err.statusCode = 401;
+      throw err;
+    }
+    const invitations = await AgentInvitation.find({ email: normalizeEmail(user.email), status: 'pending' }).sort({ invitedAt: -1 });
+    const db = mongoose.connection.db;
+    const companies = await db
+      .collection('companies')
+      .find({ _id: { $in: invitations.map((i) => i.companyId) } })
+      .project({ name: 1, companyName: 1, title: 1 })
+      .toArray();
+    const nameById = new Map(companies.map((c) => [String(c._id), c.name || c.companyName || c.title || '']));
+    return invitations.map((i) => ({
+      id: String(i._id),
+      companyId: String(i.companyId),
+      companyName: nameById.get(String(i.companyId)) || '',
+      invitedAt: i.invitedAt,
+    }));
+  }
+
+  async respondToInvitation(userId, invitationId, accept) {
+    if (!invitationId || !mongoose.Types.ObjectId.isValid(invitationId)) {
+      const err = new Error('Valid invitation id is required');
+      err.statusCode = 400;
+      throw err;
+    }
+    const user = await User.findById(userId).select('email');
+    const invitation = user ? await AgentInvitation.findById(invitationId) : null;
+    if (!user || !invitation || invitation.email !== normalizeEmail(user.email)) {
+      const err = new Error('Invitation not found');
+      err.statusCode = 404;
+      throw err;
+    }
+    invitation.status = accept ? 'accepted' : 'declined';
+    invitation.userId = user._id;
+    invitation.respondedAt = new Date();
+    await invitation.save();
+    return { id: String(invitation._id), companyId: String(invitation.companyId), status: invitation.status };
   }
 
   async resendInvite(callerUserId, companyId, agentUserId) {
@@ -285,6 +404,26 @@ class CallCenterAgentService {
     }
 
     const user = await User.findById(agentUserId);
+
+    // Existing HARX account invited by e-mail: remind them to sign in, never touch their password.
+    if (user && String(user.employerCompanyId) !== String(companyId)) {
+      const invitation = await AgentInvitation.findOne({ companyId, email: normalizeEmail(user.email) });
+      if (invitation && invitation.status !== 'accepted') {
+        const dbForNotice = mongoose.connection.db;
+        const companyForNotice = await dbForNotice.collection('companies').findOne({
+          _id: new mongoose.Types.ObjectId(companyId),
+        });
+        invitation.status = 'pending';
+        invitation.invitedAt = new Date();
+        await invitation.save();
+        await sendInvitationNotice({ user, company: companyForNotice });
+        return {
+          agent: { ...serializeAgentUser(user), employerCompanyId: null, invitationStatus: 'invited', existingAccount: true },
+          emailSent: true,
+        };
+      }
+    }
+
     if (!user || String(user.employerCompanyId) !== String(companyId)) {
       const err = new Error('Agent not found on this call center');
       err.statusCode = 404;
