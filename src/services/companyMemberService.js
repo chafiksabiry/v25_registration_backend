@@ -2,7 +2,8 @@ import crypto from 'crypto';
 import mongoose from 'mongoose';
 import User from '../models/User.js';
 import CompanyMembership from '../models/CompanyMembership.js';
-import { companyMemberInviteEmail } from '../utils/harxMessages.js';
+import AgentInvitation from '../models/AgentInvitation.js';
+import { agentInvitationNoticeEmail, companyMemberInviteEmail } from '../utils/harxMessages.js';
 import { appLoginUrl, sendAppEmail } from './brevoMail.js';
 import {
   allPermissions,
@@ -227,12 +228,93 @@ class CompanyMemberService {
       createdAt: null,
     };
 
+    const pending = await AgentInvitation.find({ companyId: company._id, kind: 'member', status: 'pending' }).sort({ createdAt: -1 });
+    const pendingRows = pending.map((i) => ({
+      userId: String(i.userId || ''),
+      email: i.email,
+      fullName: i.fullName || '',
+      phone: '',
+      isOwner: false,
+      preset: i.preset || 'custom',
+      status: 'invited',
+      online: false,
+      permissions: sanitizePermissions(i.permissions),
+      invitedAt: i.invitedAt || null,
+      createdAt: i.createdAt || null,
+      existingAccount: true,
+    }));
+
     return [
       ownerRow,
       ...docs
         .filter((d) => String(d.userId) !== String(company.userId))
         .map((d) => serializeMember(d, byId.get(String(d.userId)))),
+      ...pendingRows,
     ];
+  }
+
+  async inviteExistingAccount({ caller, company, existingUser, preset, rights, sendEmail }) {
+    const email = normalizeEmail(existingUser.email);
+    let invitation = await AgentInvitation.findOne({ companyId: company._id, email });
+    if (invitation && invitation.status === 'accepted' && invitation.kind === 'member') {
+      throw httpError('Cette personne fait déjà partie de votre équipe.', 409);
+    }
+    if (invitation && invitation.kind !== 'member' && invitation.status !== 'declined') {
+      throw httpError('Cette personne est déjà invitée comme agent de votre centre.', 409);
+    }
+    const fields = {
+      kind: 'member',
+      preset,
+      permissions: rights,
+      fullName: existingUser.fullName || '',
+      status: 'pending',
+      invitedAt: new Date(),
+      respondedAt: undefined,
+      userId: existingUser._id,
+      invitedByUserId: caller._id,
+    };
+    if (invitation) {
+      Object.assign(invitation, fields);
+      await invitation.save();
+    } else {
+      invitation = await AgentInvitation.create({ companyId: company._id, email, ...fields });
+    }
+
+    let emailSent = false;
+    let emailError = null;
+    if (sendEmail) {
+      try {
+        const message = agentInvitationNoticeEmail({
+          firstName: (existingUser.fullName || '').trim().split(/\s+/)[0] || '',
+          companyName: companyLabel(company),
+          loginUrl: appLoginUrl(),
+        });
+        await sendAppEmail({ to: email, subject: message.subject, html: message.html });
+        emailSent = true;
+      } catch (e) {
+        emailError = e.message || 'Failed to send invitation email';
+      }
+    }
+
+    return {
+      member: {
+        userId: String(existingUser._id),
+        email,
+        fullName: existingUser.fullName || '',
+        phone: existingUser.phone || '',
+        isOwner: false,
+        preset,
+        status: 'invited',
+        online: false,
+        permissions: sanitizePermissions(rights),
+        invitedAt: invitation.invitedAt,
+        existingAccount: true,
+      },
+      invitationId: String(invitation._id),
+      existingAccount: true,
+      emailSent,
+      emailError,
+    };
   }
 
   async invite(callerUserId, payload) {
@@ -263,9 +345,18 @@ class CompanyMemberService {
       throw httpError('Select at least one permission', 400);
     }
 
-    const existingUser = await User.findOne({ email: normalizedEmail }).select('_id');
+    // Une adresse peut être invitée un nombre illimité de fois mais n'a qu'un compte HARX : si elle en a déjà
+    // un, on enregistre une invitation que la personne accepte après connexion (jamais de mot de passe créé).
+    const existingUser = await User.findOne({ email: normalizedEmail }).select('_id fullName email phone');
+    if (existingUser) {
+      const already = await CompanyMembership.findOne({ companyId: company._id, userId: existingUser._id }).select('_id');
+      if (already || String(company.userId) === String(existingUser._id)) {
+        throw httpError('Cette personne fait déjà partie de votre équipe.', 409);
+      }
+      return this.inviteExistingAccount({ caller, company, existingUser, preset: resolvedPreset, rights, sendEmail });
+    }
     const existingMembership = await CompanyMembership.findOne({ email: normalizedEmail }).select('_id');
-    if (existingUser || existingMembership) {
+    if (existingMembership) {
       throw httpError('Cet e-mail existe déjà. Invitation impossible.', 409);
     }
 

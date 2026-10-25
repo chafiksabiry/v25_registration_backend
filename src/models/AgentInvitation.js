@@ -10,6 +10,11 @@ const agentInvitationSchema = new mongoose.Schema(
     email: { type: String, required: true, lowercase: true, trim: true },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     invitedByUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    /** 'agent' : rep du centre ; 'member' : manager / administratif de l'entreprise (droits `preset` / `permissions`). */
+    kind: { type: String, enum: ['agent', 'member'], default: 'agent' },
+    preset: { type: String, default: null },
+    permissions: { type: mongoose.Schema.Types.Mixed, default: null },
+    fullName: { type: String, trim: true, default: '' },
     status: { type: String, enum: ['pending', 'accepted', 'declined'], default: 'pending' },
     invitedAt: { type: Date, default: Date.now },
     respondedAt: { type: Date },
