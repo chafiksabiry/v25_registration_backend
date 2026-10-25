@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import mongoose from 'mongoose';
 import User from '../models/User.js';
 import AgentInvitation from '../models/AgentInvitation.js';
+import CompanyMembership from '../models/CompanyMembership.js';
 import { agentInvitationNoticeEmail, inviteEmail } from '../utils/harxMessages.js';
 import { appLoginUrl, sendAppEmail } from './brevoMail.js';
 
@@ -265,6 +266,11 @@ class CallCenterAgentService {
   async inviteExistingAccount({ caller, company, companyId, existing, sendEmail }) {
     const email = normalizeEmail(existing.email);
     let invitation = await AgentInvitation.findOne({ companyId, email });
+    if (invitation && invitation.kind === 'member' && invitation.status !== 'declined') {
+      const err = new Error('Cette personne est déjà invitée comme membre de votre équipe');
+      err.statusCode = 409;
+      throw err;
+    }
     if (invitation && invitation.status === 'accepted') {
       const err = new Error('This agent is already on your team');
       err.statusCode = 409;
@@ -333,7 +339,7 @@ class CallCenterAgentService {
     const staff = users.map((u) => serializeAgentUser(u, agentByUser.get(String(u._id)) || null));
 
     // People who already had a HARX account are linked through an invitation they accept after signing in.
-    const invitations = await AgentInvitation.find({ companyId, status: { $in: ['pending', 'accepted'] } }).sort({ invitedAt: -1 });
+    const invitations = await AgentInvitation.find({ companyId, kind: { $ne: 'member' }, status: { $in: ['pending', 'accepted'] } }).sort({ invitedAt: -1 });
     const invitedUsers = await User.find({ _id: { $in: invitations.map((i) => i.userId).filter(Boolean) } }).select(
       '-password -verificationCode -pendingChanges'
     );
@@ -370,6 +376,8 @@ class CallCenterAgentService {
       id: String(i._id),
       companyId: String(i.companyId),
       companyName: nameById.get(String(i.companyId)) || '',
+      kind: i.kind || 'agent',
+      preset: i.preset || null,
       invitedAt: i.invitedAt,
     }));
   }
@@ -391,6 +399,25 @@ class CallCenterAgentService {
     invitation.userId = user._id;
     invitation.respondedAt = new Date();
     await invitation.save();
+    if (accept && invitation.kind === 'member') {
+      // Manager / administratif : l'acceptation crée le rattachement à l'entreprise avec les droits invités.
+      await CompanyMembership.findOneAndUpdate(
+        { companyId: invitation.companyId, userId: user._id },
+        {
+          $set: {
+            email: invitation.email,
+            fullName: invitation.fullName || '',
+            permissions: invitation.permissions || {},
+            preset: ['admin', 'operator', 'readonly'].includes(invitation.preset) ? invitation.preset : 'custom',
+            status: 'active',
+            invitedByUserId: invitation.invitedByUserId || null,
+            invitedAt: invitation.invitedAt || null,
+            connectedAt: new Date(),
+          },
+        },
+        { upsert: true, new: true }
+      );
+    }
     return { id: String(invitation._id), companyId: String(invitation.companyId), status: invitation.status };
   }
 
@@ -407,7 +434,7 @@ class CallCenterAgentService {
 
     // Existing HARX account invited by e-mail: remind them to sign in, never touch their password.
     if (user && String(user.employerCompanyId) !== String(companyId)) {
-      const invitation = await AgentInvitation.findOne({ companyId, email: normalizeEmail(user.email) });
+      const invitation = await AgentInvitation.findOne({ companyId, kind: { $ne: 'member' }, email: normalizeEmail(user.email) });
       if (invitation && invitation.status !== 'accepted') {
         const dbForNotice = mongoose.connection.db;
         const companyForNotice = await dbForNotice.collection('companies').findOne({
