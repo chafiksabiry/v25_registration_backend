@@ -13,6 +13,7 @@ import plansRoutes from './routes/plansRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import newsletterRoutes from './routes/newsletterRoutes.js';
 import callCenterRoutes from './routes/callCenterRoutes.js';
+import agentInvitationRoutes from './routes/agentInvitationRoutes.js';
 import companyMemberRoutes from './routes/companyMemberRoutes.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { attachTeamPresence } from './realtime/teamPresence.js';
@@ -102,6 +103,7 @@ app.use('/api/plans', plansRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/newsletter', newsletterRoutes);
 app.use('/api/call-center', callCenterRoutes);
+app.use('/api/agent-invitations', agentInvitationRoutes);
 app.use('/api/company-members', companyMemberRoutes);
 
 // Error handling

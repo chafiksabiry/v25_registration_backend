@@ -116,6 +116,26 @@ export function inviteEmail({ firstName, email, tempPassword, companyName, login
   };
 }
 
+export function agentInvitationNoticeEmail({ firstName, companyName, loginUrl }) {
+  const safeName = escapeHtml(firstName || '');
+  const org = escapeHtml(companyName || 'un centre d\'appels');
+  const safeUrl = escapeHtml(loginUrl);
+  return {
+    subject: `HARX — ${companyName || 'Un centre d\'appels'} vous invite à le rejoindre`,
+    html: harxEmailShell({
+      eyebrow: 'INVITATION',
+      title: 'Vous êtes invité sur HARX',
+      intro: `Bonjour ${safeName}, ${org} vous invite à rejoindre son équipe. Vous avez déjà un compte HARX : connectez-vous avec votre e-mail et votre mot de passe habituels, puis acceptez l'invitation.`,
+      footer: 'Si vous n\'êtes pas à l\'origine de cette invitation ou si vous ne connaissez pas ce centre, ignorez ce message ou refusez l\'invitation après connexion.',
+      bodyHtml: `
+        <p style="margin:0;text-align:center;">
+          <a href="${safeUrl}" style="display:inline-block;background-color:#ec4899;background-image:linear-gradient(90deg,#ff4d4d 0%,#ec4899 100%);color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:12px;font-weight:700;">Se connecter et répondre</a>
+        </p>
+      `,
+    }),
+  };
+}
+
 export function companyMemberInviteEmail({ firstName, email, tempPassword, companyName, loginUrl }) {
   const safeName = escapeHtml(firstName || '');
   const org = escapeHtml(companyName || 'HARX');
