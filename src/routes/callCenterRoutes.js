@@ -12,8 +12,10 @@ import {
   deleteClient,
   listClients,
   listOperationClients,
+  listOperationProfiles,
   restoreClient,
   setOperationClient,
+  setOperationProfile,
   updateClient,
 } from '../controllers/callCenterClientController.js';
 
@@ -33,5 +35,9 @@ router.post('/clients/:id/restore', restoreClient);
 router.delete('/clients/:id', deleteClient);
 router.get('/operation-clients', listOperationClients);
 router.put('/operation-clients/:gigId', setOperationClient);
+
+// Fiche d'une opération : objectif, volume attendu et indicateurs de pilotage
+router.get('/operation-profiles', listOperationProfiles);
+router.put('/operation-profiles/:gigId', setOperationProfile);
 
 export default router;

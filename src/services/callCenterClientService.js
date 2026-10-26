@@ -2,7 +2,9 @@ import mongoose from 'mongoose';
 import User from '../models/User.js';
 import CallCenterClient from '../models/CallCenterClient.js';
 import CallCenterOperationClient from '../models/CallCenterOperationClient.js';
+import CallCenterOperationProfile from '../models/CallCenterOperationProfile.js';
 import { clientView, normalizeClientInput } from './callCenterClientValidation.js';
+import { normalizeProfileInput, profileView } from './callCenterOperationProfileValidation.js';
 
 function fail(statusCode, message) {
   const err = new Error(message);
@@ -113,4 +115,26 @@ export async function setOperationClient(callerUserId, companyId, gigId, clientI
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
   return { gigId: String(gigId), clientId: String(client._id) };
+}
+
+export async function listOperationProfiles(callerUserId, companyId) {
+  await resolveOwnedCompany(callerUserId, companyId);
+  const rows = await CallCenterOperationProfile.find({ companyId: oid(companyId) });
+  return rows.map(profileView);
+}
+
+/** Enregistre la description de l'opération (objectif, volume attendu) et ses indicateurs de pilotage. */
+export async function setOperationProfile(callerUserId, companyId, gigId, body) {
+  await resolveOwnedCompany(callerUserId, companyId);
+  if (!isId(gigId)) throw fail(400, 'Valid gigId is required');
+  const gig = await mongoose.connection.db.collection('gigs').findOne({ _id: oid(gigId), companyId: oid(companyId) });
+  if (!gig) throw fail(404, 'Operation not found for this company');
+  const { errors, value } = normalizeProfileInput(body);
+  if (errors.length) throw fail(400, errors.join(' '));
+  const doc = await CallCenterOperationProfile.findOneAndUpdate(
+    { companyId: oid(companyId), gigId: oid(gigId) },
+    { $set: value },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  );
+  return profileView(doc);
 }
