@@ -20,3 +20,5 @@ export const restoreClient = handle((req) => service.setClientStatus(callerId(re
 export const deleteClient = handle((req) => service.deleteClient(callerId(req), companyOf(req), req.params.id), 'Failed to delete client');
 export const listOperationClients = handle((req) => service.listOperationClients(callerId(req), companyOf(req)), 'Failed to list operation clients');
 export const setOperationClient = handle((req) => service.setOperationClient(callerId(req), companyOf(req), req.params.gigId, req.body?.clientId ?? null), 'Failed to set operation client');
+export const listOperationProfiles = handle((req) => service.listOperationProfiles(callerId(req), companyOf(req)), 'Failed to list operation profiles');
+export const setOperationProfile = handle((req) => service.setOperationProfile(callerId(req), companyOf(req), req.params.gigId, req.body), 'Failed to save operation profile');
