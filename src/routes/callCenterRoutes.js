@@ -14,6 +14,7 @@ import {
   listOperationClients,
   listOperationProfiles,
   restoreClient,
+  saveOnboardingFeedback,
   setOperationClient,
   setOperationProfile,
   updateClient,
@@ -35,6 +36,9 @@ router.post('/clients/:id/restore', restoreClient);
 router.delete('/clients/:id', deleteClient);
 router.get('/operation-clients', listOperationClients);
 router.put('/operation-clients/:gigId', setOperationClient);
+
+// Avis sur la mise en route
+router.post('/onboarding-feedback', saveOnboardingFeedback);
 
 // Fiche d'une opération : objectif, volume attendu et indicateurs de pilotage
 router.get('/operation-profiles', listOperationProfiles);

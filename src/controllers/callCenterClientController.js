@@ -22,3 +22,4 @@ export const listOperationClients = handle((req) => service.listOperationClients
 export const setOperationClient = handle((req) => service.setOperationClient(callerId(req), companyOf(req), req.params.gigId, req.body?.clientId ?? null), 'Failed to set operation client');
 export const listOperationProfiles = handle((req) => service.listOperationProfiles(callerId(req), companyOf(req)), 'Failed to list operation profiles');
 export const setOperationProfile = handle((req) => service.setOperationProfile(callerId(req), companyOf(req), req.params.gigId, req.body), 'Failed to save operation profile');
+export const saveOnboardingFeedback = handle((req) => service.saveOnboardingFeedback(callerId(req), companyOf(req), req.body), 'Failed to save onboarding feedback');

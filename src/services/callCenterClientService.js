@@ -5,6 +5,8 @@ import CallCenterOperationClient from '../models/CallCenterOperationClient.js';
 import CallCenterOperationProfile from '../models/CallCenterOperationProfile.js';
 import { clientView, normalizeClientInput } from './callCenterClientValidation.js';
 import { normalizeProfileInput, profileView } from './callCenterOperationProfileValidation.js';
+import CallCenterOnboardingFeedback from '../models/CallCenterOnboardingFeedback.js';
+import { normalizeFeedbackInput } from './callCenterOnboardingFeedbackValidation.js';
 
 function fail(statusCode, message) {
   const err = new Error(message);
@@ -137,4 +139,18 @@ export async function setOperationProfile(callerUserId, companyId, gigId, body) 
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
   return profileView(doc);
+}
+
+/** Enregistre l'avis du centre sur sa mise en route (un avis par personne et par société, remplacé s'il est renvoyé). */
+export async function saveOnboardingFeedback(callerUserId, companyId, body) {
+  await resolveOwnedCompany(callerUserId, companyId);
+  if (!isId(callerUserId)) throw fail(400, 'Valid user is required');
+  const { errors, value } = normalizeFeedbackInput(body);
+  if (errors.length) throw fail(400, errors.join(' '));
+  const doc = await CallCenterOnboardingFeedback.findOneAndUpdate(
+    { companyId: oid(companyId), userId: oid(callerUserId) },
+    { $set: value },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  );
+  return { rating: doc.rating, comment: doc.comment, durationSeconds: doc.durationSeconds };
 }
