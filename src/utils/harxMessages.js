@@ -186,6 +186,61 @@ export function companyMemberInviteEmail({ firstName, email, tempPassword, compa
   };
 }
 
+const MEMBER_ROLES = {
+  operator: { label: 'Manager', text: 'Crée et pilote les opérations : prospects, scripts, base de connaissance, téléphonie et appels. Sans facturation ni gestion de l’équipe.' },
+  admin: { label: 'Administrateur', text: 'Tous les droits, y compris la facturation et la gestion de l’équipe.' },
+  readonly: { label: 'Consultation', text: 'Voit tout, ne modifie rien.' },
+};
+
+const withProduct = (url) => (String(url).includes('?') ? url : `${url}?product=callcentre`);
+
+/**
+ * Invitation à rejoindre l'équipe d'un centre d'appels (manager, administrateur, consultation).
+ * Compte existant : se connecter puis accepter. Nouveau compte : mot de passe temporaire à changer.
+ */
+export function teamMemberInvitationEmail({ firstName, companyName, preset, inviterName, email, tempPassword, loginUrl }) {
+  const role = MEMBER_ROLES[String(preset || '').toLowerCase()] || { label: 'Membre de l’équipe', text: 'Vos droits sont ceux choisis par l’administrateur du centre.' };
+  const name = escapeHtml(firstName || '');
+  const org = escapeHtml(companyName || 'Un centre d’appels');
+  const inviter = inviterName ? escapeHtml(inviterName) : '';
+  const url = escapeHtml(withProduct(loginUrl));
+  const hasPassword = Boolean(tempPassword);
+  const steps = hasPassword
+    ? ['Connectez-vous avec l’e-mail et le mot de passe temporaire ci-dessus.', 'Choisissez votre mot de passe personnel.', `Retrouvez l’espace de ${org} : tableau de bord, opérations, appels et équipe selon vos droits.`]
+    : ['Connectez-vous avec votre e-mail et votre mot de passe HARX habituels.', 'Acceptez l’invitation de ' + org + '.', 'Retrouvez son espace : tableau de bord, opérations, appels et équipe selon vos droits.'];
+  const credentials = hasPassword
+    ? `<div style="background:#fff1f2;border:1px solid #fecdd3;border-radius:16px;padding:14px 18px;margin:0 0 18px;">
+          <p style="margin:0 0 6px;font-size:14px;color:#1e293b;"><strong>E-mail :</strong> ${escapeHtml(email)}</p>
+          <p style="margin:0;font-size:14px;color:#1e293b;"><strong>Mot de passe temporaire :</strong> ${escapeHtml(tempPassword)}</p>
+        </div>`
+    : '';
+  return {
+    subject: `${companyName || 'Un centre d’appels'} vous invite à rejoindre son équipe sur HARX Call Centre`,
+    html: harxEmailShell({
+      eyebrow: 'INVITATION · ÉQUIPE',
+      title: `${name ? `${name}, r` : 'R'}ejoignez l’équipe de ${org}`,
+      intro: `${org} vous invite sur <strong>HARX Call Centre</strong>, la plateforme qui sert à piloter ses opérations d’appels${inviter ? ` (invitation de ${inviter})` : ''}.`,
+      footer: hasPassword
+        ? 'Pour votre sécurité, changez ce mot de passe dès la première connexion. Si vous ne connaissez pas ce centre, ignorez ce message.'
+        : 'Si vous n’êtes pas à l’origine de cette invitation ou si vous ne connaissez pas ce centre, ignorez ce message ou refusez l’invitation après connexion.',
+      bodyHtml: `
+        <div style="border:1px solid #fecdd3;border-radius:16px;padding:14px 18px;margin:0 0 18px;">
+          <p style="margin:0 0 4px;font-size:11px;font-weight:700;letter-spacing:0.14em;color:#e11d48;">VOTRE RÔLE</p>
+          <p style="margin:0 0 4px;font-size:16px;font-weight:700;color:#0f172a;">${escapeHtml(role.label)}</p>
+          <p style="margin:0;font-size:14px;line-height:1.5;color:#475569;">${escapeHtml(role.text)}</p>
+        </div>
+        ${credentials}
+        <ol style="margin:0 0 22px;padding-left:20px;font-size:14px;line-height:1.7;color:#1e293b;">
+          ${steps.map((t) => `<li>${t}</li>`).join('')}
+        </ol>
+        <p style="margin:0 0 6px;text-align:center;">
+          <a href="${url}" style="display:inline-block;background-color:#ec4899;background-image:linear-gradient(90deg,#ff4d4d 0%,#ec4899 100%);color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:12px;font-weight:700;font-size:15px;">${hasPassword ? 'Me connecter' : 'Accepter l’invitation'}</a>
+        </p>
+      `,
+    }),
+  };
+}
+
 export function verificationSms(code) {
   return (
     `HARX\n` +
