@@ -14,6 +14,16 @@ const kpiSchema = new mongoose.Schema(
   { _id: false }
 );
 
+/** Dernière valeur saisie à la main pour un indicateur qui n'a pas de source automatique (satisfaction, chiffre d'affaires…). */
+const manualValueSchema = new mongoose.Schema(
+  {
+    id: { type: String, required: true },
+    value: { type: Number, required: true },
+    at: { type: Date, default: Date.now },
+  },
+  { _id: false }
+);
+
 const schema = new mongoose.Schema(
   {
     companyId: { type: mongoose.Schema.Types.ObjectId, required: true, index: true },
@@ -21,6 +31,7 @@ const schema = new mongoose.Schema(
     objective: { type: String, default: '' },
     dailyVolume: { type: Number, default: null },
     kpis: { type: [kpiSchema], default: [] },
+    manualValues: { type: [manualValueSchema], default: [] },
   },
   { timestamps: true, collection: 'callcenter_operation_profiles' }
 );
