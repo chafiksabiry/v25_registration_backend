@@ -5,6 +5,7 @@ import AgentInvitation from '../models/AgentInvitation.js';
 import CompanyMembership from '../models/CompanyMembership.js';
 import { agentInvitationNoticeEmail, inviteEmail } from '../utils/harxMessages.js';
 import { appLoginUrl, sendAppEmail } from './brevoMail.js';
+import { roleConflict } from './teamRoleConflicts.js';
 
 function generateTempPassword(length = 12) {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@$%';
@@ -193,6 +194,13 @@ class CallCenterAgentService {
     const lastName = String(givenLastName || '').trim();
     // The phone number is optional for an invitation by email: the agent adds it when they first sign in.
     const phoneValue = String(phone || '').trim();
+
+    const conflict = await roleConflict('agent', { company, companyId, email: normalizedEmail });
+    if (conflict) {
+      const err = new Error(conflict);
+      err.statusCode = 409;
+      throw err;
+    }
 
     const existing = await User.findOne({ email: normalizedEmail });
     if (existing) {

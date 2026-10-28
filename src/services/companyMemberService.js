@@ -5,6 +5,7 @@ import CompanyMembership from '../models/CompanyMembership.js';
 import AgentInvitation from '../models/AgentInvitation.js';
 import { agentInvitationNoticeEmail, companyMemberInviteEmail } from '../utils/harxMessages.js';
 import { appLoginUrl, sendAppEmail } from './brevoMail.js';
+import { roleConflict } from './teamRoleConflicts.js';
 import {
   allPermissions,
   emptyPermissions,
@@ -347,6 +348,9 @@ class CompanyMemberService {
 
     // Une adresse peut être invitée un nombre illimité de fois mais n'a qu'un compte HARX : si elle en a déjà
     // un, on enregistre une invitation que la personne accepte après connexion (jamais de mot de passe créé).
+    const conflict = await roleConflict('member', { company, companyId: company._id, email: normalizedEmail });
+    if (conflict) throw httpError(conflict, 409);
+
     const existingUser = await User.findOne({ email: normalizedEmail }).select('_id fullName email phone');
     if (existingUser) {
       const already = await CompanyMembership.findOne({ companyId: company._id, userId: existingUser._id }).select('_id');
