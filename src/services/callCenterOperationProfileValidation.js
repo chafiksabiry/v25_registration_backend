@@ -2,6 +2,7 @@
 
 const str = (v, max) => String(v ?? '').trim().slice(0, max);
 const MAX_KPIS = 20;
+const MAX_MANUAL_VALUES = 80;
 
 export function normalizeProfileInput(body) {
   const errors = [];
@@ -38,6 +39,24 @@ export function normalizeProfileInput(body) {
       }
     }
   }
+  if (has('manualValues')) {
+    if (!Array.isArray(body.manualValues)) errors.push('Les valeurs saisies doivent être une liste.');
+    else if (body.manualValues.length > MAX_MANUAL_VALUES) errors.push(`Au plus ${MAX_MANUAL_VALUES} valeurs saisies.`);
+    else {
+      const seen = new Set();
+      value.manualValues = [];
+      for (const m of body.manualValues) {
+        const id = str(m?.id, 40);
+        if (!id || seen.has(id)) continue;
+        if (m.value === null || m.value === undefined || m.value === '') continue;
+        const n = Number(m.value);
+        if (!Number.isFinite(n)) { errors.push(`Valeur invalide pour « ${id} ».`); continue; }
+        const at = m.at ? new Date(m.at) : new Date();
+        seen.add(id);
+        value.manualValues.push({ id, value: n, at: Number.isNaN(at.getTime()) ? new Date() : at });
+      }
+    }
+  }
   return { errors, value };
 }
 
@@ -47,6 +66,7 @@ export function profileView(doc) {
     gigId: String(d.gigId),
     objective: d.objective ?? '',
     dailyVolume: d.dailyVolume ?? null,
+    manualValues: (d.manualValues ?? []).map((m) => ({ id: m.id, value: m.value, at: new Date(m.at ?? Date.now()).toISOString() })),
     kpis: (d.kpis ?? []).map((k) => ({ id: k.id, label: k.label, unit: k.unit ?? '', target: k.target ?? null, goal: k.goal === 'max' ? 'max' : 'min', custom: Boolean(k.custom) })),
   };
 }

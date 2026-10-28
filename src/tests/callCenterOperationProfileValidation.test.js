@@ -29,4 +29,12 @@ assert.equal(normalizeProfileInput({ kpis: Array.from({ length: 21 }, (_, i) => 
 const view = profileView({ gigId: 'g1', objective: 'x', kpis: [{ id: 'a', label: 'A', target: 2, goal: 'max' }] });
 assert.equal(view.kpis[0].goal, 'max');
 assert.equal(view.dailyVolume, null);
+// valeurs saisies à la main
+const manual = normalizeProfileInput({ manualValues: [{ id: 'csat', value: '4.2' }, { id: 'csat', value: 5 }, { id: 'nps', value: null }, { id: '', value: 1 }, { id: 'revenue', value: 1500, at: '2026-10-01T10:00:00Z' }] });
+assert.deepEqual(manual.errors, []);
+assert.deepEqual(manual.value.manualValues.map((m) => [m.id, m.value]), [['csat', 4.2], ['revenue', 1500]]);
+assert.equal(normalizeProfileInput({ manualValues: [{ id: 'csat', value: 'abc' }] }).errors.length, 1);
+assert.equal(normalizeProfileInput({ manualValues: 'x' }).errors.length, 1);
+assert.equal(normalizeProfileInput({ manualValues: Array.from({ length: 81 }, (_, i) => ({ id: 'k' + i, value: 1 })) }).errors.length, 1);
+assert.equal(profileView({ gigId: 'g', manualValues: [{ id: 'csat', value: 4, at: '2026-10-01T10:00:00Z' }] }).manualValues[0].at, '2026-10-01T10:00:00.000Z');
 console.log('callCenterOperationProfileValidation : OK');
