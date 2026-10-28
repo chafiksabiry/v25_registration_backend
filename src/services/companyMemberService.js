@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 import User from '../models/User.js';
 import CompanyMembership from '../models/CompanyMembership.js';
 import AgentInvitation from '../models/AgentInvitation.js';
-import { agentInvitationNoticeEmail, companyMemberInviteEmail } from '../utils/harxMessages.js';
+import { teamMemberInvitationEmail } from '../utils/harxMessages.js';
 import { appLoginUrl, sendAppEmail } from './brevoMail.js';
 import { roleConflict } from './teamRoleConflicts.js';
 import {
@@ -83,13 +83,15 @@ function companyLabel(company) {
   return company.name || company.companyName || company.title || 'HARX';
 }
 
-async function sendInviteEmail({ to, firstName, email, tempPassword, companyName }) {
+async function sendInviteEmail({ to, firstName, email, tempPassword, companyName, preset, inviterName }) {
   const loginUrl = appLoginUrl();
-  const message = companyMemberInviteEmail({
+  const message = teamMemberInvitationEmail({
     firstName,
     email,
     tempPassword,
     companyName,
+    preset,
+    inviterName,
     loginUrl,
   });
   await sendAppEmail({
@@ -285,9 +287,12 @@ class CompanyMemberService {
     let emailError = null;
     if (sendEmail) {
       try {
-        const message = agentInvitationNoticeEmail({
+        const message = teamMemberInvitationEmail({
           firstName: (existingUser.fullName || '').trim().split(/\s+/)[0] || '',
           companyName: companyLabel(company),
+          preset,
+          inviterName: caller?.fullName || '',
+          email,
           loginUrl: appLoginUrl(),
         });
         await sendAppEmail({ to: email, subject: message.subject, html: message.html });
@@ -401,6 +406,8 @@ class CompanyMemberService {
           email: normalizedEmail,
           tempPassword,
           companyName: companyLabel(company),
+          preset: resolvedPreset,
+          inviterName: caller?.fullName || '',
         });
         emailSent = true;
         membership.status = 'invited';
@@ -482,6 +489,7 @@ class CompanyMemberService {
         email: targetEmail,
         tempPassword,
         companyName: companyLabel(company),
+        preset: membership.preset,
       });
       emailSent = true;
       membership.status = 'invited';
