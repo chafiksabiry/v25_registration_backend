@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import axios from 'axios';
 import userRepository from '../repositories/userRepository.js';
+import { parseProduct } from '../utils/accountProduct.js';
 import User from '../models/User.js'; // Modèle utilisateur
 import Timezone from '../models/Timezone.js';
 import twilio from 'twilio';
@@ -684,7 +685,16 @@ class AuthService {
       userType: user.typeUser,
       mustChangePassword: Boolean(user.mustChangePassword),
       employerCompanyId: user.employerCompanyId ? String(user.employerCompanyId) : null,
+      product: user.product || null,
     };
+  }
+
+  /** Rattache le compte à un produit HARX (appelé par l'application du produit quand le compte l'utilise). */
+  async setProduct(userId, product) {
+    const value = parseProduct(product);
+    if (!value) throw new Error('Produit inconnu');
+    await userRepository.update(userId, { product: value });
+    return { product: value };
   }
 
   async adminLogin(email, password, req) {

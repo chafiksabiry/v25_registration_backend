@@ -275,6 +275,18 @@ export const changeUserType = async (req, res) => {
     return res.status(500).json({ error: error.message });
   }
 };
+/** Rattache le compte connecté à un produit HARX (« callcentre »). */
+export const setProduct = async (req, res) => {
+  try {
+    const userId = req.user?.userId || req.user?.id;
+    if (!userId) return res.status(401).json({ message: 'Authentication required' });
+    const result = await authService.setProduct(userId, req.body?.product);
+    return res.json({ success: true, data: result });
+  } catch (error) {
+    return res.status(400).json({ success: false, message: error?.message || 'Produit invalide' });
+  }
+};
+
 export const checkUserType = async (req, res) => {
   const { userId } = req.body;
   const result = await authService.checkUserType(userId);
@@ -284,6 +296,7 @@ export const checkUserType = async (req, res) => {
       userType: result.userType,
       mustChangePassword: result.mustChangePassword,
       employerCompanyId: result.employerCompanyId,
+      product: result.product ?? null,
       ...result,
     });
   }
