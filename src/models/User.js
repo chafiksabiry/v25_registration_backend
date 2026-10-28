@@ -91,6 +91,12 @@ const userSchema = new mongoose.Schema({
     type :String,
     default: null,
   },
+  /** Produit HARX du compte (ex. « callcentre ») : la connexion mène à ce produit. */
+  product: {
+    type: String,
+    enum: ['callcentre', null],
+    default: null,
+  },
   firstTime: {
     type: Boolean,
     default: true
