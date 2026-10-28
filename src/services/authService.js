@@ -10,6 +10,7 @@ import ipInfoService from './ipInfoService.js';
 import { verificationEmail, verificationSms } from '../utils/harxMessages.js';
 import { sendAppEmail } from './brevoMail.js';
 import companyMemberService from './companyMemberService.js';
+import CompanyMembership from '../models/CompanyMembership.js';
 import { hashReengagementToken } from '../utils/reengagementToken.js';
 
 
@@ -681,11 +682,24 @@ class AuthService {
     if (!user) {
       throw new Error('User not found');
     }
+    // Un membre invité arrive dans le produit de la personne qui l'a invité.
+    let product = user.product || null;
+    if (!product && user.typeUser === 'company-member') {
+      try {
+        const membership = await CompanyMembership.findOne({ userId: user._id }).sort({ createdAt: 1 }).select('invitedByUserId').lean();
+        if (membership?.invitedByUserId) {
+          const inviter = await userRepository.findById(membership.invitedByUserId);
+          product = inviter?.product || null;
+        }
+      } catch (error) {
+        console.error('checkUserType: produit du membre illisible:', error.message);
+      }
+    }
     return {
       userType: user.typeUser,
       mustChangePassword: Boolean(user.mustChangePassword),
       employerCompanyId: user.employerCompanyId ? String(user.employerCompanyId) : null,
-      product: user.product || null,
+      product,
     };
   }
 
