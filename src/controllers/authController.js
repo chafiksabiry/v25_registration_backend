@@ -288,8 +288,15 @@ export const setProduct = async (req, res) => {
 };
 
 export const checkUserType = async (req, res) => {
-  const { userId } = req.body;
-  const result = await authService.checkUserType(userId);
+  const { userId } = req.body || {};
+  let result;
+  try {
+    result = await authService.checkUserType(userId);
+  } catch (error) {
+    // Un identifiant inconnu ou illisible (session périmée) ne doit pas faire tomber le service.
+    const unknown = /not found/i.test(error?.message || '');
+    return res.status(unknown ? 404 : 400).json({ success: false, message: unknown ? 'User not found' : 'Invalid user' });
+  }
   // Keep legacy `userType` top-level for existing clients; also return full payload.
   if (result && typeof result === 'object') {
     return res.json({
