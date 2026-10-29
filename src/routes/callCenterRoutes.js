@@ -19,6 +19,8 @@ import {
   setOperationClient,
   setOperationProfile,
   updateClient,
+  getWorkspaceState,
+  saveWorkspaceState,
 } from '../controllers/callCenterClientController.js';
 
 const router = express.Router();
@@ -45,5 +47,9 @@ router.post('/onboarding-feedback', saveOnboardingFeedback);
 // Fiche d'une opération : objectif, volume attendu et indicateurs de pilotage
 router.get('/operation-profiles', listOperationProfiles);
 router.put('/operation-profiles/:gigId', setOperationProfile);
+
+// État du portail conservé côté serveur (files, mise en route, lignes testées ; académie et préférences de la personne)
+router.get('/workspace-state', getWorkspaceState);
+router.put('/workspace-state', saveWorkspaceState);
 
 export default router;

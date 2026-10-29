@@ -1,4 +1,5 @@
 import * as service from '../services/callCenterClientService.js';
+import * as workspace from '../services/callCenterWorkspaceStateService.js';
 
 const callerId = (req) => req.user?.userId || req.user?.id || req.user?._id;
 const companyOf = (req) => req.query.companyId || req.body?.companyId;
@@ -23,3 +24,5 @@ export const setOperationClient = handle((req) => service.setOperationClient(cal
 export const listOperationProfiles = handle((req) => service.listOperationProfiles(callerId(req), companyOf(req)), 'Failed to list operation profiles');
 export const setOperationProfile = handle((req) => service.setOperationProfile(callerId(req), companyOf(req), req.params.gigId, req.body), 'Failed to save operation profile');
 export const saveOnboardingFeedback = handle((req) => service.saveOnboardingFeedback(callerId(req), companyOf(req), req.body), 'Failed to save onboarding feedback');
+export const getWorkspaceState = handle((req) => workspace.getWorkspaceState(callerId(req), companyOf(req)), 'Failed to read workspace state');
+export const saveWorkspaceState = handle((req) => workspace.saveWorkspaceState(callerId(req), companyOf(req), req.body), 'Failed to save workspace state');
