@@ -11,7 +11,8 @@ export function serializeInvitedAccount(user, invitation) {
   const typedPhone = String(invitation.phone || '').trim();
   const email = normalizeEmail(invitation.email || user.email);
   return {
-    _id: user._id,
+    userId: String(user._id),
+    agentId: null,
     fullName: typedName || (accepted ? String(user.fullName || '').trim() : '') || email.split('@')[0],
     email,
     phone: typedPhone || (accepted ? String(user.phone || '') : ''),

@@ -6,6 +6,7 @@ const invitation = { companyId: 'c1', email: 'pro@mail.com', fullName: 'Chafik S
 
 // En attente : le centre voit ce qu'il a saisi, rien du profil du compte (nom d'un autre centre, téléphone)
 let out = serializeInvitedAccount(account, invitation);
+assert.equal(out.userId, 'u1');
 assert.equal(out.fullName, 'Chafik Sabiry');
 assert.equal(out.phone, '');
 assert.equal(out.isVerified, false);
