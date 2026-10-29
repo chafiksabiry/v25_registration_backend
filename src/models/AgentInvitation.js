@@ -15,6 +15,8 @@ const agentInvitationSchema = new mongoose.Schema(
     preset: { type: String, default: null },
     permissions: { type: mongoose.Schema.Types.Mixed, default: null },
     fullName: { type: String, trim: true, default: '' },
+    /** Téléphone saisi par le centre qui invite (jamais celui du compte de la personne invitée). */
+    phone: { type: String, trim: true, default: '' },
     status: { type: String, enum: ['pending', 'accepted', 'declined'], default: 'pending' },
     invitedAt: { type: Date, default: Date.now },
     respondedAt: { type: Date },

@@ -4,6 +4,7 @@ import {
   createCallCenterAgent,
   listCallCenterAgents,
   resendCallCenterAgentInvite,
+  removeCallCenterAgentInvitation,
 } from '../controllers/callCenterAgentController.js';
 
 import {
@@ -26,6 +27,7 @@ router.use(authenticateCallCenter);
 router.get('/agents', listCallCenterAgents);
 router.post('/agents', createCallCenterAgent);
 router.post('/agents/:userId/resend-invite', resendCallCenterAgentInvite);
+router.delete('/agents/:userId', removeCallCenterAgentInvitation);
 
 // Clients du centre et rattachement client / opération
 router.get('/clients', listClients);
