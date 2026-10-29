@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { normalizeWorkspaceInput } from '../services/callCenterWorkspaceStateValidation.js';
+import { normalizeWorkspaceInput, writableParts } from '../services/callCenterWorkspaceStateValidation.js';
 
 const ok = normalizeWorkspaceInput({
   company: {
@@ -43,4 +43,7 @@ assert.equal(normalizeWorkspaceInput({ user: { activeOperationId: 'pas-un-id' } 
 assert.deepEqual(normalizeWorkspaceInput({ user: { activeOperationId: null } }).value, { user: { activeOperationId: null } });
 assert.deepEqual(normalizeWorkspaceInput({}).value, {});
 
+const both = { company: { queues: [] }, user: { academy: {} } };
+assert.deepEqual(writableParts('agent', both), { user: { academy: {} } }, 'un agent n’écrit pas l’état du centre');
+assert.deepEqual(writableParts(undefined, both), both, 'le propriétaire et les membres écrivent les deux parties');
 console.log('callCenterWorkspaceStateValidation OK');

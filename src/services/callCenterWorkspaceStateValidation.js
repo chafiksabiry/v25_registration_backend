@@ -126,3 +126,10 @@ export function normalizeWorkspaceInput(body) {
   }
   return { value, errors };
 }
+
+/** Un agent n'enregistre que ses propres préférences : l'état partagé du centre n'est pas de son ressort. */
+export function writableParts(access, value) {
+  if (access !== 'agent') return value;
+  const { company: _ignored, ...own } = value;
+  return own;
+}
