@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import mongoose from 'mongoose';
 import axios from 'axios';
 import userRepository from '../repositories/userRepository.js';
 import { parseProduct } from '../utils/accountProduct.js';
@@ -693,6 +694,18 @@ class AuthService {
         }
       } catch (error) {
         console.error('checkUserType: produit du membre illisible:', error.message);
+      }
+    }
+    // Un agent employé par un centre arrive dans le produit du propriétaire de ce centre.
+    if (!product && user.typeUser === 'rep' && user.employerCompanyId) {
+      try {
+        const company = await mongoose.connection.db.collection('companies').findOne({ _id: new mongoose.Types.ObjectId(String(user.employerCompanyId)) }, { projection: { userId: 1 } });
+        if (company?.userId) {
+          const owner = await userRepository.findById(company.userId);
+          product = owner?.product || null;
+        }
+      } catch (error) {
+        console.error('checkUserType: produit de l\'agent illisible:', error.message);
       }
     }
     return {
