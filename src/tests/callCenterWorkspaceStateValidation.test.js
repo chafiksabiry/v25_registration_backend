@@ -23,6 +23,16 @@ assert.deepEqual(Object.keys(ok.value.company.onboarding.timings), ['company'], 
 assert.deepEqual(ok.value.user.academy, { done: ['m1', 'm2'], welcomeDismissed: true });
 assert.equal(ok.value.user.activeOperationId, '6ae32645b98a1af2bcb10953');
 
+// identité du centre et appel de test
+const prof = normalizeWorkspaceInput({ company: { profile: { name: ' Nipux Experts ', siren: '123456789', representativeEmail: 'a@b.fr', kybStatus: 'submitted', country: 'fr', address: { street: '1 rue X', postalCode: '75001', city: 'Paris' }, documents: [{ name: 'kbis.pdf', size: 1200, kind: 'kbis', contenu: 'ignoré' }, { name: '' }] }, testCallOk: 1, testCall: { at: 'x', from: '+33219122061', to: '+33623984708' } } });
+assert.deepEqual(prof.errors, []);
+assert.equal(prof.value.company.profile.name, 'Nipux Experts');
+assert.equal(prof.value.company.profile.country, 'FR');
+assert.deepEqual(prof.value.company.profile.documents, [{ name: 'kbis.pdf', size: 1200, kind: 'kbis' }]);
+assert.equal(prof.value.company.testCallOk, true);
+assert.equal(prof.value.company.testCall.to, '+33623984708');
+assert.equal(normalizeWorkspaceInput({ company: { profile: 'x' } }).errors.length, 1);
+
 // mauvais formats : refusés sans rien écrire
 for (const body of [{ company: 'x' }, { company: { queues: 'x' } }, { company: { testedLines: [] } }, { company: { onboarding: 3 } }, { user: [] }]) {
   assert(normalizeWorkspaceInput(body).errors.length > 0, `refus : ${JSON.stringify(body)}`);

@@ -59,6 +59,26 @@ function normalizeOnboarding(o) {
   return { value: { done: Boolean(o.done), currentStep: STEP_IDS.includes(o.currentStep) ? o.currentStep : STEP_IDS[0], timings } };
 }
 
+/** Identité du centre saisie à la mise en route (affichée dans le profil) : texte borné, justificatifs réduits à leur nom. */
+function normalizeProfile(p) {
+  if (!isObj(p)) return { error: 'Le profil du centre doit être un objet.' };
+  const out = {
+    name: str(p.name, 120),
+    siren: str(p.siren, 40),
+    representativeEmail: str(p.representativeEmail, 160),
+    kybStatus: p.kybStatus === 'submitted' ? 'submitted' : 'draft',
+    documents: (Array.isArray(p.documents) ? p.documents : []).slice(0, 20).map((d) => ({ name: str(d?.name, 160), size: Math.max(0, num(d?.size) ?? 0), ...(d?.kind ? { kind: str(d.kind, 40) } : {}) })).filter((d) => d.name),
+  };
+  if (typeof p.country === 'string') out.country = str(p.country, 4).toUpperCase();
+  if (isObj(p.address)) out.address = { street: str(p.address.street, 200), postalCode: str(p.address.postalCode, 20), city: str(p.address.city, 100) };
+  return { value: out };
+}
+
+function normalizeTestCall(t) {
+  if (!isObj(t)) return { error: 'L’appel de test doit être un objet.' };
+  return { value: { at: str(t.at, 40), from: str(t.from, 30), to: str(t.to, 30) } };
+}
+
 /** @returns {{ value: { company?: object, user?: object }, errors: string[] }} */
 export function normalizeWorkspaceInput(body) {
   const errors = [];
@@ -79,6 +99,9 @@ export function normalizeWorkspaceInput(body) {
       take('testedLines', (m) => normalizeLines(m, ['to']));
       take('inboundTestedLines', (m) => normalizeLines(m, ['from']));
       take('onboarding', normalizeOnboarding);
+      take('profile', normalizeProfile);
+      take('testCall', normalizeTestCall);
+      if (has(body.company, 'testCallOk')) c.testCallOk = Boolean(body.company.testCallOk);
       value.company = c;
     }
   }
