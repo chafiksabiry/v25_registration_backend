@@ -12,6 +12,8 @@ import {
   presetPermissions,
   sanitizePermissions,
   PERMISSION_GROUPS,
+  agentPermissions,
+  isCallCenterAgent,
 } from '../constants/companyPermissions.js';
 
 function generateTempPassword(length = 12) {
@@ -152,6 +154,16 @@ class CompanyMemberService {
       };
     }
     const membership = await CompanyMembership.findOne({ userId: caller._id }).sort({ createdAt: -1 });
+    // Un agent employé par un centre : sa société est celle de son employeur, avec les seuls droits d'un agent.
+    if (!membership && isCallCenterAgent(caller)) {
+      return {
+        isOwner: false,
+        isAgent: true,
+        companyId: String(caller.employerCompanyId),
+        permissions: agentPermissions(),
+        preset: 'agent',
+      };
+    }
     // No membership document means the account is not a restricted teammate
     // (company owner, or a user created before team invites). Keep full access.
     if (!membership) {
@@ -161,6 +173,7 @@ class CompanyMemberService {
     const fresh = await CompanyMembership.findById(membership._id);
     return {
       isOwner: false,
+      isAgent: false,
       companyId: String(membership.companyId),
       permissions: sanitizePermissions(membership.permissions),
       preset: (fresh || membership).preset || 'custom',
