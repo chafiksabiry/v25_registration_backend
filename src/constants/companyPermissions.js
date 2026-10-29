@@ -108,3 +108,14 @@ export function sanitizePermissions(input) {
   }
   return out;
 }
+
+/** Agent employé par un centre d'appels (compte rep rattaché à une société) : prendre ses appels, se former, voir son planning. */
+const AGENT_KEYS = ['gigs.view', 'calls.view', 'calls.listen', 'training.view'];
+
+export function agentPermissions() {
+  return withKeys(AGENT_KEYS);
+}
+
+export function isCallCenterAgent(user) {
+  return user?.typeUser === 'rep' && Boolean(user?.employerCompanyId);
+}

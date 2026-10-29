@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import User from '../models/User.js';
 import CompanyMembership from '../models/CompanyMembership.js';
 import CallCenterWorkspaceState from '../models/CallCenterWorkspaceState.js';
+import { isCallCenterAgent } from '../constants/companyPermissions.js';
 import { normalizeWorkspaceInput } from './callCenterWorkspaceStateValidation.js';
 
 function fail(statusCode, message) {
@@ -13,7 +14,7 @@ function fail(statusCode, message) {
 const oid = (v) => new mongoose.Types.ObjectId(String(v));
 const isId = (v) => mongoose.Types.ObjectId.isValid(String(v || ''));
 
-/** Le propriétaire de la société, ou une personne membre de son équipe : le portail est un compte du centre. */
+/** Le propriétaire de la société, une personne membre de son équipe, ou un agent qu'elle emploie. */
 async function resolveAccess(callerUserId, companyId) {
   if (!callerUserId || !isId(callerUserId)) throw fail(401, 'Authentication required');
   if (!isId(companyId)) throw fail(400, 'Valid companyId is required');
@@ -22,6 +23,7 @@ async function resolveAccess(callerUserId, companyId) {
   const company = await mongoose.connection.db.collection('companies').findOne({ _id: oid(companyId) });
   if (!company) throw fail(404, 'Company not found');
   if (String(company.userId) === String(callerUserId)) return;
+  if (isCallCenterAgent(caller) && String(caller.employerCompanyId) === String(companyId)) return;
   const member = await CompanyMembership.findOne({ companyId: oid(companyId), userId: oid(callerUserId) }).select('_id').lean();
   if (!member) throw fail(403, 'You do not belong to this company');
 }
