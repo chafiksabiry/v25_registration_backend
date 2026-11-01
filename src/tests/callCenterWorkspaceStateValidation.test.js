@@ -47,3 +47,24 @@ const both = { company: { queues: [] }, user: { academy: {} } };
 assert.deepEqual(writableParts('agent', both), { user: { academy: {} } }, 'un agent n’écrit pas l’état du centre');
 assert.deepEqual(writableParts(undefined, both), both, 'le propriétaire et les membres écrivent les deux parties');
 console.log('callCenterWorkspaceStateValidation OK');
+
+// écran client : adresses https seulement, domaines normalisés, rien d'injectable
+const GIG = '6ae32645b98a1af2bcb10953';
+const cs = normalizeWorkspaceInput({ company: { clientScreen: {
+  domains: ['CRM.Client.FR', '*.autre.com', 'javascript:alert(1)', 'http://x.fr', '10.0.0.1', 'crm.client.fr'],
+  byOperation: {
+    [GIG]: { url: 'https://crm.client.fr/fiche?tel={telephone}&ref={reference_appel}&n={nom}' },
+    '6ae32645b98a1af2bcb10954': { url: 'http://crm.client.fr/' },
+    '6ae32645b98a1af2bcb10955': { url: 'javascript:alert(1)' },
+    '6ae32645b98a1af2bcb10956': { url: 'https://{nom}.client.fr/' },
+    '6ae32645b98a1af2bcb10957': { url: 'https://crm.client.fr/{inconnu}' },
+    '6ae32645b98a1af2bcb10958': { url: 'https://u:p@crm.client.fr/' },
+    'pas-un-id': { url: 'https://crm.client.fr/' },
+  },
+} } });
+assert.deepEqual(cs.errors, []);
+assert.deepEqual(cs.value.company.clientScreen.domains, ['crm.client.fr', '*.autre.com']);
+assert.deepEqual(Object.keys(cs.value.company.clientScreen.byOperation), [GIG], 'seules les adresses https valides sont gardées');
+assert.equal(normalizeWorkspaceInput({ company: { clientScreen: 'x' } }).errors.length, 1);
+// un agent ne modifie pas l'écran client (état partagé du centre)
+assert.equal(writableParts('agent', cs.value).company, undefined);
