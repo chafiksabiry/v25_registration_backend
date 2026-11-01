@@ -12,6 +12,7 @@ import { verificationEmail, verificationSms } from '../utils/harxMessages.js';
 import { sendAppEmail } from './brevoMail.js';
 import companyMemberService from './companyMemberService.js';
 import CompanyMembership from '../models/CompanyMembership.js';
+import { activeEmployments, defaultCompanyId } from '../utils/employments.js';
 import { hashReengagementToken } from '../utils/reengagementToken.js';
 
 
@@ -696,22 +697,29 @@ class AuthService {
         console.error('checkUserType: produit du membre illisible:', error.message);
       }
     }
-    // Un agent employé par un centre arrive dans le produit du propriétaire de ce centre.
-    if (!product && user.typeUser === 'rep' && user.employerCompanyId) {
-      try {
-        const company = await mongoose.connection.db.collection('companies').findOne({ _id: new mongoose.Types.ObjectId(String(user.employerCompanyId)) }, { projection: { userId: 1 } });
-        if (company?.userId) {
-          const owner = await userRepository.findById(company.userId);
-          product = owner?.product || null;
+    // Un agent employé par un centre arrive dans le produit du propriétaire d'un de ses centres (le défaut d'abord).
+    const defaultCenter = user.typeUser === 'rep' ? defaultCompanyId(user) : null;
+    if (!product && defaultCenter) {
+      const ordered = [defaultCenter, ...activeEmployments(user).map((e) => e.companyId).filter((id) => id !== defaultCenter)];
+      for (const centerId of ordered) {
+        if (product) break;
+        try {
+          const company = await mongoose.connection.db.collection('companies').findOne({ _id: new mongoose.Types.ObjectId(String(centerId)) }, { projection: { userId: 1 } });
+          if (company?.userId) {
+            const owner = await userRepository.findById(company.userId);
+            product = owner?.product || null;
+          }
+        } catch (error) {
+          console.error('checkUserType: produit de l\'agent illisible:', error.message);
         }
-      } catch (error) {
-        console.error('checkUserType: produit de l\'agent illisible:', error.message);
       }
     }
     return {
       userType: user.typeUser,
       mustChangePassword: Boolean(user.mustChangePassword),
-      employerCompanyId: user.employerCompanyId ? String(user.employerCompanyId) : null,
+      // Centre par défaut (ancien champ mono-valué, lecture compatible) et liste de tous les emplois actifs.
+      employerCompanyId: user.typeUser === 'rep' ? defaultCenter : (user.employerCompanyId ? String(user.employerCompanyId) : null),
+      employments: user.typeUser === 'rep' ? activeEmployments(user).map((e) => e.companyId) : [],
       product,
     };
   }
