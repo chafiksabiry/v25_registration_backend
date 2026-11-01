@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import User from '../models/User.js';
 import CallCenterClient from '../models/CallCenterClient.js';
+import CallCenterClientAccess from '../models/CallCenterClientAccess.js';
 import CallCenterOperationClient from '../models/CallCenterOperationClient.js';
 import CallCenterOperationProfile from '../models/CallCenterOperationProfile.js';
 import { clientView, normalizeClientInput } from './callCenterClientValidation.js';
@@ -18,7 +19,7 @@ const oid = (v) => new mongoose.Types.ObjectId(String(v));
 const isId = (v) => mongoose.Types.ObjectId.isValid(String(v || ''));
 
 /** Même contrôle d'appartenance que la gestion des agents : seul le propriétaire de la société agit sur ses clients. */
-async function resolveOwnedCompany(callerUserId, companyId) {
+export async function resolveOwnedCompany(callerUserId, companyId) {
   if (!callerUserId) throw fail(401, 'Authentication required');
   if (!isId(companyId)) throw fail(400, 'Valid companyId is required');
   const caller = await User.findById(callerUserId);
@@ -32,7 +33,7 @@ async function resolveOwnedCompany(callerUserId, companyId) {
   return company;
 }
 
-async function ownedClient(companyId, id) {
+export async function ownedClient(companyId, id) {
   if (!isId(id)) throw fail(400, 'Valid client id is required');
   const client = await CallCenterClient.findOne({ _id: oid(id), companyId: oid(companyId) });
   if (!client) throw fail(404, 'Client not found');
@@ -89,6 +90,8 @@ export async function deleteClient(callerUserId, companyId, id) {
   const client = await ownedClient(companyId, id);
   const linked = await CallCenterOperationClient.countDocuments({ companyId: oid(companyId), clientId: client._id });
   if (linked > 0) throw fail(409, `${linked} opération(s) sont rattachées à ce client : rattachez-les à un autre client, ou archivez-le.`);
+  // Les contacts invités au portail de ce client perdent leur accès avec lui.
+  await CallCenterClientAccess.updateMany({ companyId: oid(companyId), clientId: client._id }, { $set: { status: 'revoked' } });
   await client.deleteOne();
   return { id: String(client._id) };
 }

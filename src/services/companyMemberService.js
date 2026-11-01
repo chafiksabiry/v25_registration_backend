@@ -15,7 +15,9 @@ import {
   PERMISSION_GROUPS,
   agentPermissions,
   isCallCenterAgent,
+  isClientPortalUser,
 } from '../constants/companyPermissions.js';
+import { clientPortalSession } from './callCenterClientPortalService.js';
 
 function generateTempPassword(length = 12) {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@$%';
@@ -154,6 +156,8 @@ class CompanyMemberService {
         preset: 'owner',
       };
     }
+    // Contact d'un client (portail en lecture seule) : traité avant le repli « titulaire » ci-dessous, qui donnerait tout.
+    if (isClientPortalUser(caller)) return clientPortalSession(caller);
     const membership = await CompanyMembership.findOne({ userId: caller._id }).sort({ createdAt: -1 });
     // Un agent employé par un centre : sa société est celle de son employeur, avec les seuls droits d'un agent.
     if (!membership && isCallCenterAgent(caller)) {

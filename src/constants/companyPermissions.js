@@ -119,3 +119,17 @@ export function agentPermissions() {
 export function isCallCenterAgent(user) {
   return user?.typeUser === 'rep' && Boolean(user?.employerCompanyId);
 }
+
+/**
+ * Contact d'un client du centre (portail client, lecture seule) : il consulte les appels de SES opérations, et les
+ * écoute seulement si le centre l'autorise. Aucun droit de gestion, quel que soit l'écran.
+ */
+export function clientPermissions({ allowRecordings = false } = {}) {
+  return withKeys(allowRecordings ? ['calls.view', 'calls.listen'] : ['calls.view']);
+}
+
+export const CLIENT_PORTAL_USER_TYPE = 'client-portal';
+
+export function isClientPortalUser(user) {
+  return user?.typeUser === CLIENT_PORTAL_USER_TYPE;
+}

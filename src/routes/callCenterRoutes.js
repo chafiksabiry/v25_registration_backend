@@ -1,5 +1,5 @@
 import express from 'express';
-import { authenticateCallCenter } from '../middleware/callCenterAuth.js';
+import { authenticateCallCenter, authenticateUserJwt } from '../middleware/callCenterAuth.js';
 import {
   createCallCenterAgent,
   listCallCenterAgents,
@@ -34,6 +34,16 @@ import {
   setAgentShifts,
 } from '../controllers/callCenterScheduleController.js';
 
+import {
+  getBranding,
+  inviteClientContact,
+  listClientAccess,
+  resendClientInvitation,
+  revokeClientAccess,
+  setBranding,
+  updateClientAccess,
+} from '../controllers/callCenterClientPortalController.js';
+
 const router = express.Router();
 
 router.use(authenticateCallCenter);
@@ -51,6 +61,16 @@ router.post('/clients/:id/restore', restoreClient);
 router.delete('/clients/:id', deleteClient);
 router.get('/operation-clients', listOperationClients);
 router.put('/operation-clients/:gigId', setOperationClient);
+
+// Portail client (multi-clients) : marque blanche et accès en lecture seule des contacts d'un client.
+// Jeton de connexion exigé (pas de repli sur un en-tête d'identifiant), propriétaire du centre uniquement.
+router.get('/branding', authenticateUserJwt, getBranding);
+router.put('/branding', authenticateUserJwt, setBranding);
+router.get('/client-access', authenticateUserJwt, listClientAccess);
+router.post('/client-access', authenticateUserJwt, inviteClientContact);
+router.patch('/client-access/:userId', authenticateUserJwt, updateClientAccess);
+router.post('/client-access/:userId/resend', authenticateUserJwt, resendClientInvitation);
+router.delete('/client-access/:userId', authenticateUserJwt, revokeClientAccess);
 
 // Avis sur la mise en route
 router.post('/onboarding-feedback', saveOnboardingFeedback);
