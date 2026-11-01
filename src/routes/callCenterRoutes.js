@@ -23,6 +23,17 @@ import {
   saveWorkspaceState,
 } from '../controllers/callCenterClientController.js';
 
+import {
+  cancelRequest,
+  createRequest,
+  decideRequest,
+  listAgentShifts,
+  listMyRequests,
+  listMyShifts,
+  listRequests,
+  setAgentShifts,
+} from '../controllers/callCenterScheduleController.js';
+
 const router = express.Router();
 
 router.use(authenticateCallCenter);
@@ -51,5 +62,15 @@ router.put('/operation-profiles/:gigId', setOperationProfile);
 // État du portail conservé côté serveur (files, mise en route, lignes testées ; académie et préférences de la personne)
 router.get('/workspace-state', getWorkspaceState);
 router.put('/workspace-state', saveWorkspaceState);
+
+// Planning des agents : l'agent lit son planning et fait ses demandes ; le centre planifie et répond
+router.get('/schedule/my-shifts', listMyShifts);
+router.get('/schedule/my-requests', listMyRequests);
+router.post('/schedule/requests', createRequest);
+router.post('/schedule/requests/:id/cancel', cancelRequest);
+router.get('/schedule/shifts', listAgentShifts);
+router.put('/schedule/agents/:userId/shifts', setAgentShifts);
+router.get('/schedule/requests', listRequests);
+router.post('/schedule/requests/:id/decision', decideRequest);
 
 export default router;
