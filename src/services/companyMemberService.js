@@ -6,6 +6,7 @@ import AgentInvitation from '../models/AgentInvitation.js';
 import { teamMemberInvitationEmail } from '../utils/harxMessages.js';
 import { appLoginUrl, sendAppEmail } from './brevoMail.js';
 import { roleConflict } from './teamRoleConflicts.js';
+import { assertCanAddSeat } from './companyProduct.js';
 import {
   allPermissions,
   emptyPermissions,
@@ -349,6 +350,7 @@ class CompanyMemberService {
     } = payload || {};
 
     const { caller, company } = await assertCan(callerUserId, companyId, 'members.invite');
+    await assertCanAddSeat(company._id);
     const normalizedEmail = normalizeEmail(email);
     if (!normalizedEmail || !normalizedEmail.includes('@')) {
       throw httpError('Valid email is required', 400);

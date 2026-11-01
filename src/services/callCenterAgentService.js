@@ -6,6 +6,7 @@ import CompanyMembership from '../models/CompanyMembership.js';
 import { agentInvitationNoticeEmail, inviteEmail } from '../utils/harxMessages.js';
 import { appLoginUrl, sendAppEmail } from './brevoMail.js';
 import { roleConflict } from './teamRoleConflicts.js';
+import { assertCanAddSeat } from './companyProduct.js';
 import { serializeInvitedAccount } from '../utils/invitedAccount.js';
 
 function generateTempPassword(length = 12) {
@@ -183,6 +184,7 @@ class CallCenterAgentService {
     } = payload || {};
 
     const { caller, company } = await resolveCallerCompany(callerUserId, companyId);
+    await assertCanAddSeat(companyId);
 
     const normalizedEmail = normalizeEmail(email);
     if (!normalizedEmail || !normalizedEmail.includes('@')) {
@@ -477,6 +479,8 @@ class CallCenterAgentService {
     if (user && String(user.employerCompanyId) !== String(companyId)) {
       const invitation = await AgentInvitation.findOne({ companyId, kind: { $ne: 'member' }, email: normalizeEmail(user.email) });
       if (invitation && invitation.status !== 'accepted') {
+        // Relancer une invitation refusée rouvre un siège : même règle que pour une nouvelle invitation.
+        if (invitation.status === 'declined') await assertCanAddSeat(companyId);
         const dbForNotice = mongoose.connection.db;
         const companyForNotice = await dbForNotice.collection('companies').findOne({
           _id: new mongoose.Types.ObjectId(companyId),
