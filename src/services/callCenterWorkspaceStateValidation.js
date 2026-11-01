@@ -101,6 +101,7 @@ export function normalizeWorkspaceInput(body) {
       take('onboarding', normalizeOnboarding);
       take('profile', normalizeProfile);
       take('testCall', normalizeTestCall);
+      take('clientScreen', normalizeClientScreen);
       if (has(body.company, 'testCallOk')) c.testCallOk = Boolean(body.company.testCallOk);
       value.company = c;
     }
@@ -125,6 +126,58 @@ export function normalizeWorkspaceInput(body) {
     }
   }
   return { value, errors };
+}
+
+const MAX_CLIENT_DOMAINS = 50;
+const MAX_CLIENT_OPERATIONS = 200;
+const MAX_CLIENT_URL = 2000;
+const HOST_RE = /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
+const MARKER_RE = /\{([a-z_]+)\}/g;
+const MARKERS = ['telephone', 'nom', 'reference_appel'];
+
+/** Domaine autorisé : « crm.client.fr » ou « *.client.fr » ; null sinon (pas d'adresse IP, pas de schéma autre que https). */
+function normalizeClientDomain(v) {
+  let d = String(v ?? '').trim().toLowerCase().replace(/^https:\/\//, '');
+  if (/^[a-z][a-z0-9+.-]*:/.test(d)) return null;
+  d = d.split(/[/?#]/)[0];
+  const wildcard = d.startsWith('*.');
+  const host = wildcard ? d.slice(2) : d;
+  if (!HOST_RE.test(host) || /^\d+(\.\d+)+$/.test(host)) return null;
+  return wildcard ? `*.${host}` : host;
+}
+
+/** Modèle d'adresse de l'écran client : https obligatoire, marqueurs connus seulement et jamais dans le nom d'hôte, sans identifiants ni port. */
+function isValidClientUrl(url) {
+  if (typeof url !== 'string' || url.length > MAX_CLIENT_URL) return false;
+  if (!/^https:\/\//i.test(url) || /[\s<>"'`\\\u0000-\u001f]/.test(url)) return false;
+  if ([...url.matchAll(MARKER_RE)].some((m) => !MARKERS.includes(m[1]))) return false;
+  if (/[{}]/.test(url.replace(MARKER_RE, ''))) return false;
+  const authority = url.slice('https://'.length).split(/[/?#]/)[0];
+  if (authority.includes('{') || authority.includes('@')) return false;
+  try {
+    const u = new URL(url.replace(MARKER_RE, 'x'));
+    return u.protocol === 'https:' && !u.port && HOST_RE.test(u.hostname);
+  } catch { return false; }
+}
+
+/** Écran client (iframe du client pendant l'appel) : domaines autorisés du centre + adresse par opération. */
+function normalizeClientScreen(c) {
+  if (!isObj(c)) return { error: 'L’écran client doit être un objet.' };
+  const domains = [];
+  for (const raw of Array.isArray(c.domains) ? c.domains : []) {
+    const d = normalizeClientDomain(raw);
+    if (d && !domains.includes(d)) domains.push(d);
+    if (domains.length >= MAX_CLIENT_DOMAINS) break;
+  }
+  const byOperation = {};
+  if (isObj(c.byOperation)) {
+    for (const [gigId, v] of Object.entries(c.byOperation).slice(0, MAX_CLIENT_OPERATIONS)) {
+      if (!/^[a-f\d]{24}$/i.test(gigId) || !isObj(v)) continue;
+      const url = String(v.url ?? '').trim();
+      if (isValidClientUrl(url)) byOperation[gigId] = { url };
+    }
+  }
+  return { value: { domains, byOperation } };
 }
 
 /** Un agent n'enregistre que ses propres préférences : l'état partagé du centre n'est pas de son ressort. */
