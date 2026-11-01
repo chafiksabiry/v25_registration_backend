@@ -248,3 +248,30 @@ export function verificationSms(code) {
     `Valable 5 minutes. Ne le partagez avec personne.`
   );
 }
+
+/** Invitation d'un contact client au portail du centre (lecture seule) : le centre est nommé, pas HARX. */
+export function clientPortalInvitationEmail({ firstName, email, tempPassword, centerName, clientName, loginUrl }) {
+  const safeName = escapeHtml(firstName || '');
+  const center = escapeHtml(centerName || 'Votre centre d\'appels');
+  const client = escapeHtml(clientName || 'votre entreprise');
+  const safeUrl = escapeHtml(loginUrl);
+  const credentials = tempPassword
+    ? `<div style="background:#fff1f2;border:1px solid #fecdd3;border-radius:16px;padding:16px 18px;margin:0 0 22px;">
+          <p style="margin:0 0 8px;font-size:14px;color:#1e293b;"><strong>E-mail :</strong> ${escapeHtml(email)}</p>
+          <p style="margin:0;font-size:14px;color:#1e293b;"><strong>Mot de passe temporaire :</strong> ${escapeHtml(tempPassword)}</p>
+        </div>`
+    : '';
+  return {
+    subject: `${centerName || 'Votre centre d\'appels'} — accès à votre portail client`,
+    html: harxEmailShell({
+      eyebrow: 'PORTAIL CLIENT',
+      title: 'Suivez votre activité',
+      intro: `Bonjour ${safeName}, ${center} vous ouvre l'accès à « Mon activité » pour ${client} : les appels passés pour votre compte, leur durée et leur qualité. L'accès est en lecture seule.`,
+      footer: 'Pour votre sécurité, changez ce mot de passe dès la première connexion. Si vous ne connaissez pas ce centre, ignorez ce message.',
+      bodyHtml: `${credentials}
+        <p style="margin:0;text-align:center;">
+          <a href="${safeUrl}" style="display:inline-block;background-color:#ec4899;background-image:linear-gradient(90deg,#ff4d4d 0%,#ec4899 100%);color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:12px;font-weight:700;">Ouvrir mon portail</a>
+        </p>`,
+    }),
+  };
+}
