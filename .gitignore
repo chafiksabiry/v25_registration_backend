@@ -5,3 +5,5 @@ out/
 reps_clean.*
 reps_excluded.csv
 tokens_*.csv
+
+/node_modules
