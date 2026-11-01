@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 import User from '../models/User.js';
 import CompanyMembership from '../models/CompanyMembership.js';
 import CallCenterWorkspaceState from '../models/CallCenterWorkspaceState.js';
-import { isCallCenterAgent } from '../constants/companyPermissions.js';
+import { hasEmployment } from '../utils/employments.js';
 import { normalizeWorkspaceInput, writableParts } from './callCenterWorkspaceStateValidation.js';
 
 function fail(statusCode, message) {
@@ -23,7 +23,7 @@ async function resolveAccess(callerUserId, companyId) {
   const company = await mongoose.connection.db.collection('companies').findOne({ _id: oid(companyId) });
   if (!company) throw fail(404, 'Company not found');
   if (String(company.userId) === String(callerUserId)) return;
-  if (isCallCenterAgent(caller) && String(caller.employerCompanyId) === String(companyId)) return 'agent';
+  if (hasEmployment(caller, companyId)) return 'agent';
   const member = await CompanyMembership.findOne({ companyId: oid(companyId), userId: oid(callerUserId) }).select('_id').lean();
   if (!member) throw fail(403, 'You do not belong to this company');
 }

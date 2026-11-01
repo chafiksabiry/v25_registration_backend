@@ -107,6 +107,24 @@ const userSchema = new mongoose.Schema({
     default: null,
     index: true,
   },
+  /**
+   * Emplois d'un agent (un compte peut travailler pour plusieurs centres). `employerCompanyId` reste le centre par
+   * défaut et vaut entrée active tant que la liste ne le contredit pas (voir utils/employments.js).
+   */
+  employments: {
+    type: [
+      new mongoose.Schema(
+        {
+          companyId: { type: mongoose.Schema.Types.ObjectId, required: true },
+          status: { type: String, enum: ['active', 'ended'], default: 'active' },
+          startedAt: { type: Date, default: Date.now },
+          endedAt: { type: Date, default: null },
+        },
+        { _id: false }
+      ),
+    ],
+    default: [],
+  },
   /** Set when a call center provisions the account with a temporary password. */
   mustChangePassword: {
     type: Boolean,

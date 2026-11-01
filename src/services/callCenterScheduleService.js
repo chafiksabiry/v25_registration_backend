@@ -3,7 +3,7 @@ import User from '../models/User.js';
 import CompanyMembership from '../models/CompanyMembership.js';
 import AgentShift from '../models/AgentShift.js';
 import ScheduleRequest from '../models/ScheduleRequest.js';
-import { isCallCenterAgent } from '../constants/companyPermissions.js';
+import { hasEmployment } from '../utils/employments.js';
 import {
   isDate,
   normalizeDecisionInput,
@@ -38,7 +38,7 @@ async function resolveActor(callerUserId, companyId) {
   const company = await mongoose.connection.db.collection('companies').findOne({ _id: oid(companyId) });
   if (!company) throw fail(404, 'Company not found');
   if (String(company.userId) === String(callerUserId)) return { role: 'owner', canManage: true, caller };
-  if (isCallCenterAgent(caller) && String(caller.employerCompanyId) === String(companyId)) return { role: 'agent', canManage: false, caller };
+  if (hasEmployment(caller, companyId)) return { role: 'agent', canManage: false, caller };
   const membership = await CompanyMembership.findOne({ companyId: oid(companyId), userId: oid(callerUserId) }).select('permissions').lean();
   if (!membership) throw fail(403, 'You do not belong to this company');
   return { role: 'member', canManage: membership.permissions?.[MANAGE_PERMISSION] === true, caller };
@@ -87,7 +87,7 @@ export async function setAgentShifts(callerUserId, companyId, agentUserId, body)
   needManage(actor);
   if (!isId(agentUserId)) throw fail(400, 'Valid agent id is required');
   const agent = await User.findById(agentUserId);
-  if (!agent || !isCallCenterAgent(agent) || String(agent.employerCompanyId) !== String(companyId)) throw fail(404, 'Agent not found in this company');
+  if (!agent || !hasEmployment(agent, companyId)) throw fail(404, 'Agent not found in this company');
   const { errors, value } = normalizeShiftsInput(body);
   if (errors.length) throw fail(400, errors.join(' '));
   await AgentShift.deleteMany({ companyId: oid(companyId), userId: agent._id, date: { $gte: value.from, $lte: value.to } });

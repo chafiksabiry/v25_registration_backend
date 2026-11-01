@@ -5,6 +5,7 @@ import {
   listCallCenterAgents,
   resendCallCenterAgentInvite,
   removeCallCenterAgentInvitation,
+  removeCallCenterAgentEmployment,
 } from '../controllers/callCenterAgentController.js';
 
 import {
@@ -41,6 +42,8 @@ router.get('/agents', listCallCenterAgents);
 router.post('/agents', createCallCenterAgent);
 router.post('/agents/:userId/resend-invite', resendCallCenterAgentInvite);
 router.delete('/agents/:userId', removeCallCenterAgentInvitation);
+// Retire l'agent de CE centre seulement (ses autres centres ne sont pas touchés).
+router.delete('/agents/:userId/employment', removeCallCenterAgentEmployment);
 
 // Clients du centre et rattachement client / opération
 router.get('/clients', listClients);

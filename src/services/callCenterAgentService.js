@@ -8,6 +8,7 @@ import { appLoginUrl, sendAppEmail } from './brevoMail.js';
 import { roleConflict } from './teamRoleConflicts.js';
 import { assertCanAddSeat } from './companyProduct.js';
 import { serializeInvitedAccount } from '../utils/invitedAccount.js';
+import { activeEmployments, hasEmployment, withEmployment, withoutEmployment } from '../utils/employments.js';
 
 function generateTempPassword(length = 12) {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@$%';
@@ -155,7 +156,13 @@ async function sendInvitationNotice({ user, company }) {
   return sendAppEmail({ to: user.email, subject: message.subject, html: message.html });
 }
 
-function serializeAgentUser(user, agentId = null) {
+/**
+ * Un agent vu par UN centre : identité (nom, e-mail, téléphone) et statut de son emploi dans ce centre. `forCompanyId`
+ * est le centre qui regarde : l'employeur par défaut du compte (peut-être un autre centre) n'est jamais exposé.
+ */
+export function serializeAgentUser(user, agentId = null, forCompanyId = null) {
+  const here = forCompanyId ? String(forCompanyId) : (user.employerCompanyId ? String(user.employerCompanyId) : null);
+  const origin = Boolean(here) && user.employerCompanyId && String(user.employerCompanyId) === here;
   return {
     userId: String(user._id),
     agentId,
@@ -163,13 +170,17 @@ function serializeAgentUser(user, agentId = null) {
     email: user.email,
     phone: user.phone || '',
     typeUser: user.typeUser,
-    employerCompanyId: user.employerCompanyId ? String(user.employerCompanyId) : null,
-    mustChangePassword: Boolean(user.mustChangePassword),
-    invitationStatus: user.invitationStatus || 'none',
-    invitedAt: user.invitedAt || null,
+    employerCompanyId: here,
+    mustChangePassword: origin ? Boolean(user.mustChangePassword) : false,
+    invitationStatus: origin ? user.invitationStatus || 'none' : 'active',
+    invitedAt: origin ? user.invitedAt || null : null,
     isVerified: Boolean(user.isVerified),
     createdAt: user.createdAt,
   };
+}
+
+function activeOtherEmployments(user, companyId) {
+  return activeEmployments(user).some((e) => e.companyId !== String(companyId));
 }
 
 class CallCenterAgentService {
@@ -207,7 +218,7 @@ class CallCenterAgentService {
 
     const existing = await User.findOne({ email: normalizedEmail });
     if (existing) {
-      if (existing.employerCompanyId && String(existing.employerCompanyId) === String(companyId)) {
+      if (hasEmployment(existing, companyId)) {
         const err = new Error('This agent is already on your team');
         err.statusCode = 409;
         throw err;
@@ -329,12 +340,14 @@ class CallCenterAgentService {
 
   async listAgents(callerUserId, companyId) {
     await resolveCallerCompany(callerUserId, companyId);
-    const users = await User.find({
-      employerCompanyId: companyId,
+    // Employés de CE centre : ancien employeur mono-valué ou emploi actif de la liste (agent partagé entre centres).
+    const candidates = await User.find({
       typeUser: 'rep',
+      $or: [{ employerCompanyId: companyId }, { 'employments.companyId': companyId }],
     })
       .sort({ createdAt: -1 })
       .select('-password -verificationCode -pendingChanges');
+    const users = candidates.filter((u) => hasEmployment(u, companyId));
 
     const db = mongoose.connection.db;
     const userIds = users.map((u) => u._id);
@@ -345,7 +358,7 @@ class CallCenterAgentService {
       .toArray();
     const agentByUser = new Map(agents.map((a) => [String(a.userId), String(a._id)]));
 
-    const staff = users.map((u) => serializeAgentUser(u, agentByUser.get(String(u._id)) || null));
+    const staff = users.map((u) => serializeAgentUser(u, agentByUser.get(String(u._id)) || null, companyId));
 
     // People who already had a HARX account are linked through an invitation they accept after signing in.
     const invitations = await AgentInvitation.find({ companyId, kind: { $ne: 'member' }, status: { $in: ['pending', 'accepted'] } }).sort({ invitedAt: -1 });
@@ -353,10 +366,19 @@ class CallCenterAgentService {
       '-password -verificationCode -pendingChanges'
     );
     const userById = new Map(invitedUsers.map((u) => [String(u._id), u]));
-    const invited = invitations
-      .filter((i) => i.userId && userById.has(String(i.userId)))
-      .map((i) => serializeInvitedAccount(userById.get(String(i.userId)), i));
-    return [...staff, ...invited];
+    // Une invitation acceptée a aussi créé un emploi : une seule ligne par personne, avec ce que CE centre a saisi.
+    const invitedByUser = new Map();
+    for (const i of invitations) {
+      if (i.userId && userById.has(String(i.userId)) && !invitedByUser.has(String(i.userId))) {
+        invitedByUser.set(String(i.userId), serializeInvitedAccount(userById.get(String(i.userId)), i));
+      }
+    }
+    const merged = staff.map((row) => {
+      const mine = invitedByUser.get(row.userId);
+      if (mine) invitedByUser.delete(row.userId);
+      return mine && mine.invitationStatus === 'active' ? { ...mine, agentId: row.agentId } : row;
+    });
+    return [...merged, ...invitedByUser.values()];
   }
 
   /** Pending invitations addressed to the signed-in person's e-mail. */
@@ -402,6 +424,16 @@ class CallCenterAgentService {
     invitation.userId = user._id;
     invitation.respondedAt = new Date();
     await invitation.save();
+    if (accept && invitation.kind !== 'member') {
+      // Agent d'un centre : l'emploi s'AJOUTE à ceux que la personne a déjà, sans toucher aux autres centres.
+      const account = await User.findById(user._id);
+      if (account && account.typeUser === 'rep') {
+        const next = withEmployment(account, invitation.companyId);
+        account.employments = next.employments;
+        account.employerCompanyId = next.employerCompanyId;
+        await account.save();
+      }
+    }
     if (accept && invitation.kind === 'member') {
       // Manager / administratif : l'acceptation crée le rattachement à l'entreprise avec les droits invités.
       await CompanyMembership.findOneAndUpdate(
@@ -449,7 +481,7 @@ class CallCenterAgentService {
     }
 
     const user = await User.findById(agentUserId);
-    if (!user || String(user.employerCompanyId) !== String(companyId) || user.typeUser !== 'rep') {
+    if (!user || !hasEmployment(user, companyId)) {
       const err = new Error('Invitation not found on this call center');
       err.statusCode = 404;
       throw err;
@@ -459,9 +491,43 @@ class CallCenterAgentService {
       err.statusCode = 409;
       throw err;
     }
+    // Compte partagé avec un autre centre : on ne supprime jamais le compte, seulement l'emploi dans ce centre.
+    if (activeOtherEmployments(user, companyId)) {
+      await this.applyEnd(user, companyId);
+      return { removed: true, kind: 'employment' };
+    }
     await mongoose.connection.db.collection('agents').deleteMany({ userId: user._id });
     await User.deleteOne({ _id: user._id });
     return { removed: true, kind: 'account' };
+  }
+
+  async applyEnd(user, companyId) {
+    const next = withoutEmployment(user, companyId);
+    user.employments = next.employments;
+    user.employerCompanyId = next.employerCompanyId;
+    await user.save();
+  }
+
+  /**
+   * Retire l'agent de CE centre (emploi terminé, invitation supprimée pour pouvoir le ré-inviter). Les autres
+   * emplois, son compte et ses données des autres centres ne sont pas touchés.
+   */
+  async removeEmployment(callerUserId, companyId, agentUserId) {
+    await resolveCallerCompany(callerUserId, companyId);
+    if (!agentUserId || !mongoose.Types.ObjectId.isValid(agentUserId)) {
+      const err = new Error('Valid agent userId is required');
+      err.statusCode = 400;
+      throw err;
+    }
+    const user = await User.findById(agentUserId);
+    if (!user || !hasEmployment(user, companyId)) {
+      const err = new Error('Agent not found on this call center');
+      err.statusCode = 404;
+      throw err;
+    }
+    await this.applyEnd(user, companyId);
+    await AgentInvitation.deleteOne({ companyId, kind: { $ne: 'member' }, userId: user._id });
+    return { removed: true, kind: 'employment' };
   }
 
   async resendInvite(callerUserId, companyId, agentUserId) {
@@ -476,7 +542,7 @@ class CallCenterAgentService {
     const user = await User.findById(agentUserId);
 
     // Existing HARX account invited by e-mail: remind them to sign in, never touch their password.
-    if (user && String(user.employerCompanyId) !== String(companyId)) {
+    if (user && !hasEmployment(user, companyId)) {
       const invitation = await AgentInvitation.findOne({ companyId, kind: { $ne: 'member' }, email: normalizeEmail(user.email) });
       if (invitation && invitation.status !== 'accepted') {
         // Relancer une invitation refusée rouvre un siège : même règle que pour une nouvelle invitation.
@@ -496,7 +562,7 @@ class CallCenterAgentService {
       }
     }
 
-    if (!user || String(user.employerCompanyId) !== String(companyId)) {
+    if (!user || !hasEmployment(user, companyId)) {
       const err = new Error('Agent not found on this call center');
       err.statusCode = 404;
       throw err;

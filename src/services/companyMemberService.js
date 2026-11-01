@@ -7,6 +7,7 @@ import { teamMemberInvitationEmail } from '../utils/harxMessages.js';
 import { appLoginUrl, sendAppEmail } from './brevoMail.js';
 import { roleConflict } from './teamRoleConflicts.js';
 import { assertCanAddSeat } from './companyProduct.js';
+import { activeEmployments, hasEmployment, resolveActiveCompanyId } from '../utils/employments.js';
 import {
   allPermissions,
   emptyPermissions,
@@ -138,7 +139,21 @@ class CompanyMemberService {
     };
   }
 
-  async session(callerUserId) {
+  /** Emplois actifs de l'agent avec le nom de chaque centre (ses propres emplois seulement). */
+  async agentEmployments(caller) {
+    const active = activeEmployments(caller);
+    if (!active.length) return [];
+    const ids = active.map((e) => e.companyId).filter((id) => mongoose.Types.ObjectId.isValid(id)).map((id) => new mongoose.Types.ObjectId(id));
+    const docs = await mongoose.connection.db.collection('companies').find({ _id: { $in: ids } }).project({ name: 1, companyName: 1, title: 1 }).toArray();
+    const nameById = new Map(docs.map((c) => [String(c._id), c.name || c.companyName || c.title || '']));
+    return active.map((e) => ({ companyId: e.companyId, companyName: nameById.get(e.companyId) || '', status: e.status, startedAt: e.startedAt }));
+  }
+
+  /**
+   * Session de la personne connectée. `requestedCompanyId` = centre actif choisi par un agent qui travaille pour
+   * plusieurs centres : accepté seulement s'il fait partie de ses emplois, sinon son centre par défaut.
+   */
+  async session(callerUserId, requestedCompanyId = null) {
     const caller = await loadCaller(callerUserId);
     const owned = await mongoose.connection.db.collection('companies').findOne({
       $or: [
@@ -150,17 +165,21 @@ class CompanyMemberService {
       return {
         isOwner: true,
         companyId: String(owned._id),
+        companyIds: [String(owned._id)],
         permissions: allPermissions(),
         preset: 'owner',
       };
     }
     const membership = await CompanyMembership.findOne({ userId: caller._id }).sort({ createdAt: -1 });
-    // Un agent employé par un centre : sa société est celle de son employeur, avec les seuls droits d'un agent.
-    if (!membership && isCallCenterAgent(caller)) {
+    // Un agent employé par un centre : sa société est celle du centre actif (l'un de ses emplois), avec les seuls droits d'un agent.
+    if ((!membership || hasEmployment(caller, requestedCompanyId)) && isCallCenterAgent(caller)) {
+      const employments = await this.agentEmployments(caller);
       return {
         isOwner: false,
         isAgent: true,
-        companyId: String(caller.employerCompanyId),
+        companyId: resolveActiveCompanyId(caller, requestedCompanyId),
+        companyIds: employments.map((e) => e.companyId),
+        employments,
         permissions: agentPermissions(),
         preset: 'agent',
       };
@@ -168,7 +187,7 @@ class CompanyMemberService {
     // No membership document means the account is not a restricted teammate
     // (company owner, or a user created before team invites). Keep full access.
     if (!membership) {
-      return { isOwner: true, companyId: null, permissions: allPermissions(), preset: 'owner' };
+      return { isOwner: true, companyId: null, companyIds: [], permissions: allPermissions(), preset: 'owner' };
     }
     await this.markPresent(caller._id);
     const fresh = await CompanyMembership.findById(membership._id);
@@ -176,6 +195,7 @@ class CompanyMemberService {
       isOwner: false,
       isAgent: false,
       companyId: String(membership.companyId),
+      companyIds: [String(membership.companyId)],
       permissions: sanitizePermissions(membership.permissions),
       preset: (fresh || membership).preset || 'custom',
     };

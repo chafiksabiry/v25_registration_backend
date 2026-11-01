@@ -47,3 +47,14 @@ export const removeCallCenterAgentInvitation = async (req, res) => {
     return res.status(status).json({ success: false, message: error.message || 'Failed to remove invitation' });
   }
 };
+
+export const removeCallCenterAgentEmployment = async (req, res) => {
+  try {
+    const companyId = req.body?.companyId || req.query.companyId;
+    const result = await callCenterAgentService.removeEmployment(callerId(req), companyId, req.params.userId);
+    return res.json({ success: true, data: result });
+  } catch (error) {
+    const status = error.statusCode || 500;
+    return res.status(status).json({ success: false, message: error.message || 'Failed to remove agent' });
+  }
+};

@@ -1,3 +1,4 @@
+import { activeEmployments } from '../utils/employments.js';
 /** Action-level rights for company members. Owner bypasses this list. */
 
 export const PERMISSION_GROUPS = [
@@ -117,5 +118,5 @@ export function agentPermissions() {
 }
 
 export function isCallCenterAgent(user) {
-  return user?.typeUser === 'rep' && Boolean(user?.employerCompanyId);
+  return user?.typeUser === 'rep' && activeEmployments(user).length > 0;
 }
