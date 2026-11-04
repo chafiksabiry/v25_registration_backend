@@ -137,6 +137,7 @@ const userSchema = new mongoose.Schema({
     tokenHash: { type: String, default: null, index: true },
     expiresAt: { type: Date, default: null },
     lastUsedAt: { type: Date, default: null },
+    lastRequestedAt: { type: Date, default: null },
   },
   /** Profile data carried over from HARX v1 (segment, languages, activities...). */
   legacyV1: {

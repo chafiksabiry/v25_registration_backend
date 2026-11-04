@@ -173,3 +173,29 @@ export function verificationSms(code) {
     `Valable 5 minutes. Ne le partagez avec personne.`
   );
 }
+
+export function reengageLinkEmail({ link, hours = 24 }) {
+  const safeLink = escapeHtml(link);
+  const button = `
+    <p style="margin:0 0 18px;text-align:center;">
+      <a href="${safeLink}" style="display:inline-block;background-color:#ec4899;background-image:linear-gradient(90deg,#ff4d4d 0%,#ec4899 100%);color:#ffffff;text-decoration:none;padding:13px 26px;border-radius:12px;font-weight:700;">Open my HARX space &middot; Ouvrir mon espace HARX</a>
+    </p>
+    <p style="margin:0 0 6px;font-size:13px;line-height:1.5;color:#64748b;">This link is personal and valid for ${hours} hours: please do not forward it. The button does not work? Copy this address into your browser:<br><span style="color:#be123c;word-break:break-all;">${safeLink}</span></p>
+    <p style="margin:0 0 6px;font-size:13px;line-height:1.5;color:#64748b;">Ce lien est personnel et valable ${hours} heures : ne le transférez pas. Le bouton ne fonctionne pas ? Copiez cette adresse dans votre navigateur.</p>`;
+  return {
+    subject: 'Your HARX one-click link · Votre lien HARX en un clic',
+    text:
+      `HARX\n\n` +
+      `Open your HARX space (one click, no password):\n${link}\n\n` +
+      `This link is personal and valid for ${hours} hours. Do not forward it. If you did not ask for it, ignore this message.\n\n` +
+      `Ouvrez votre espace HARX (un clic, sans mot de passe) :\n${link}\n\n` +
+      `Ce lien est personnel et valable ${hours} heures. Ne le transférez pas. Si vous n'êtes pas à l'origine de cette demande, ignorez ce message.`,
+    html: harxEmailShell({
+      eyebrow: 'YOUR REP SPACE · VOTRE ESPACE REP',
+      title: 'Your HARX space is one click away',
+      intro: 'You asked for your personal link. Votre lien personnel est prêt.',
+      bodyHtml: button,
+      footer: 'If you did not make this request, ignore this message. Si vous n\'êtes pas à l\'origine de cette demande, ignorez ce message.',
+    }),
+  };
+}
