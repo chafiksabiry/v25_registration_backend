@@ -17,6 +17,8 @@
  *   --max-bounce / --max-complaint / --min-sample   same limits as send.js
  *   --no-ses                  skip the CloudWatch counters
  *   --out <html>              default ./dashboard.html (mode 600)
+ *   --json-out <json>         also write the aggregated figures (no address, no token) for the interactive
+ *                             dashboard (tableau_de_bord_reps.html)
  */
 import fs from 'fs';
 import { pathToFileURL } from 'url';
@@ -41,6 +43,7 @@ export function parseArgs(argv) {
     days: Number(opt('--days', 14)) || 14,
     noSes: flag('--no-ses'),
     out: opt('--out', 'dashboard.html'),
+    jsonOut: opt('--json-out'),
     limits: {
       maxBounce: Number(opt('--max-bounce', DEFAULT_LIMITS.maxBounce)),
       maxComplaint: Number(opt('--max-complaint', DEFAULT_LIMITS.maxComplaint)),
@@ -98,9 +101,9 @@ export async function fetchFunnelData({ uri, expectDb, batchIds }) {
     if (db.databaseName !== expectDb) throw new Error(`connected to database "${db.databaseName}", expected "${expectDb}"`);
     const rows = await db
       .collection('users')
-      .find({ importBatch: { $in: batchIds } }, { projection: { 'legacyV1.segment': 1, 'reengagement.lastUsedAt': 1 } })
+      .find({ importBatch: { $in: batchIds } }, { projection: { 'legacyV1.segment': 1, 'reengagement.lastUsedAt': 1, 'reengagement.lastRequestedAt': 1 } })
       .toArray();
-    const users = rows.map((r) => ({ id: r._id, segment: r.legacyV1?.segment || null, clicked: !!r.reengagement?.lastUsedAt }));
+    const users = rows.map((r) => ({ id: r._id, segment: r.legacyV1?.segment || null, requested: !!r.reengagement?.lastRequestedAt, clicked: !!r.reengagement?.lastUsedAt }));
     const agents = [];
     const subs = [];
     for (let i = 0; i < users.length; i += CHUNK) {
@@ -166,6 +169,10 @@ export async function runDashboard(o, deps) {
   const html = renderDashboard({ generatedAt: deps.now().toISOString().replace('T', ' ').slice(0, 16) + ' UTC', campaign: o.campaignTag, ledger, ses, sesDays, funnel, notes, limits: o.limits });
   deps.writeFile(o.out, html);
   log(`Dashboard written to ${o.out}`);
+  if (o.jsonOut) {
+    deps.writeFile(o.jsonOut, JSON.stringify({ version: 1, generatedAt: deps.now().toISOString(), campaign: o.campaignTag, limits: o.limits, ledger, sesDays, funnel }, null, 2));
+    log(`Figures written to ${o.jsonOut}`);
+  }
   return { exitCode: 0, ledger, ses, funnel };
 }
 
