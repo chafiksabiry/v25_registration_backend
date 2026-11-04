@@ -120,13 +120,13 @@ export function countryWaitlistEmail({ countryName, locale }) {
   const en = String(locale || '').toLowerCase().startsWith('en');
   const country = escapeHtml(countryName);
   return {
-    subject: en ? `HARX Call Centre — you are on the list for ${countryName}` : `HARX Centre d'appels — vous êtes sur la liste pour ${countryName}`,
+    subject: en ? `HARX Telephony — you are on the list for ${countryName}` : `HARX Telephony — vous êtes sur la liste pour ${countryName}`,
     html: harxEmailShell({
-      eyebrow: en ? 'WAITING LIST' : 'LISTE D\'ATTENTE',
+      eyebrow: en ? 'WAITING LIST · TELEPHONY' : 'LISTE D\'ATTENTE · TELEPHONY',
       title: en ? 'Thank you, we noted your interest' : 'Merci, votre demande est enregistrée',
       intro: en
-        ? `HARX Call Centre is not yet open in ${country}. We have registered your address and will write to you once it is available. Nothing is billed and no account has been created.`
-        : `HARX Centre d'appels n'est pas encore ouvert en ${country}. Nous avons enregistré votre adresse et vous écrirons dès l'ouverture. Rien n'est facturé et aucun compte n'a été créé.`,
+        ? `HARX Telephony is not yet open in ${country}. We have registered your address and will write to you once it is available. Nothing is billed and no account has been created.`
+        : `HARX Telephony n'est pas encore ouvert en ${country}. Nous avons enregistré votre adresse et vous écrirons dès l'ouverture. Rien n'est facturé et aucun compte n'a été créé.`,
       footer: en ? 'If you did not make this request, simply ignore this message.' : 'Si vous n\'êtes pas à l\'origine de cette demande, ignorez simplement ce message.',
       bodyHtml: '',
     }),
@@ -215,11 +215,11 @@ export function teamMemberInvitationEmail({ firstName, companyName, preset, invi
         </div>`
     : '';
   return {
-    subject: `${companyName || 'Un centre d’appels'} vous invite à rejoindre son équipe sur HARX Call Centre`,
+    subject: `${companyName || 'Un centre d’appels'} vous invite à rejoindre son équipe sur HARX Telephony`,
     html: harxEmailShell({
-      eyebrow: 'INVITATION · ÉQUIPE',
+      eyebrow: 'INVITATION · ÉQUIPE · TELEPHONY',
       title: `${name ? `${name}, r` : 'R'}ejoignez l’équipe de ${org}`,
-      intro: `${org} vous invite sur <strong>HARX Call Centre</strong>, la plateforme qui sert à piloter ses opérations d’appels${inviter ? ` (invitation de ${inviter})` : ''}.`,
+      intro: `${org} vous invite sur <strong>HARX Telephony</strong>, la plateforme qui sert à piloter ses opérations d’appels${inviter ? ` (invitation de ${inviter})` : ''}.`,
       footer: hasPassword
         ? 'Pour votre sécurité, changez ce mot de passe dès la première connexion. Si vous ne connaissez pas ce centre, ignorez ce message.'
         : 'Si vous n’êtes pas à l’origine de cette invitation ou si vous ne connaissez pas ce centre, ignorez ce message ou refusez l’invitation après connexion.',
