@@ -277,3 +277,26 @@ test('send: bilingual is the default for every recipient', async () => {
   const o = parseArgs(['node', 's', '--tokens', 't', '--file', 'f', '--link-base', 'https://harx.ai']);
   assert.deepEqual((await runCampaign(o, deps)).stats.byLang, { fr: 0, en: 0, bi: 2 });
 });
+
+test('template: public link wording does not promise a personal link, personal wording unchanged', () => {
+  const args = { link: 'https://harx.ai/auth/reactivate', bannerUrl: 'https://x/b.jpg', lang: 'bi' };
+  const pub = renderEmail({ ...args, linkKind: 'public' });
+  const per = renderEmail(args);
+  assert.ok(!/do not forward|ne le transférez pas/.test(pub.html + pub.text));
+  assert.ok(/Enter your email/.test(pub.html) && /Saisissez votre e-mail/.test(pub.html));
+  assert.ok(/do not forward/.test(per.html) && /One click, no password/.test(per.html));
+  assert.ok(pub.html.includes('https://harx.ai/auth/reactivate') && pub.text.includes('https://harx.ai/auth/reactivate'));
+  assert.throws(() => renderEmail({ ...args, linkKind: 'x' }));
+});
+
+test('zoho template: static public link, Zoho unsubscribe tag, no merge placeholder left', async () => {
+  const { buildZohoHtml } = await import('../zohoTemplate.js');
+  for (const env of ['production', 'recette']) {
+    const html = buildZohoHtml(env);
+    assert.ok(html.includes('$[LI:UNSUBSCRIBE]$'));
+    assert.ok(!/%%|\{\{|undefined/.test(html));
+    assert.ok(/href="https:\/\/[^"]+\/auth\/reactivate"/.test(html));
+    assert.ok(html.includes('Enter your email') && html.includes('REPS2027'));
+  }
+  assert.throws(() => buildZohoHtml('nope'));
+});

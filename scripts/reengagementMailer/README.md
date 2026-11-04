@@ -104,3 +104,12 @@ node dashboard.js --ledger ~/HARX_reengagement/ledger.jsonl \
 1. SES (eu-west-3) > Configuration sets > `my-first-configuration-set` > Event destinations > la destination CloudWatch > Edit : cocher **Opens** et **Clicks** en plus des événements existants.
 2. Recommandé avant les envois réels : onglet Tracking domain, domaine de redirection personnalisé (par exemple `track.mail.harx.ai`, enregistrement CNAME à créer dans Cloudflare, en gris/DNS only). Sans cela SES réécrit les liens vers un domaine `awstrack.me`, ce qui peut dégrader la délivrabilité.
 3. SES réécrit tous les liens du HTML, y compris le lien de connexion en un clic (il transite alors par le domaine de redirection). Le test d'envoi doit confirmer que le lien fonctionne encore.
+
+### Tableau de bord interactif
+
+`tableau_de_bord_reps.html` : page unique à ouvrir dans le navigateur (double-clic), sans serveur ni dépendance. Tout reste dans le navigateur ; aucune adresse e-mail n'y entre.
+
+- **Envois** : importez l'export CSV du rapport de campagne Zoho Campaigns (colonnes reconnues par leur nom, en anglais ou en français, séparateur virgule ou point-virgule) ou saisissez une ligne par jour dans l'onglet « Données ».
+- **Parcours des REPS** : produisez le fichier de chiffres avec `node dashboard.js --batch-ids … --expect-db … --json-out suivi.json` (lecture seule de la base, sans adresse ni jeton) puis chargez-le avec le bouton « Charger les chiffres de la base ». Il apporte aussi les compteurs SES s'ils sont lus.
+- **Onglets** : vue d'ensemble (santé, taux, graphiques par jour), envois (tableau triable, filtre par dates), parcours (lien demandé, connexion, CV, profil, photo, créneaux, formule, étape où l'on perd le plus), paliers et décision (feu vert, orange ou rouge pour passer au palier suivant, seuils modifiables), données (saisie et export CSV).
+- « Voir un exemple » affiche des chiffres fictifs ; « Tout effacer » vide le navigateur.
