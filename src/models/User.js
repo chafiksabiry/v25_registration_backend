@@ -22,9 +22,10 @@ const userSchema = new mongoose.Schema({
   },
   phone: {
     type: String,
-    // Staff invited by email (employerCompanyId) add their phone number later.
+    // Staff invited by email (employerCompanyId) add their phone number later, and
+    // reps migrated from HARX v1 often have none: they add it when completing their profile.
     required: function() {
-      return !this.linkedInId && !this.employerCompanyId;
+      return !this.linkedInId && !this.employerCompanyId && this.source !== 'harx_v1_import';
     }
   },
   linkedInId: {
@@ -162,6 +163,7 @@ const userSchema = new mongoose.Schema({
     tokenHash: { type: String, default: null, index: true },
     expiresAt: { type: Date, default: null },
     lastUsedAt: { type: Date, default: null },
+    lastRequestedAt: { type: Date, default: null },
   },
   /** Profile data carried over from HARX v1 (segment, languages, activities...). */
   legacyV1: {
