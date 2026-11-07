@@ -5,7 +5,8 @@ import AgentInvitation from '../models/AgentInvitation.js';
 import CompanyMembership from '../models/CompanyMembership.js';
 import { agentInvitationNoticeEmail, inviteEmail } from '../utils/harxMessages.js';
 import { appLoginUrl, sendAppEmail } from './brevoMail.js';
-import { roleConflict } from './teamRoleConflicts.js';
+import { isCompanyAccount, roleConflict } from './teamRoleConflicts.js';
+import { COMPANY_ACCOUNT_MESSAGE } from './teamRoleDecision.js';
 import { assertCanAddSeat } from './companyProduct.js';
 import { serializeInvitedAccount } from '../utils/invitedAccount.js';
 import { activeEmployments, hasEmployment, withEmployment, withoutEmployment } from '../utils/employments.js';
@@ -383,12 +384,14 @@ class CallCenterAgentService {
 
   /** Pending invitations addressed to the signed-in person's e-mail. */
   async listMyInvitations(userId) {
-    const user = await User.findById(userId).select('email');
+    const user = await User.findById(userId).select('email typeUser');
     if (!user) {
       const err = new Error('User not found');
       err.statusCode = 401;
       throw err;
     }
+    // Un compte entreprise ne reçoit aucune invitation d'équipe (même une ancienne) : il ne peut être ni agent ni membre.
+    if (isCompanyAccount(user)) return [];
     const invitations = await AgentInvitation.find({ email: normalizeEmail(user.email), status: 'pending' }).sort({ invitedAt: -1 });
     const db = mongoose.connection.db;
     const companies = await db
@@ -413,11 +416,17 @@ class CallCenterAgentService {
       err.statusCode = 400;
       throw err;
     }
-    const user = await User.findById(userId).select('email');
+    const user = await User.findById(userId).select('email typeUser');
     const invitation = user ? await AgentInvitation.findById(invitationId) : null;
     if (!user || !invitation || invitation.email !== normalizeEmail(user.email)) {
       const err = new Error('Invitation not found');
       err.statusCode = 404;
+      throw err;
+    }
+    // Accepter est refusé à un compte entreprise (refuser reste possible, pour nettoyer une ancienne invitation).
+    if (accept && isCompanyAccount(user)) {
+      const err = new Error(COMPANY_ACCOUNT_MESSAGE);
+      err.statusCode = 403;
       throw err;
     }
     invitation.status = accept ? 'accepted' : 'declined';

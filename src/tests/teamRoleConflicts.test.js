@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { AGENT_CONFLICT_MESSAGE, MEMBER_CONFLICT_MESSAGE, OWNER_CONFLICT_MESSAGE, decideRoleConflict } from '../services/teamRoleDecision.js';
+import { AGENT_CONFLICT_MESSAGE, COMPANY_ACCOUNT_MESSAGE, MEMBER_CONFLICT_MESSAGE, OWNER_CONFLICT_MESSAGE, decideRoleConflict } from '../services/teamRoleDecision.js';
 
 const none = { isOwner: false, hasMembership: false, memberInvitation: false, isAgent: false, agentInvitation: false };
 // agent : refusé pour un membre (adhésion ou invitation en cours), pour le propriétaire ; permis sinon
@@ -13,4 +13,9 @@ assert.equal(decideRoleConflict('member', { ...none, isAgent: true }), AGENT_CON
 assert.equal(decideRoleConflict('member', { ...none, agentInvitation: true }), AGENT_CONFLICT_MESSAGE);
 // un membre déjà membre n'est pas un conflit de rôle (le contrôle existant s'en charge)
 assert.equal(decideRoleConflict('member', { ...none, hasMembership: true }), null);
+// un compte entreprise ne peut être ni agent ni membre d'une autre équipe (le propriétaire garde son message propre)
+assert.equal(decideRoleConflict('agent', { ...none, isCompanyAccount: true }), COMPANY_ACCOUNT_MESSAGE);
+assert.equal(decideRoleConflict('member', { ...none, isCompanyAccount: true }), COMPANY_ACCOUNT_MESSAGE);
+assert.equal(decideRoleConflict('agent', { ...none, isOwner: true, isCompanyAccount: true }), OWNER_CONFLICT_MESSAGE);
+assert.equal(decideRoleConflict('agent', { ...none, isCompanyAccount: false }), null);
 console.log('teamRoleConflicts OK');
