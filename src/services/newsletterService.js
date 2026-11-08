@@ -15,8 +15,11 @@ export async function subscribe({ email, locale, source } = {}) {
     throw err;
   }
 
+  const interest = typeof source === 'string' && source.trim() ? source.trim() : null;
   const existing = await NewsletterSubscriber.findOne({ email: normalized }).lean();
   if (existing) {
+    // Déjà inscrit (ex. par le pied de page) : on retient quand même l'annonce demandée.
+    if (interest) await NewsletterSubscriber.updateOne({ _id: existing._id }, { $addToSet: { interests: interest } });
     return { email: existing.email, created: false };
   }
 
@@ -24,12 +27,14 @@ export async function subscribe({ email, locale, source } = {}) {
     const doc = await NewsletterSubscriber.create({
       email: normalized,
       locale: typeof locale === 'string' && locale.trim() ? locale.trim() : null,
-      source: typeof source === 'string' && source.trim() ? source.trim() : 'landing_footer',
+      source: interest ?? 'landing_footer',
+      interests: interest ? [interest] : [],
     });
     return { email: doc.email, created: true };
   } catch (error) {
     // Concurrent insert on unique email
     if (error?.code === 11000) {
+      if (interest) await NewsletterSubscriber.updateOne({ email: normalized }, { $addToSet: { interests: interest } });
       return { email: normalized, created: false };
     }
     throw error;
