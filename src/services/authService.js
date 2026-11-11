@@ -1,6 +1,8 @@
 import jwt from 'jsonwebtoken';
+import mongoose from 'mongoose';
 import axios from 'axios';
 import userRepository from '../repositories/userRepository.js';
+import { parseProduct } from '../utils/accountProduct.js';
 import User from '../models/User.js'; // Modèle utilisateur
 import Timezone from '../models/Timezone.js';
 import twilio from 'twilio';
@@ -9,6 +11,8 @@ import ipInfoService from './ipInfoService.js';
 import { verificationEmail, verificationSms, reengageLinkEmail } from '../utils/harxMessages.js';
 import { sendAppEmail } from './brevoMail.js';
 import companyMemberService from './companyMemberService.js';
+import CompanyMembership from '../models/CompanyMembership.js';
+import { activeEmployments, defaultCompanyId } from '../utils/employments.js';
 import { hashReengagementToken, generateReengagementToken } from '../utils/reengagementToken.js';
 import {
   normalizeEmail,
@@ -54,7 +58,12 @@ class AuthService {
       },
     });
 
-    return { verificationCode };
+    // This code resets the account's password — it must never be readable
+    // off the wire by anyone who merely knows the victim's email. Same rule
+    // as login()/register(): send it by email server-side only.
+    await this.sendVerificationEmail(normalized, verificationCode);
+
+    return { success: true };
   }
 
   generateToken(userId, userInfo = {}) {
@@ -174,7 +183,14 @@ class AuthService {
         ...(locationInfo && { locationInfo: locationInfo })
       }]
     });
-    return { verificationCode, result };
+
+    // Same rule as login(): the code is only ever delivered by email, never
+    // echoed back in the API response — otherwise anyone who can call this
+    // endpoint can read the verification code off the wire without needing
+    // the registrant's inbox.
+    await this.sendVerificationEmail(email, verificationCode);
+
+    return { result };
   }
 
   async checkEmailAvailable(email) {
@@ -186,6 +202,9 @@ class AuthService {
     return { available: !existingUser };
   }
 
+  // Phone numbers are not required to be unique (décidé le 14/10) — only
+  // the email is. Kept as a no-op available:true so the frontend's
+  // check-phone step still has something to call.
   async checkPhoneAvailable(phone) {
     const trimmed = String(phone || '').trim();
     if (!trimmed) {
@@ -711,11 +730,52 @@ class AuthService {
     if (!user) {
       throw new Error('User not found');
     }
+    // Un membre invité arrive dans le produit de la personne qui l'a invité.
+    let product = user.product || null;
+    if (!product && user.typeUser === 'company-member') {
+      try {
+        const membership = await CompanyMembership.findOne({ userId: user._id }).sort({ createdAt: 1 }).select('invitedByUserId').lean();
+        if (membership?.invitedByUserId) {
+          const inviter = await userRepository.findById(membership.invitedByUserId);
+          product = inviter?.product || null;
+        }
+      } catch (error) {
+        console.error('checkUserType: produit du membre illisible:', error.message);
+      }
+    }
+    // Un agent employé par un centre arrive dans le produit du propriétaire d'un de ses centres (le défaut d'abord).
+    const defaultCenter = user.typeUser === 'rep' ? defaultCompanyId(user) : null;
+    if (!product && defaultCenter) {
+      const ordered = [defaultCenter, ...activeEmployments(user).map((e) => e.companyId).filter((id) => id !== defaultCenter)];
+      for (const centerId of ordered) {
+        if (product) break;
+        try {
+          const company = await mongoose.connection.db.collection('companies').findOne({ _id: new mongoose.Types.ObjectId(String(centerId)) }, { projection: { userId: 1 } });
+          if (company?.userId) {
+            const owner = await userRepository.findById(company.userId);
+            product = owner?.product || null;
+          }
+        } catch (error) {
+          console.error('checkUserType: produit de l\'agent illisible:', error.message);
+        }
+      }
+    }
     return {
       userType: user.typeUser,
       mustChangePassword: Boolean(user.mustChangePassword),
-      employerCompanyId: user.employerCompanyId ? String(user.employerCompanyId) : null,
+      // Centre par défaut (ancien champ mono-valué, lecture compatible) et liste de tous les emplois actifs.
+      employerCompanyId: user.typeUser === 'rep' ? defaultCenter : (user.employerCompanyId ? String(user.employerCompanyId) : null),
+      employments: user.typeUser === 'rep' ? activeEmployments(user).map((e) => e.companyId) : [],
+      product,
     };
+  }
+
+  /** Rattache le compte à un produit HARX (appelé par l'application du produit quand le compte l'utilise). */
+  async setProduct(userId, product) {
+    const value = parseProduct(product);
+    if (!value) throw new Error('Produit inconnu');
+    await userRepository.update(userId, { product: value });
+    return { product: value };
   }
 
   async adminLogin(email, password, req) {

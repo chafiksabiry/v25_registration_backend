@@ -3,8 +3,12 @@ import mongoose from 'mongoose';
 import User from '../models/User.js';
 import CompanyMembership from '../models/CompanyMembership.js';
 import CompanyRole from '../models/CompanyRole.js';
-import { companyMemberInviteEmail } from '../utils/harxMessages.js';
+import AgentInvitation from '../models/AgentInvitation.js';
+import { teamMemberInvitationEmail } from '../utils/harxMessages.js';
 import { appLoginUrl, sendAppEmail } from './brevoMail.js';
+import { roleConflict } from './teamRoleConflicts.js';
+import { assertCanAddSeat } from './companyProduct.js';
+import { activeEmployments, hasEmployment, resolveActiveCompanyId } from '../utils/employments.js';
 import {
   allPermissions,
   emptyPermissions,
@@ -12,7 +16,11 @@ import {
   presetPermissions,
   sanitizePermissions,
   PERMISSION_GROUPS,
+  agentPermissions,
+  isCallCenterAgent,
+  isClientPortalUser,
 } from '../constants/companyPermissions.js';
+import { clientPortalSession } from './callCenterClientPortalService.js';
 
 function generateTempPassword(length = 12) {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@$%';
@@ -83,13 +91,15 @@ function companyLabel(company) {
   return company.name || company.companyName || company.title || 'HARX';
 }
 
-async function sendInviteEmail({ to, firstName, email, tempPassword, companyName, roleName, permissions }) {
+async function sendInviteEmail({ to, firstName, email, tempPassword, companyName, preset, inviterName, roleName, permissions }) {
   const loginUrl = appLoginUrl();
-  const message = companyMemberInviteEmail({
+  const message = teamMemberInvitationEmail({
     firstName,
     email,
     tempPassword,
     companyName,
+    preset,
+    inviterName,
     loginUrl,
     roleName,
     accessLines: describeGrantedAccess(permissions, 'fr'),
@@ -138,7 +148,21 @@ class CompanyMemberService {
     };
   }
 
-  async session(callerUserId) {
+  /** Emplois actifs de l'agent avec le nom de chaque centre (ses propres emplois seulement). */
+  async agentEmployments(caller) {
+    const active = activeEmployments(caller);
+    if (!active.length) return [];
+    const ids = active.map((e) => e.companyId).filter((id) => mongoose.Types.ObjectId.isValid(id)).map((id) => new mongoose.Types.ObjectId(id));
+    const docs = await mongoose.connection.db.collection('companies').find({ _id: { $in: ids } }).project({ name: 1, companyName: 1, title: 1 }).toArray();
+    const nameById = new Map(docs.map((c) => [String(c._id), c.name || c.companyName || c.title || '']));
+    return active.map((e) => ({ companyId: e.companyId, companyName: nameById.get(e.companyId) || '', status: e.status, startedAt: e.startedAt }));
+  }
+
+  /**
+   * Session de la personne connectée. `requestedCompanyId` = centre actif choisi par un agent qui travaille pour
+   * plusieurs centres : accepté seulement s'il fait partie de ses emplois, sinon son centre par défaut.
+   */
+  async session(callerUserId, requestedCompanyId = null) {
     const caller = await loadCaller(callerUserId);
     const owned = await mongoose.connection.db.collection('companies').findOne({
       $or: [
@@ -150,21 +174,39 @@ class CompanyMemberService {
       return {
         isOwner: true,
         companyId: String(owned._id),
+        companyIds: [String(owned._id)],
         permissions: allPermissions(),
         preset: 'owner',
       };
     }
+    // Contact d'un client (portail en lecture seule) : traité avant le repli « titulaire » ci-dessous, qui donnerait tout.
+    if (isClientPortalUser(caller)) return clientPortalSession(caller);
     const membership = await CompanyMembership.findOne({ userId: caller._id }).sort({ createdAt: -1 });
+    // Un agent employé par un centre : sa société est celle du centre actif (l'un de ses emplois), avec les seuls droits d'un agent.
+    if ((!membership || hasEmployment(caller, requestedCompanyId)) && isCallCenterAgent(caller)) {
+      const employments = await this.agentEmployments(caller);
+      return {
+        isOwner: false,
+        isAgent: true,
+        companyId: resolveActiveCompanyId(caller, requestedCompanyId),
+        companyIds: employments.map((e) => e.companyId),
+        employments,
+        permissions: agentPermissions(),
+        preset: 'agent',
+      };
+    }
     // No membership document means the account is not a restricted teammate
     // (company owner, or a user created before team invites). Keep full access.
     if (!membership) {
-      return { isOwner: true, companyId: null, permissions: allPermissions(), preset: 'owner' };
+      return { isOwner: true, companyId: null, companyIds: [], permissions: allPermissions(), preset: 'owner' };
     }
     await this.markPresent(caller._id);
     const fresh = await CompanyMembership.findById(membership._id);
     return {
       isOwner: false,
+      isAgent: false,
       companyId: String(membership.companyId),
+      companyIds: [String(membership.companyId)],
       permissions: sanitizePermissions(membership.permissions),
       preset: (fresh || membership).preset || 'custom',
     };
@@ -234,12 +276,98 @@ class CompanyMemberService {
       createdAt: null,
     };
 
+    const pending = await AgentInvitation.find({ companyId: company._id, kind: 'member', status: 'pending' }).sort({ createdAt: -1 });
+    const pendingRows = pending.map((i) => ({
+      userId: String(i.userId || ''),
+      email: i.email,
+      fullName: i.fullName || '',
+      phone: '',
+      isOwner: false,
+      preset: i.preset || 'custom',
+      status: 'invited',
+      online: false,
+      permissions: sanitizePermissions(i.permissions),
+      invitedAt: i.invitedAt || null,
+      createdAt: i.createdAt || null,
+      existingAccount: true,
+    }));
+
     return [
       ownerRow,
       ...docs
         .filter((d) => String(d.userId) !== String(company.userId))
         .map((d) => serializeMember(d, byId.get(String(d.userId)))),
+      ...pendingRows,
     ];
+  }
+
+  async inviteExistingAccount({ caller, company, existingUser, preset, rights, sendEmail }) {
+    const email = normalizeEmail(existingUser.email);
+    let invitation = await AgentInvitation.findOne({ companyId: company._id, email });
+    if (invitation && invitation.status === 'accepted' && invitation.kind === 'member') {
+      throw httpError('Cette personne fait déjà partie de votre équipe.', 409);
+    }
+    if (invitation && invitation.kind !== 'member' && invitation.status !== 'declined') {
+      throw httpError('Cette personne est déjà invitée comme agent de votre centre.', 409);
+    }
+    const fields = {
+      kind: 'member',
+      preset,
+      permissions: rights,
+      fullName: existingUser.fullName || '',
+      status: 'pending',
+      invitedAt: new Date(),
+      respondedAt: undefined,
+      userId: existingUser._id,
+      invitedByUserId: caller._id,
+    };
+    if (invitation) {
+      Object.assign(invitation, fields);
+      await invitation.save();
+    } else {
+      invitation = await AgentInvitation.create({ companyId: company._id, email, ...fields });
+    }
+
+    let emailSent = false;
+    let emailError = null;
+    if (sendEmail) {
+      try {
+        const message = teamMemberInvitationEmail({
+          firstName: (existingUser.fullName || '').trim().split(/\s+/)[0] || '',
+          companyName: companyLabel(company),
+          preset,
+          inviterName: caller?.fullName || '',
+          email,
+          loginUrl: appLoginUrl(),
+          accessLines: describeGrantedAccess(rights, 'fr'),
+          accessLinesEn: describeGrantedAccess(rights, 'en'),
+        });
+        await sendAppEmail({ to: email, subject: message.subject, html: message.html });
+        emailSent = true;
+      } catch (e) {
+        emailError = e.message || 'Failed to send invitation email';
+      }
+    }
+
+    return {
+      member: {
+        userId: String(existingUser._id),
+        email,
+        fullName: existingUser.fullName || '',
+        phone: existingUser.phone || '',
+        isOwner: false,
+        preset,
+        status: 'invited',
+        online: false,
+        permissions: sanitizePermissions(rights),
+        invitedAt: invitation.invitedAt,
+        existingAccount: true,
+      },
+      invitationId: String(invitation._id),
+      existingAccount: true,
+      emailSent,
+      emailError,
+    };
   }
 
   async invite(callerUserId, payload) {
@@ -255,9 +383,14 @@ class CompanyMemberService {
     } = payload || {};
 
     const { caller, company } = await assertCan(callerUserId, companyId, 'members.invite');
-    const roleCount = await CompanyRole.countDocuments({ companyId: company._id });
-    if (roleCount === 0) {
-      throw httpError('Créez un rôle avant d’inviter un membre.', 400);
+    await assertCanAddSeat(company._id);
+    // Main (production) rule: no invitation while the company has no saved role. Recette's preset-based
+    // invitations (explicit preset, no roleId) stay possible without a saved role.
+    if (!payload?.roleId && !payload?.preset && !permissions) {
+      const roleCount = await CompanyRole.countDocuments({ companyId: company._id });
+      if (roleCount === 0) {
+        throw httpError('Créez un rôle avant d’inviter un membre.', 400);
+      }
     }
     const normalizedEmail = normalizeEmail(email);
     if (!normalizedEmail || !normalizedEmail.includes('@')) {
@@ -281,9 +414,21 @@ class CompanyMemberService {
       throw httpError('Select at least one permission', 400);
     }
 
-    const existingUser = await User.findOne({ email: normalizedEmail }).select('_id');
+    // Une adresse peut être invitée un nombre illimité de fois mais n'a qu'un compte HARX : si elle en a déjà
+    // un, on enregistre une invitation que la personne accepte après connexion (jamais de mot de passe créé).
+    const conflict = await roleConflict('member', { company, companyId: company._id, email: normalizedEmail });
+    if (conflict) throw httpError(conflict, 409);
+
+    const existingUser = await User.findOne({ email: normalizedEmail }).select('_id fullName email phone');
+    if (existingUser) {
+      const already = await CompanyMembership.findOne({ companyId: company._id, userId: existingUser._id }).select('_id');
+      if (already || String(company.userId) === String(existingUser._id)) {
+        throw httpError('Cette personne fait déjà partie de votre équipe.', 409);
+      }
+      return this.inviteExistingAccount({ caller, company, existingUser, preset: resolvedPreset, rights, sendEmail });
+    }
     const existingMembership = await CompanyMembership.findOne({ email: normalizedEmail }).select('_id');
-    if (existingUser || existingMembership) {
+    if (existingMembership) {
       throw httpError('Cet e-mail existe déjà. Invitation impossible.', 409);
     }
 
@@ -326,6 +471,8 @@ class CompanyMemberService {
           email: normalizedEmail,
           tempPassword,
           companyName: companyLabel(company),
+          preset: resolvedPreset,
+          inviterName: caller?.fullName || '',
           roleName: role?.name || '',
           permissions: rights,
         });
@@ -409,6 +556,7 @@ class CompanyMemberService {
         email: targetEmail,
         tempPassword,
         companyName: companyLabel(company),
+        preset: membership.preset,
         roleName: membership.roleName || '',
         permissions: membership.permissions,
       });

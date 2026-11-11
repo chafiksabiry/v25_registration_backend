@@ -1,3 +1,4 @@
+import { activeEmployments } from '../utils/employments.js';
 /** Action-level rights for company members. Owner bypasses this list. */
 
 export const PERMISSION_GROUPS = [
@@ -282,4 +283,29 @@ export function sanitizePermissions(input) {
     if (input[key] === true || input[key] === 'true') out[key] = true;
   }
   return out;
+}
+
+/** Agent employé par un centre d'appels (compte rep rattaché à une société) : prendre ses appels, se former, voir son planning. */
+const AGENT_KEYS = ['gigs.view', 'calls.view', 'calls.listen', 'training.view'];
+
+export function agentPermissions() {
+  return withKeys(AGENT_KEYS);
+}
+
+export function isCallCenterAgent(user) {
+  return user?.typeUser === 'rep' && activeEmployments(user).length > 0;
+}
+
+/**
+ * Contact d'un client du centre (portail client, lecture seule) : il consulte les appels de SES opérations, et les
+ * écoute seulement si le centre l'autorise. Aucun droit de gestion, quel que soit l'écran.
+ */
+export function clientPermissions({ allowRecordings = false } = {}) {
+  return withKeys(allowRecordings ? ['calls.view', 'calls.listen'] : ['calls.view']);
+}
+
+export const CLIENT_PORTAL_USER_TYPE = 'client-portal';
+
+export function isClientPortalUser(user) {
+  return user?.typeUser === CLIENT_PORTAL_USER_TYPE;
 }

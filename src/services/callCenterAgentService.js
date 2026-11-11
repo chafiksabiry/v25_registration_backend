@@ -1,8 +1,15 @@
 import crypto from 'crypto';
 import mongoose from 'mongoose';
 import User from '../models/User.js';
-import { inviteEmail } from '../utils/harxMessages.js';
+import AgentInvitation from '../models/AgentInvitation.js';
+import CompanyMembership from '../models/CompanyMembership.js';
+import { agentInvitationNoticeEmail, inviteEmail } from '../utils/harxMessages.js';
 import { appLoginUrl, sendAppEmail } from './brevoMail.js';
+import { isCompanyAccount, roleConflict } from './teamRoleConflicts.js';
+import { COMPANY_ACCOUNT_MESSAGE } from './teamRoleDecision.js';
+import { assertCanAddSeat } from './companyProduct.js';
+import { serializeInvitedAccount } from '../utils/invitedAccount.js';
+import { activeEmployments, hasEmployment, withEmployment, withoutEmployment } from '../utils/employments.js';
 
 function generateTempPassword(length = 12) {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@$%';
@@ -140,7 +147,23 @@ async function sendInviteEmail({
   });
 }
 
-function serializeAgentUser(user, agentId = null) {
+async function sendInvitationNotice({ user, company }) {
+  const firstName = (user.fullName || '').trim().split(/\s+/)[0] || '';
+  const message = agentInvitationNoticeEmail({
+    firstName,
+    companyName: company?.name || company?.companyName || company?.title,
+    loginUrl: appLoginUrl(),
+  });
+  return sendAppEmail({ to: user.email, subject: message.subject, html: message.html });
+}
+
+/**
+ * Un agent vu par UN centre : identité (nom, e-mail, téléphone) et statut de son emploi dans ce centre. `forCompanyId`
+ * est le centre qui regarde : l'employeur par défaut du compte (peut-être un autre centre) n'est jamais exposé.
+ */
+export function serializeAgentUser(user, agentId = null, forCompanyId = null) {
+  const here = forCompanyId ? String(forCompanyId) : (user.employerCompanyId ? String(user.employerCompanyId) : null);
+  const origin = Boolean(here) && user.employerCompanyId && String(user.employerCompanyId) === here;
   return {
     userId: String(user._id),
     agentId,
@@ -148,27 +171,32 @@ function serializeAgentUser(user, agentId = null) {
     email: user.email,
     phone: user.phone || '',
     typeUser: user.typeUser,
-    employerCompanyId: user.employerCompanyId ? String(user.employerCompanyId) : null,
-    mustChangePassword: Boolean(user.mustChangePassword),
-    invitationStatus: user.invitationStatus || 'none',
-    invitedAt: user.invitedAt || null,
+    employerCompanyId: here,
+    mustChangePassword: origin ? Boolean(user.mustChangePassword) : false,
+    invitationStatus: origin ? user.invitationStatus || 'none' : 'active',
+    invitedAt: origin ? user.invitedAt || null : null,
     isVerified: Boolean(user.isVerified),
     createdAt: user.createdAt,
   };
+}
+
+function activeOtherEmployments(user, companyId) {
+  return activeEmployments(user).some((e) => e.companyId !== String(companyId));
 }
 
 class CallCenterAgentService {
   async createAndInvite(callerUserId, payload) {
     const {
       companyId,
-      firstName,
-      lastName,
+      firstName: givenFirstName,
+      lastName: givenLastName,
       email,
       phone,
       sendEmail = true,
     } = payload || {};
 
     const { caller, company } = await resolveCallerCompany(callerUserId, companyId);
+    await assertCanAddSeat(companyId);
 
     const normalizedEmail = normalizeEmail(email);
     if (!normalizedEmail || !normalizedEmail.includes('@')) {
@@ -176,30 +204,29 @@ class CallCenterAgentService {
       err.statusCode = 400;
       throw err;
     }
-    if (!String(firstName || '').trim() || !String(lastName || '').trim()) {
-      const err = new Error('First name and last name are required');
-      err.statusCode = 400;
-      throw err;
-    }
-    if (!String(phone || '').trim()) {
-      const err = new Error('Phone number is required');
-      err.statusCode = 400;
+    // An invitation by email may come without names (the agent completes them later): use the part before the @.
+    const firstName = String(givenFirstName || '').trim() || normalizedEmail.split('@')[0];
+    const lastName = String(givenLastName || '').trim();
+    // The phone number is optional for an invitation by email: the agent adds it when they first sign in.
+    const phoneValue = String(phone || '').trim();
+
+    const conflict = await roleConflict('agent', { company, companyId, email: normalizedEmail });
+    if (conflict) {
+      const err = new Error(conflict);
+      err.statusCode = 409;
       throw err;
     }
 
     const existing = await User.findOne({ email: normalizedEmail });
     if (existing) {
-      if (
-        existing.employerCompanyId &&
-        String(existing.employerCompanyId) === String(companyId)
-      ) {
+      if (hasEmployment(existing, companyId)) {
         const err = new Error('This agent is already on your team');
         err.statusCode = 409;
         throw err;
       }
-      const err = new Error('Email already registered');
-      err.statusCode = 409;
-      throw err;
+      // An address has at most one HARX account but can be invited by any number of call centres:
+      // the person accepts after signing in, so nothing about the account is created or changed here.
+      return this.inviteExistingAccount({ caller, company, companyId, existing, sendEmail, typed: { fullName: buildFullName(givenFirstName, givenLastName), phone: phoneValue } });
     }
 
     const tempPassword = generateTempPassword();
@@ -208,7 +235,7 @@ class CallCenterAgentService {
     const user = new User({
       email: normalizedEmail,
       fullName,
-      phone: String(phone).trim(),
+      phone: phoneValue,
       password: tempPassword,
       typeUser: 'rep',
       isVerified: true,
@@ -224,7 +251,7 @@ class CallCenterAgentService {
       firstName,
       lastName,
       email: normalizedEmail,
-      phone: String(phone).trim(),
+      phone: phoneValue,
       companyId,
     });
 
@@ -259,14 +286,69 @@ class CallCenterAgentService {
     };
   }
 
+  async inviteExistingAccount({ caller, company, companyId, existing, sendEmail, typed = {} }) {
+    const email = normalizeEmail(existing.email);
+    let invitation = await AgentInvitation.findOne({ companyId, email });
+    if (invitation && invitation.kind === 'member' && invitation.status !== 'declined') {
+      const err = new Error('Cette personne est déjà invitée comme membre de votre équipe');
+      err.statusCode = 409;
+      throw err;
+    }
+    if (invitation && invitation.status === 'accepted') {
+      const err = new Error('This agent is already on your team');
+      err.statusCode = 409;
+      throw err;
+    }
+    if (invitation) {
+      invitation.status = 'pending';
+      invitation.invitedAt = new Date();
+      invitation.respondedAt = undefined;
+      invitation.userId = existing._id;
+      invitation.invitedByUserId = caller._id;
+      if (typed.fullName) invitation.fullName = typed.fullName;
+      if (typed.phone) invitation.phone = typed.phone;
+      await invitation.save();
+    } else {
+      invitation = await AgentInvitation.create({
+        companyId,
+        email,
+        userId: existing._id,
+        invitedByUserId: caller._id,
+        fullName: typed.fullName || '',
+        phone: typed.phone || '',
+      });
+    }
+
+    let emailSent = false;
+    let emailError = null;
+    if (sendEmail) {
+      try {
+        await sendInvitationNotice({ user: existing, company });
+        emailSent = true;
+      } catch (e) {
+        emailError = e.message || 'Failed to send invitation email';
+      }
+    }
+
+    return {
+      agent: serializeInvitedAccount(existing, invitation),
+      invitationId: String(invitation._id),
+      existingAccount: true,
+      emailSent,
+      emailError,
+    };
+  }
+
   async listAgents(callerUserId, companyId) {
     await resolveCallerCompany(callerUserId, companyId);
-    const users = await User.find({
-      employerCompanyId: companyId,
+    // Employés de CE centre : ancien employeur mono-valué ou emploi actif de la liste (agent partagé entre centres).
+    const candidates = await User.find({
       typeUser: 'rep',
+      $or: [{ employerCompanyId: companyId }, { 'employments.companyId': companyId }],
     })
       .sort({ createdAt: -1 })
       .select('-password -verificationCode -pendingChanges');
+    const users = candidates.filter((u) => hasEmployment(u, companyId));
 
     const db = mongoose.connection.db;
     const userIds = users.map((u) => u._id);
@@ -277,7 +359,184 @@ class CallCenterAgentService {
       .toArray();
     const agentByUser = new Map(agents.map((a) => [String(a.userId), String(a._id)]));
 
-    return users.map((u) => serializeAgentUser(u, agentByUser.get(String(u._id)) || null));
+    const staff = users.map((u) => serializeAgentUser(u, agentByUser.get(String(u._id)) || null, companyId));
+
+    // People who already had a HARX account are linked through an invitation they accept after signing in.
+    const invitations = await AgentInvitation.find({ companyId, kind: { $ne: 'member' }, status: { $in: ['pending', 'accepted'] } }).sort({ invitedAt: -1 });
+    const invitedUsers = await User.find({ _id: { $in: invitations.map((i) => i.userId).filter(Boolean) } }).select(
+      '-password -verificationCode -pendingChanges'
+    );
+    const userById = new Map(invitedUsers.map((u) => [String(u._id), u]));
+    // Une invitation acceptée a aussi créé un emploi : une seule ligne par personne, avec ce que CE centre a saisi.
+    const invitedByUser = new Map();
+    for (const i of invitations) {
+      if (i.userId && userById.has(String(i.userId)) && !invitedByUser.has(String(i.userId))) {
+        invitedByUser.set(String(i.userId), serializeInvitedAccount(userById.get(String(i.userId)), i));
+      }
+    }
+    const merged = staff.map((row) => {
+      const mine = invitedByUser.get(row.userId);
+      if (mine) invitedByUser.delete(row.userId);
+      return mine && mine.invitationStatus === 'active' ? { ...mine, agentId: row.agentId } : row;
+    });
+    return [...merged, ...invitedByUser.values()];
+  }
+
+  /** Pending invitations addressed to the signed-in person's e-mail. */
+  async listMyInvitations(userId) {
+    const user = await User.findById(userId).select('email typeUser');
+    if (!user) {
+      const err = new Error('User not found');
+      err.statusCode = 401;
+      throw err;
+    }
+    // Un compte entreprise ne reçoit aucune invitation d'équipe (même une ancienne) : il ne peut être ni agent ni membre.
+    if (isCompanyAccount(user)) return [];
+    const invitations = await AgentInvitation.find({ email: normalizeEmail(user.email), status: 'pending' }).sort({ invitedAt: -1 });
+    const db = mongoose.connection.db;
+    const companies = await db
+      .collection('companies')
+      .find({ _id: { $in: invitations.map((i) => i.companyId) } })
+      .project({ name: 1, companyName: 1, title: 1 })
+      .toArray();
+    const nameById = new Map(companies.map((c) => [String(c._id), c.name || c.companyName || c.title || '']));
+    return invitations.map((i) => ({
+      id: String(i._id),
+      companyId: String(i.companyId),
+      companyName: nameById.get(String(i.companyId)) || '',
+      kind: i.kind || 'agent',
+      preset: i.preset || null,
+      invitedAt: i.invitedAt,
+    }));
+  }
+
+  async respondToInvitation(userId, invitationId, accept) {
+    if (!invitationId || !mongoose.Types.ObjectId.isValid(invitationId)) {
+      const err = new Error('Valid invitation id is required');
+      err.statusCode = 400;
+      throw err;
+    }
+    const user = await User.findById(userId).select('email typeUser');
+    const invitation = user ? await AgentInvitation.findById(invitationId) : null;
+    if (!user || !invitation || invitation.email !== normalizeEmail(user.email)) {
+      const err = new Error('Invitation not found');
+      err.statusCode = 404;
+      throw err;
+    }
+    // Accepter est refusé à un compte entreprise (refuser reste possible, pour nettoyer une ancienne invitation).
+    if (accept && isCompanyAccount(user)) {
+      const err = new Error(COMPANY_ACCOUNT_MESSAGE);
+      err.statusCode = 403;
+      throw err;
+    }
+    invitation.status = accept ? 'accepted' : 'declined';
+    invitation.userId = user._id;
+    invitation.respondedAt = new Date();
+    await invitation.save();
+    if (accept && invitation.kind !== 'member') {
+      // Agent d'un centre : l'emploi s'AJOUTE à ceux que la personne a déjà, sans toucher aux autres centres.
+      const account = await User.findById(user._id);
+      if (account && account.typeUser === 'rep') {
+        const next = withEmployment(account, invitation.companyId);
+        account.employments = next.employments;
+        account.employerCompanyId = next.employerCompanyId;
+        await account.save();
+      }
+    }
+    if (accept && invitation.kind === 'member') {
+      // Manager / administratif : l'acceptation crée le rattachement à l'entreprise avec les droits invités.
+      await CompanyMembership.findOneAndUpdate(
+        { companyId: invitation.companyId, userId: user._id },
+        {
+          $set: {
+            email: invitation.email,
+            fullName: invitation.fullName || '',
+            permissions: invitation.permissions || {},
+            preset: ['admin', 'operator', 'readonly'].includes(invitation.preset) ? invitation.preset : 'custom',
+            status: 'active',
+            invitedByUserId: invitation.invitedByUserId || null,
+            invitedAt: invitation.invitedAt || null,
+            connectedAt: new Date(),
+          },
+        },
+        { upsert: true, new: true }
+      );
+    }
+    return { id: String(invitation._id), companyId: String(invitation.companyId), status: invitation.status };
+  }
+
+  /**
+   * Retire une invitation qui n'a pas été acceptée : invitation d'un compte existant (elle disparaît de sa liste), ou
+   * agent créé par ce centre qui ne s'est jamais connecté (compte et profil supprimés). Un agent qui a activé son
+   * compte ne peut plus être retiré ainsi.
+   */
+  async removeInvitation(callerUserId, companyId, agentUserId) {
+    await resolveCallerCompany(callerUserId, companyId);
+    if (!agentUserId || !mongoose.Types.ObjectId.isValid(agentUserId)) {
+      const err = new Error('Valid agent userId is required');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const invitation = await AgentInvitation.findOne({ companyId, kind: { $ne: 'member' }, userId: agentUserId });
+    if (invitation) {
+      if (invitation.status === 'accepted') {
+        const err = new Error('Cet agent a accepté l’invitation : il fait partie de votre équipe.');
+        err.statusCode = 409;
+        throw err;
+      }
+      await AgentInvitation.deleteOne({ _id: invitation._id });
+      return { removed: true, kind: 'invitation' };
+    }
+
+    const user = await User.findById(agentUserId);
+    if (!user || !hasEmployment(user, companyId)) {
+      const err = new Error('Invitation not found on this call center');
+      err.statusCode = 404;
+      throw err;
+    }
+    if (user.invitationStatus === 'active') {
+      const err = new Error('Cet agent a déjà activé son compte : l’invitation ne peut plus être retirée.');
+      err.statusCode = 409;
+      throw err;
+    }
+    // Compte partagé avec un autre centre : on ne supprime jamais le compte, seulement l'emploi dans ce centre.
+    if (activeOtherEmployments(user, companyId)) {
+      await this.applyEnd(user, companyId);
+      return { removed: true, kind: 'employment' };
+    }
+    await mongoose.connection.db.collection('agents').deleteMany({ userId: user._id });
+    await User.deleteOne({ _id: user._id });
+    return { removed: true, kind: 'account' };
+  }
+
+  async applyEnd(user, companyId) {
+    const next = withoutEmployment(user, companyId);
+    user.employments = next.employments;
+    user.employerCompanyId = next.employerCompanyId;
+    await user.save();
+  }
+
+  /**
+   * Retire l'agent de CE centre (emploi terminé, invitation supprimée pour pouvoir le ré-inviter). Les autres
+   * emplois, son compte et ses données des autres centres ne sont pas touchés.
+   */
+  async removeEmployment(callerUserId, companyId, agentUserId) {
+    await resolveCallerCompany(callerUserId, companyId);
+    if (!agentUserId || !mongoose.Types.ObjectId.isValid(agentUserId)) {
+      const err = new Error('Valid agent userId is required');
+      err.statusCode = 400;
+      throw err;
+    }
+    const user = await User.findById(agentUserId);
+    if (!user || !hasEmployment(user, companyId)) {
+      const err = new Error('Agent not found on this call center');
+      err.statusCode = 404;
+      throw err;
+    }
+    await this.applyEnd(user, companyId);
+    await AgentInvitation.deleteOne({ companyId, kind: { $ne: 'member' }, userId: user._id });
+    return { removed: true, kind: 'employment' };
   }
 
   async resendInvite(callerUserId, companyId, agentUserId) {
@@ -290,7 +549,29 @@ class CallCenterAgentService {
     }
 
     const user = await User.findById(agentUserId);
-    if (!user || String(user.employerCompanyId) !== String(companyId)) {
+
+    // Existing HARX account invited by e-mail: remind them to sign in, never touch their password.
+    if (user && !hasEmployment(user, companyId)) {
+      const invitation = await AgentInvitation.findOne({ companyId, kind: { $ne: 'member' }, email: normalizeEmail(user.email) });
+      if (invitation && invitation.status !== 'accepted') {
+        // Relancer une invitation refusée rouvre un siège : même règle que pour une nouvelle invitation.
+        if (invitation.status === 'declined') await assertCanAddSeat(companyId);
+        const dbForNotice = mongoose.connection.db;
+        const companyForNotice = await dbForNotice.collection('companies').findOne({
+          _id: new mongoose.Types.ObjectId(companyId),
+        });
+        invitation.status = 'pending';
+        invitation.invitedAt = new Date();
+        await invitation.save();
+        await sendInvitationNotice({ user, company: companyForNotice });
+        return {
+          agent: serializeInvitedAccount(user, invitation),
+          emailSent: true,
+        };
+      }
+    }
+
+    if (!user || !hasEmployment(user, companyId)) {
       const err = new Error('Agent not found on this call center');
       err.statusCode = 404;
       throw err;

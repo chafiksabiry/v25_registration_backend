@@ -19,6 +19,7 @@ import {
   updateHarxObjectives,
 } from '../services/adminObjectivesService.js';
 import { listOnboardingSatisfaction } from '../services/adminOnboardingSatisfactionService.js';
+import { listCountries, updateCountryRetractionDays } from '../services/adminCountriesService.js';
 
 export const adminLogin = async (req, res) => {
   try {
@@ -155,6 +156,24 @@ export const adminUpdateRepPlan = async (req, res) => {
     res.status(200).json({ success: true, data });
   } catch (error) {
     res.status(error.statusCode || 500).json({ message: error.message || 'Failed to update rep plan' });
+  }
+};
+
+export const adminCountries = async (_req, res) => {
+  try {
+    const data = await listCountries();
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    res.status(500).json({ message: error.message || 'Failed to load countries' });
+  }
+};
+
+export const adminUpdateCountryRetractionDays = async (req, res) => {
+  try {
+    const data = await updateCountryRetractionDays(req.params.countryId, req.body.retractionDays);
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    res.status(error.statusCode || 500).json({ message: error.message || 'Failed to update country' });
   }
 };
 

@@ -14,6 +14,11 @@ const newsletterSubscriberSchema = new mongoose.Schema(
       default: 'landing_footer',
       trim: true,
     },
+    /** Annonces demandées en plus de la lettre (ex. `taas_company_launch` : ouverture de « Publier un gig »). */
+    interests: {
+      type: [String],
+      default: [],
+    },
     locale: {
       type: String,
       trim: true,
