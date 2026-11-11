@@ -1,45 +1,76 @@
 import jwt from 'jsonwebtoken';
+import mongoose from 'mongoose';
 import axios from 'axios';
 import userRepository from '../repositories/userRepository.js';
+import { parseProduct } from '../utils/accountProduct.js';
 import User from '../models/User.js'; // Modèle utilisateur
 import Timezone from '../models/Timezone.js';
 import twilio from 'twilio';
 import { getClientIp } from '../utils/ipHelper.js';
 import ipInfoService from './ipInfoService.js';
+import { verificationEmail, verificationSms } from '../utils/harxMessages.js';
+import { sendAppEmail } from './brevoMail.js';
+import companyMemberService from './companyMemberService.js';
+import CompanyMembership from '../models/CompanyMembership.js';
+import { activeEmployments, defaultCompanyId } from '../utils/employments.js';
+import { hashReengagementToken } from '../utils/reengagementToken.js';
 
-const client = twilio('AC8a453959a6cb01cbbd1c819b00c5782f', '7ade91a170bff98bc625543287ee62c8');
+
+// Client initialized lazily inside methods to ensure env vars are loaded
 class AuthService {
   generateVerificationCode() {
     return Math.floor(100000 + Math.random() * 900000).toString();
   }
   async generateVerificationCodeForRecovery(email) {
-    const existingUser = await userRepository.findByEmail(email);
-    if (!existingUser) {
-      throw new Error('Email not registered');
+    const normalized = String(email || '').trim().toLowerCase();
+    if (!normalized) {
+      const error = new Error('Email is required');
+      error.statusCode = 400;
+      error.code = 'EMAIL_REQUIRED';
+      throw error;
     }
-    const verificationCode= Math.floor(100000 + Math.random() * 900000).toString();
+
+    const existingUser = await userRepository.findByEmail(normalized);
+    if (!existingUser) {
+      const error = new Error('Email not registered');
+      error.statusCode = 404;
+      error.code = 'EMAIL_NOT_REGISTERED';
+      throw error;
+    }
+
+    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
     const verificationExpiry = new Date();
     verificationExpiry.setMinutes(verificationExpiry.getMinutes() + 10);
 
-   const result = await userRepository.update(  { _id: existingUser._id},
-    {
+    await userRepository.update(existingUser._id, {
       $set: {
-        'verificationCode.code' : verificationCode,
-  'verificationCode.expiresAt' :verificationExpiry,
+        'verificationCode.code': verificationCode,
+        'verificationCode.expiresAt': verificationExpiry,
       },
-    },
-    { upsert: true, new: true });
+    });
 
-    console.log("resultrecovery",result);
+    // This code resets the account's password — it must never be readable
+    // off the wire by anyone who merely knows the victim's email. Same rule
+    // as login()/register(): send it by email server-side only.
+    await this.sendVerificationEmail(normalized, verificationCode);
 
-    return { verificationCode , result};
+    return { success: true };
   }
 
-  generateToken(userId) {
+  generateToken(userId, userInfo = {}) {
     return jwt.sign(
-      { userId },
-      process.env.JWT_SECRET,
-      { expiresIn: '24h' }
+      {
+        userId,
+        email: userInfo.email,
+        fullName: userInfo.fullName,
+        typeUser: userInfo.typeUser,
+        isVerified: userInfo.isVerified,
+        mustChangePassword: Boolean(userInfo.mustChangePassword),
+        employerCompanyId: userInfo.employerCompanyId
+          ? String(userInfo.employerCompanyId)
+          : null,
+      },
+      process.env.JWT_SECRET
     );
   }
 
@@ -51,11 +82,11 @@ class AuthService {
       }
 
       // Chercher si le timezone existe avec country code ET zone name
-      const timezone = await Timezone.findOne({ 
+      const timezone = await Timezone.findOne({
         countryCode: locationInfo.countryCode,
-        zoneName: locationInfo.timezone 
+        zoneName: locationInfo.timezone
       });
-      
+
       if (!timezone) {
         console.warn(`Timezone not found for country: ${locationInfo.countryCode}, zone: ${locationInfo.timezone}`);
         return null;
@@ -77,7 +108,7 @@ class AuthService {
       }
 
       const locationInfo = await ipInfoService.getLocationInfo(ipAddress);
-      
+
       if (!locationInfo) {
         console.warn('Unable to get location info for IP:', ipAddress);
         return null;
@@ -107,22 +138,32 @@ class AuthService {
   }
 
   async register(userData, req) {
-    console.log("userData",userData);
-    const existingUser = await userRepository.findByEmail(userData.email);
+    console.log('Register attempt for email:', userData.email);
+    const password = String(userData.password || '');
+    if (!(password.length >= 8 && /[A-Za-z]/.test(password) && /[0-9]/.test(password))) {
+      throw new Error('Password must be at least 8 characters with letters and numbers');
+    }
+
+    const email = String(userData.email || '').trim().toLowerCase();
+    const existingUser = await userRepository.findByEmail(email);
     if (existingUser) {
       console.warn("Email already registered");
       throw new Error('Email already registered');
     }
 
+    const phone = String(userData.phone || '').trim();
+
     const verificationCode = this.generateVerificationCode();
     const verificationExpiry = new Date();
     verificationExpiry.setMinutes(verificationExpiry.getMinutes() + 10);
-    
+
     const clientIp = getClientIp(req);
     const locationInfo = await this.enrichIPInfo(clientIp);
-    
+
     const result = await userRepository.create({
       ...userData,
+      email,
+      phone,
       verificationCode: {
         code: verificationCode,
         expiresAt: verificationExpiry
@@ -133,37 +174,67 @@ class AuthService {
         ...(locationInfo && { locationInfo: locationInfo })
       }]
     });
-    console.log("result2",result);
 
-    return { verificationCode , result};
+    // Same rule as login(): the code is only ever delivered by email, never
+    // echoed back in the API response — otherwise anyone who can call this
+    // endpoint can read the verification code off the wire without needing
+    // the registrant's inbox.
+    await this.sendVerificationEmail(email, verificationCode);
+
+    return { result };
+  }
+
+  async checkEmailAvailable(email) {
+    const normalized = String(email || '').trim().toLowerCase();
+    if (!normalized) {
+      throw new Error('Email is required');
+    }
+    const existingUser = await userRepository.findByEmail(normalized);
+    return { available: !existingUser };
+  }
+
+  // Phone numbers are not required to be unique (décidé le 14/10) — only
+  // the email is. Kept as a no-op available:true so the frontend's
+  // check-phone step still has something to call.
+  async checkPhoneAvailable(phone) {
+    const trimmed = String(phone || '').trim();
+    if (!trimmed) {
+      throw new Error('Phone is required');
+    }
+    return { available: true };
   }
 
   async login(email, password, req) {
-    console.log('we are here');
     const user = await userRepository.findByEmail(email);
-    console.log("user",user);
     if (!user) {
-      console.log('user not found');
-      throw new Error('Invalid credentials');
+      const err = new Error('Invalid email');
+      err.code = 'INVALID_EMAIL';
+      throw err;
     }
 
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
-      console.log('invalid credentials')
-      throw new Error('Invalid credentials');
+      const err = new Error('Invalid password');
+      err.code = 'INVALID_PASSWORD';
+      throw err;
+    }
+
+    if (!user.isVerified) {
+      const err = new Error('Account not verified');
+      err.code = 'ACCOUNT_NOT_VERIFIED';
+      throw err;
     }
 
     const verificationCode = this.generateVerificationCode();
     const verificationExpiry = new Date();
     verificationExpiry.setMinutes(verificationExpiry.getMinutes() + 10);
-    console.log("verificationCodeLogin",verificationCode);
-    
+
     const clientIp = getClientIp(req);
     const locationInfo = await this.enrichIPInfo(clientIp);
-    
+
     // Check if it's first time login
     const isFirstTime = user.firstTime;
-    
+
     await userRepository.update(user._id, {
       verificationCode: {
         code: verificationCode,
@@ -179,54 +250,120 @@ class AuthService {
       }
     });
 
+    // The code is a 2FA secret — it must reach the user only by email, never
+    // echoed back in the API response (that would let anyone with the
+    // password skip 2FA entirely).
+    await this.sendVerificationEmail(user.email, verificationCode);
+
     return {
-      verificationCode,
       userId: String(user._id),
       phone: user.phone || '',
     };
   }
 
 
-    async verifyEmail(email, code) {
-      try {
-        // Récupérer l'utilisateur par email
-        const user = await userRepository.findByEmail(email);
-        console.log("userInVerifyEmail:", user);
-    
-        if (!user) {
-          throw new Error('User not found');
-        }
-    
-        // Vérifier le code de vérification et sa validité
-        if (
-          !user.verificationCode ||
-          user.verificationCode.code !== code ||
-          user.verificationCode.expiresAt < new Date()
-        ) {
-          console.log('Verification failed: invalid or expired code');
-          return{ error: true, message:'invalid or expired code. Please try again.'}
-
-         // throw new Error('Invalid or expired verification code');
-        }
-    
-        // Mettre à jour l'utilisateur : retirer le code de vérification
-        await userRepository.update(user._id, {
-          verificationCode: undefined,
-          // isVerified: true
-        });
-    
-        // Générer un token et le retourner
-        return { token: this.generateToken(user._id) };
-      } catch (error) {
-        console.error('Error in verifyEmail:', error.message);
-        // Propager une erreur pour qu'elle puisse être gérée par l'appelant
-        throw new Error(error.message || 'Failed to verify email');
-      }
+  /**
+   * Exchange the token from a re-engagement e-mail link for a session JWT.
+   * Clicking the link proves control of the mailbox, so the account is marked verified.
+   */
+  async reengageLogin(rawToken, req) {
+    const token = String(rawToken || '').trim();
+    const fail = (message, code, statusCode) => {
+      const error = new Error(message);
+      error.code = code;
+      error.statusCode = statusCode;
+      return error;
+    };
+    if (token.length < 32 || token.length > 128) {
+      throw fail('Invalid link', 'INVALID_LINK', 400);
     }
-    
+
+    const user = await User.findOne({ 'reengagement.tokenHash': hashReengagementToken(token) });
+    if (!user || user.typeUser !== 'rep') {
+      throw fail('Invalid link', 'INVALID_LINK', 400);
+    }
+    const expiresAt = user.reengagement?.expiresAt;
+    if (!expiresAt || expiresAt < new Date()) {
+      throw fail('This link has expired', 'LINK_EXPIRED', 410);
+    }
+
+    const clientIp = getClientIp(req);
+    const locationInfo = await this.enrichIPInfo(clientIp);
+
+    await userRepository.update(user._id, {
+      isVerified: true,
+      firstTime: false,
+      'reengagement.lastUsedAt': new Date(),
+      $push: {
+        ipHistory: {
+          ip: clientIp,
+          action: 'login',
+          ...(locationInfo && { locationInfo }),
+        },
+      },
+    });
+
+    return {
+      token: this.generateToken(user._id, {
+        email: user.email,
+        fullName: user.fullName,
+        typeUser: user.typeUser,
+        isVerified: true,
+        mustChangePassword: user.mustChangePassword,
+        employerCompanyId: user.employerCompanyId,
+      }),
+    };
+  }
+
+  async verifyEmail(email, code) {
+    try {
+      // Récupérer l'utilisateur par email
+      const user = await userRepository.findByEmail(email);
+
+      if (!user) {
+        throw new Error('User not found');
+      }
+
+      // Vérifier le code de vérification et sa validité
+      if (
+        !user.verificationCode ||
+        user.verificationCode.code !== code ||
+        user.verificationCode.expiresAt < new Date()
+      ) {
+        return { error: true, message: 'invalid or expired code. Please try again.' }
+
+        // throw new Error('Invalid or expired verification code');
+      }
+
+      // Clear email code only — keep SMS OTP fields if present
+      await userRepository.update(user._id, {
+        $unset: {
+          'verificationCode.code': '',
+          'verificationCode.expiresAt': '',
+        },
+      });
+
+      // Générer un token et le retourner avec les informations utilisateur
+      return {
+        token: this.generateToken(user._id, {
+          email: user.email,
+          fullName: user.fullName,
+          typeUser: user.typeUser,
+          isVerified: user.isVerified,
+          mustChangePassword: user.mustChangePassword,
+          employerCompanyId: user.employerCompanyId,
+        })
+      };
+    } catch (error) {
+      console.error('Error in verifyEmail:', error.message);
+      // Propager une erreur pour qu'elle puisse être gérée par l'appelant
+      throw new Error(error.message || 'Failed to verify email');
+    }
+  }
+
 
   async linkedInAuth(code) {
-    console.log("code before accesstoken",code);
+    console.log("code before accesstoken", code);
     const tokenResponse = await axios.post('https://www.linkedin.com/oauth/v2/accessToken', null, {
       params: {
         grant_type: 'authorization_code',
@@ -236,298 +373,407 @@ class AuthService {
         redirect_uri: `${process.env.FRONTEND_URL}/linkedin/callback`
       }
     });
-console.log("redirect_uri",`${process.env.FRONTEND_URL}/linkedin/callback`);
+    console.log("redirect_uri", `${process.env.FRONTEND_URL}/linkedin/callback`);
     const accessToken = tokenResponse.data.access_token;
-    console.log("accessToken",accessToken);
+    console.log("accessToken", accessToken);
 
     const [profileResponse] = await Promise.all([
       axios.get('https://api.linkedin.com/v2/userinfo', {
         headers: { Authorization: `Bearer ${accessToken}` }
-       /*  params: {
-          projection: '(localizedFirstName,localizedLastName)'
-        } */
+        /*  params: {
+           projection: '(localizedFirstName,localizedLastName)'
+         } */
       })
-    /*   axios.get('https://api.linkedin.com/v2/emailAddress?q=members&projection=(elements*(handle~))', {
-        headers: { Authorization: `Bearer ${accessToken}` }
-      }) */
+      /*   axios.get('https://api.linkedin.com/v2/emailAddress?q=members&projection=(elements*(handle~))', {
+          headers: { Authorization: `Bearer ${accessToken}` }
+        }) */
     ]);
 
     const profile = profileResponse.data;
-   // const email = emailResponse.data.elements[0]['handle~'].emailAddress;
-console.log("profile",profileResponse);
+    // const email = emailResponse.data.elements[0]['handle~'].emailAddress;
+    console.log("profile", profileResponse);
     let user = await userRepository.findByEmail(profile.email);
     if (!user) {
       user = await userRepository.create({
         fullName: profile.name,
-        email:profile.email,
+        email: profile.email,
         isVerified: profile.email_verified,
         linkedInId: profile.sub
       });
     }
 
-    return { token: this.generateToken(user._id) };
+    return {
+      token: this.generateToken(user._id, {
+        email: user.email,
+        fullName: user.fullName,
+        typeUser: user.typeUser,
+        isVerified: user.isVerified,
+        mustChangePassword: user.mustChangePassword,
+        employerCompanyId: user.employerCompanyId,
+      })
+    };
   }
 
-// Service pour envoyer un OTP
- async  sendOTPWithTwilio(userId, phoneNumber) {
-  try {
-    const otp = Math.floor(100000 + Math.random() * 900000);
-    const expiresAt = new Date(Date.now() + 300000);
-console.log("userIdInSendOTPWithTwilio",userId);
-   const result= await userRepository.update(
-      { _id: userId },
-      {
+  // Service pour envoyer un OTP
+  async sendOTPWithTwilio(userId, phoneNumber) {
+    try {
+      if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN || !process.env.TWILIO_PHONE_NUMBER) {
+        console.error("🚨 Missing Twilio Configuration! Check TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER.");
+        throw new Error('Server misconfiguration: Missing SMS credentials.');
+      }
+
+      const otp = Math.floor(100000 + Math.random() * 900000);
+      const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 min — 30s was too short for SMS delivery + user input
+      await userRepository.update(userId, {
         $set: {
           'verificationCode.otp': otp,
           'verificationCode.otpExpiresAt': expiresAt,
         },
-      },
-      { upsert: true, new: true }
-    );
-    console.log("result",result);
+      });
+      const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+      console.log(`Sending SMS OTP to ${phoneNumber.slice(0, 4)}***`);
+      const twilioResponse = await client.messages.create({
+        body: verificationSms(otp),
+        to: phoneNumber,
+        from: process.env.TWILIO_PHONE_NUMBER,
+      });
+      console.log('Twilio SMS sent, SID:', twilioResponse.sid);
+      return { success: true, message: 'OTP sent successfully' };
 
-     await client.messages.create({
-      body: `Your OTP code is: ${otp}`,
-      to: phoneNumber,
-      from: process.env.TWILIO_PHONE_NUMBER,
-    });  
-    console.log('done');
-    return { success: true, message: 'OTP sent successfully' };
-    
-  } catch (error) {
-    console.error('Error in sendOTPWithTwilio:', error);
-    throw new Error('Failed to send OTP');
+    } catch (error) {
+      console.error('Error in sendOTPWithTwilio:', error.code || error.message);
+      let message = error?.message || 'Failed to send OTP';
+      if (error?.code === 21408) {
+        message = 'SMS verification is not available for this phone region. Please use email verification.';
+      }
+      const enrichedError = new Error(message);
+      enrichedError.status = error?.status || error?.statusCode || 500;
+      enrichedError.code = error?.code;
+      enrichedError.moreInfo = error?.moreInfo;
+      throw enrichedError;
+    }
   }
-}
 
-// Service pour vérifier un OTP
- async  verifyOTPTwilio(userId, enteredOtp) {
-  try {
-    const user = await userRepository.findById({ _id: userId });
+  // Service pour vérifier un OTP
+  async verifyOTPTwilio(userId, enteredOtp) {
+    try {
+      const user = await userRepository.findById(userId);
 
-    if (!user || !user.verificationCode) {
-      throw new Error('User not found or OTP not generated');
-    }
+      if (!user || !user.verificationCode) {
+        throw new Error('User not found or OTP not generated');
+      }
 
-    const { otp, otpExpiresAt } = user.verificationCode;
+      const { otp, otpExpiresAt } = user.verificationCode;
 
-    if (!otpExpiresAt || new Date() > otpExpiresAt) {
-      throw new Error('OTP has expired. Please request a new one.');
-    }
-    if (String(otp) === String(enteredOtp)) {
-      console.log("search for otp");
-      await userRepository.update(
-        { _id: user._id },
-        {
-          $set: {
-            'verificationCode.otp' : undefined,
-      'verificationCode.otpExpiresAt' :undefined,
+      if (!otpExpiresAt || new Date() > otpExpiresAt) {
+        throw new Error('OTP has expired. Please request a new one.');
+      }
+      if (String(otp) === String(enteredOtp)) {
+        await userRepository.update(user._id, {
+          $unset: {
+            'verificationCode.otp': '',
+            'verificationCode.otpExpiresAt': '',
           },
-        },
-        { upsert: true, new: true }
-      );
-      return { success: true, message: 'OTP verified successfully' };
-    } else {
-      return{ error: true, message:'Invalid OTP. Please try again.'}
-     // throw new Error('Invalid OTP. Please try again.');
+        });
+        return {
+          token: this.generateToken(user._id, {
+            email: user.email,
+            fullName: user.fullName,
+            typeUser: user.typeUser,
+            isVerified: user.isVerified,
+            mustChangePassword: user.mustChangePassword,
+            employerCompanyId: user.employerCompanyId,
+          }),
+          success: true,
+          message: 'OTP verified successfully'
+        };
+      } else {
+        return { error: true, message: 'Invalid OTP. Please try again.' }
+        // throw new Error('Invalid OTP. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error in verifyOTPTwilio:', error);
+      throw new Error(error.message || 'Failed to verify OTP');
     }
-  } catch (error) {
-    console.error('Error in verifyOTPTwilio:', error);
-    throw new Error(error.message || 'Failed to verify OTP');
   }
-}
 
-async verifyAccount(userId) {
-  try {
-    // Chercher l'utilisateur par son ID
-    const user = await userRepository.findById({ _id: userId });
-    
-    if (!user) {
-      throw new Error('User not found');
-    }
+  async verifyAccount(userId) {
+    try {
+      // Chercher l'utilisateur par son ID
+      const user = await userRepository.findById(userId);
 
-    // Si l'utilisateur est déjà vérifié, retourner un message sans effectuer d'action
-    if (user.isVerified) {
-      return { success: true, message: 'Account is already verified' };
-    }
+      if (!user) {
+        throw new Error('User not found');
+      }
 
-    // Mettre à jour le champ isVerified à true
-    await userRepository.update(
-      { _id: user._id },
-      {
+      // Si l'utilisateur est déjà vérifié, retourner un message sans effectuer d'action
+      if (user.isVerified) {
+        return { success: true, message: 'Account is already verified' };
+      }
+
+      // Mettre à jour le champ isVerified à true
+      await userRepository.update(user._id, {
         $set: {
           isVerified: true,
         },
-      },
-      { upsert: true, new: true }
-    );
-    return { success: true, message: 'Account verified successfully' };
-  } catch (error) {
-    console.error('Error in verifyAccount:', error);
-    throw new Error('Failed to verify account');
+      });
+      return { success: true, message: 'Account verified successfully' };
+    } catch (error) {
+      console.error('Error in verifyAccount:', error);
+      throw new Error('Failed to verify account');
+    }
   }
-}
 
-/* 
-async changePassword(email, newPassword){
-  // Recherche de l'utilisateur par email
-  const user = await userRepository.findByEmail(email);
-  if (!user) {
-      throw new Error('Utilisateur non trouvé.');
-  }
-  console.log("userinchangepasswd",user);
-  // Mise à jour du mot de passe dans la base de données
-   await userRepository.update(
-    { _id: user._id },
-    {
-      $set: {
-        password: newPassword,
-      },
-    },
-    { upsert: true, new: true }
-  ); 
-    // Mettre à jour le mot de passe
-    user.password = newPassword; // Le hook `pre('save')` hash automatiquement le mot de passe
-    await user.save();
-
-  return { success: true, message: 'Mot de passe changé avec succès.' };
-
-} */
-
-async changePassword(email, newPassword){
+  /* 
+  async changePassword(email, newPassword){
     // Recherche de l'utilisateur par email
-    const user = await User.findOne({ email });
+    const user = await userRepository.findByEmail(email);
     if (!user) {
         throw new Error('Utilisateur non trouvé.');
     }
+    console.log("userinchangepasswd",user);
+    // Mise à jour du mot de passe dans la base de données
+     await userRepository.update(
+      { _id: user._id },
+      {
+        $set: {
+          password: newPassword,
+        },
+      },
+      { upsert: true, new: true }
+    ); 
+      // Mettre à jour le mot de passe
+      user.password = newPassword; // Le hook `pre('save')` hash automatiquement le mot de passe
+      await user.save();
+  
+    return { success: true, message: 'Mot de passe changé avec succès.' };
+  
+  } */
+
+  async changePassword(email, newPassword) {
+    // Recherche de l'utilisateur par email
+    const user = await User.findOne({ email: String(email || '').trim().toLowerCase() });
+    if (!user) {
+      const error = new Error('Email not registered');
+      error.statusCode = 404;
+      error.code = 'EMAIL_NOT_REGISTERED';
+      throw error;
+    }
 
     // Mettre à jour le mot de passe
     user.password = newPassword; // Le hook `pre('save')` hash automatiquement le mot de passe
+    user.mustChangePassword = false;
+    if (user.employerCompanyId && user.invitationStatus !== 'active') {
+      user.invitationStatus = 'active';
+    }
     await user.save();
-
-    return { success: true, message: 'Mot de passe changé avec succès.' };
-
-}
-
-async linkedinSignIn(code){
-  console.log("code/////",code);
-  const clientId = process.env.LINKEDIN_CLIENT_ID;
-  const clientSecret = process.env.LINKEDIN_CLIENT_SECRET;
-  const redirectUri = `${process.env.FRONTEND_URL}/linkedin/signin/callback`;
-console.log("redirectUri",redirectUri);
-  // Get LinkedIn Access Token
-  const tokenResponse = await axios.post("https://www.linkedin.com/oauth/v2/accessToken", null, {
-    params: {
-      grant_type: "authorization_code",
-      code,
-      redirect_uri: redirectUri,
-      client_id: clientId,
-      client_secret: clientSecret,
-    },
-  });
-console.log("tokenResponse",tokenResponse);
-  const accessToken = tokenResponse.data.access_token;
-  console.log("accessToken",accessToken);
-
-   // Fetch LinkedIn User Info
-  const profileResponse = await axios.get("https://api.linkedin.com/v2/userinfo", {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
-
-  const { sub,name, given_name, family_name, email, email_verified } = profileResponse.data;
-
-  // Check if user exists, else create one
-  let user = await User.findOne({ email });
-  if (!user) {
-    user = new User({
-      fullName: name,
-      email,
-      linkedInId: sub,
-      isVerified: email_verified,
-    });
-    await user.save();
-  }
-
-  // Generate JWT Token
-  const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: "7d" });
-
-  return { token, user }; 
-};
-
-async sendVerificationEmail(email, code) {
-  console.log("sendverififcationemail from service");
-  if (!process.env.BREVO_API_KEY) {
-    throw new Error('🚨 BREVO_API_KEY is missing in production!');
-  }
-  try {
-    // Send verification email using Brevo
-    const response = await axios.post('https://api.brevo.com/v3/smtp/email', {
-      sender: {
-        name: process.env.SMTP_SENDER_NAME,
-        email: process.env.BREVO_FROM_EMAIL
-      },
-      to: [{
-        email: email,
-        name: email.split('@')[0]
-      }],
-      subject: 'Email Verification',
-      htmlContent: `
-        <h1>Email Verification</h1>
-        <p>Your verification code is: <strong>${code}</strong></p>
-        <p>This code will expire in 10 minutes.</p>
-      `
-    }, {
-      headers: {
-        'api-key': process.env.BREVO_API_KEY,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    if (!response.data) {
-      throw new Error('No response data from Brevo API');
+    if (user.typeUser === 'company-member') {
+      await companyMemberService.markPresent(user._id);
     }
 
-    return { success: true, message: 'Verification email sent successfully', data: response.data };
-  } catch (error) {
-    console.error('Error sending verification email:', error.response?.data || error.message);
-    throw new Error(error.response?.data?.message || 'Failed to send verification email');
-  }
-}
-async checkFirstLogin(userId) {
-  const user = await User.findById(userId);
-  if (!user) {
-    throw new Error("User not found");
+    return { success: true, message: 'Mot de passe changé avec succès.', user };
+
   }
 
-  return { isFirstLogin: user.firstTime };
-}
-async changeUserType(userId, newType) {
-  try {
-    // Find the user by their ID
+  async linkedinSignIn(code) {
+    console.log("code/////", code);
+    const clientId = process.env.LINKEDIN_CLIENT_ID;
+    const clientSecret = process.env.LINKEDIN_CLIENT_SECRET;
+    const redirectUri = `${process.env.FRONTEND_URL}/linkedin/signin/callback`;
+    console.log("redirectUri", redirectUri);
+    // Get LinkedIn Access Token
+    const tokenResponse = await axios.post("https://www.linkedin.com/oauth/v2/accessToken", null, {
+      params: {
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: redirectUri,
+        client_id: clientId,
+        client_secret: clientSecret,
+      },
+    });
+    console.log("tokenResponse", tokenResponse);
+    const accessToken = tokenResponse.data.access_token;
+    console.log("accessToken", accessToken);
+
+    // Fetch LinkedIn User Info
+    const profileResponse = await axios.get("https://api.linkedin.com/v2/userinfo", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    const { sub, name, given_name, family_name, email, email_verified } = profileResponse.data;
+
+    // Check if user exists, else create one
+    let user = await User.findOne({ email });
+    if (!user) {
+      user = new User({
+        fullName: name,
+        email,
+        linkedInId: sub,
+        isVerified: email_verified,
+      });
+      await user.save();
+    }
+
+    // Generate JWT Token with user info
+    const token = jwt.sign({
+      userId: user._id,
+      email: user.email,
+      fullName: user.fullName,
+      typeUser: user.typeUser,
+      isVerified: user.isVerified
+    }, process.env.JWT_SECRET);
+
+    return { token, user };
+  };
+
+  async sendVerificationEmail(email, code) {
+    const message = verificationEmail({ code });
+    try {
+      const info = await sendAppEmail({
+        to: email,
+        subject: message.subject,
+        text: message.text,
+        html: message.html,
+      });
+      return { success: true, message: 'Verification email sent successfully', data: info };
+    } catch (error) {
+      console.error('Error sending verification email with Brevo:', error.message);
+      const wrapped = new Error('Failed to send verification email');
+      wrapped.statusCode = 502;
+      wrapped.code = 'EMAIL_SEND_FAILED';
+      throw wrapped;
+    }
+  }
+  async checkFirstLogin(userId) {
+    const user = await User.findById(userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    return { isFirstLogin: user.firstTime };
+  }
+  async changeUserType(userId, newType) {
+    try {
+      const allowed = ['company', 'rep', 'call-center'];
+      if (newType === 'admin') {
+        throw new Error('Admin role cannot be assigned through this endpoint');
+      }
+      if (!allowed.includes(newType)) {
+        throw new Error(`Invalid user type. Allowed: ${allowed.join(', ')}`);
+      }
+
+      const user = await userRepository.findById(userId);
+
+      if (!user) {
+        throw new Error('User not found');
+      }
+
+      // Update the user's type
+      user.typeUser = newType;
+      await user.save();
+
+      return { success: true, message: `User type changed to ${newType}` };
+    } catch (error) {
+      console.error('Error changing user type:', error);
+      throw new Error(error?.message || 'Failed to change user type');
+    }
+  }
+
+  async checkUserType(userId) {
     const user = await userRepository.findById({ _id: userId });
-    
     if (!user) {
       throw new Error('User not found');
     }
-
-    // Update the user's type
-    user.typeUser = newType;
-    await user.save();
-
-    return { success: true, message: `User type changed to ${newType}` };
-  } catch (error) {
-    console.error('Error changing user type:', error);
-    throw new Error('Failed to change user type');
+    // Un membre invité arrive dans le produit de la personne qui l'a invité.
+    let product = user.product || null;
+    if (!product && user.typeUser === 'company-member') {
+      try {
+        const membership = await CompanyMembership.findOne({ userId: user._id }).sort({ createdAt: 1 }).select('invitedByUserId').lean();
+        if (membership?.invitedByUserId) {
+          const inviter = await userRepository.findById(membership.invitedByUserId);
+          product = inviter?.product || null;
+        }
+      } catch (error) {
+        console.error('checkUserType: produit du membre illisible:', error.message);
+      }
+    }
+    // Un agent employé par un centre arrive dans le produit du propriétaire d'un de ses centres (le défaut d'abord).
+    const defaultCenter = user.typeUser === 'rep' ? defaultCompanyId(user) : null;
+    if (!product && defaultCenter) {
+      const ordered = [defaultCenter, ...activeEmployments(user).map((e) => e.companyId).filter((id) => id !== defaultCenter)];
+      for (const centerId of ordered) {
+        if (product) break;
+        try {
+          const company = await mongoose.connection.db.collection('companies').findOne({ _id: new mongoose.Types.ObjectId(String(centerId)) }, { projection: { userId: 1 } });
+          if (company?.userId) {
+            const owner = await userRepository.findById(company.userId);
+            product = owner?.product || null;
+          }
+        } catch (error) {
+          console.error('checkUserType: produit de l\'agent illisible:', error.message);
+        }
+      }
+    }
+    return {
+      userType: user.typeUser,
+      mustChangePassword: Boolean(user.mustChangePassword),
+      // Centre par défaut (ancien champ mono-valué, lecture compatible) et liste de tous les emplois actifs.
+      employerCompanyId: user.typeUser === 'rep' ? defaultCenter : (user.employerCompanyId ? String(user.employerCompanyId) : null),
+      employments: user.typeUser === 'rep' ? activeEmployments(user).map((e) => e.companyId) : [],
+      product,
+    };
   }
-}
 
-async checkUserType(userId) {
-  const user = await userRepository.findById({ _id: userId });
-  if (!user) {
-    throw new Error('User not found');
+  /** Rattache le compte à un produit HARX (appelé par l'application du produit quand le compte l'utilise). */
+  async setProduct(userId, product) {
+    const value = parseProduct(product);
+    if (!value) throw new Error('Produit inconnu');
+    await userRepository.update(userId, { product: value });
+    return { product: value };
   }
-  return user.typeUser;
-}
+
+  async adminLogin(email, password, req) {
+    const user = await userRepository.findByEmail(email);
+    if (!user || user.typeUser !== 'admin') {
+      throw new Error('Invalid admin credentials');
+    }
+
+    const isMatch = await user.comparePassword(password);
+    if (!isMatch) {
+      throw new Error('Invalid admin credentials');
+    }
+
+    const clientIp = getClientIp(req);
+    const locationInfo = await this.enrichIPInfo(clientIp);
+
+    await userRepository.update(user._id, {
+      firstTime: false,
+      isVerified: true,
+      verificationCode: undefined,
+      $push: {
+        ipHistory: {
+          ip: clientIp,
+          action: 'login',
+          ...(locationInfo && { locationInfo }),
+        },
+      },
+    });
+
+    return {
+      token: this.generateToken(user._id, {
+        email: user.email,
+        fullName: user.fullName,
+        typeUser: user.typeUser,
+        isVerified: true,
+      }),
+      user: {
+        userId: user._id,
+        email: user.email,
+        fullName: user.fullName,
+        typeUser: user.typeUser,
+      },
+    };
+  }
 
 
 }

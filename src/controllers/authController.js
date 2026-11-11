@@ -1,17 +1,44 @@
 //import { Request, Response } from 'express';
 import authService from '../services/authService.js';
 
+function sendPasswordResetError(res, error, scope) {
+  const status = Number(error?.statusCode) || 500;
+  const code = status >= 500 ? 'PASSWORD_RESET_FAILED' : (error?.code || 'PASSWORD_RESET_FAILED');
+  console.error(`${scope}:`, error?.message || error);
+  return res.status(status).json({ error: code });
+}
+
 export const register = async (req, res) => {
   try {
     const result = await authService.register(req.body, req);
-    console.log("result1",result);
-    console.log("result._id",result.result._id);
-    console.log('Verification code:', result.verificationCode);
-    //res.status(201).json({ message: 'Registration successful' });
-    res.status(201).json({ 
-      message: 'Registration successful', 
-      data: { code: result.verificationCode , _id:result.result._id} 
-  });
+    res.status(201).json({
+      message: 'Registration successful',
+      data: { _id: result.result._id }
+    });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+export const checkEmail = async (req, res) => {
+  try {
+    const result = await authService.checkEmailAvailable(req.body?.email);
+    if (!result.available) {
+      return res.status(409).json({ available: false, message: 'Email already registered' });
+    }
+    res.status(200).json({ available: true });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+export const checkPhone = async (req, res) => {
+  try {
+    const result = await authService.checkPhoneAvailable(req.body?.phone);
+    if (!result.available) {
+      return res.status(409).json({ available: false, message: 'Phone already registered' });
+    }
+    res.status(200).json({ available: true });
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
@@ -33,21 +60,32 @@ export const register = async (req, res) => {
 export const login = async (req, res) => {
   try {
     const result = await authService.login(req.body.email, req.body.password, req);
-    console.log('Login verification code:', result.verificationCode);
-    
-    res.status(201).json({ 
-      message: 'Verification code sent', 
+
+    res.status(201).json({
+      message: 'Verification code sent',
       data: {
-        code: result.verificationCode,
         userId: result.userId,
         phone: result.phone || '',
       },
     });
   } catch (error) {
     console.error("Login error:", error.message);
+    const code = error.code || (
+      error.message === 'Invalid email' ? 'INVALID_EMAIL' :
+      error.message === 'Invalid password' ? 'INVALID_PASSWORD' :
+      'INVALID_CREDENTIALS'
+    );
+    if (code === 'ACCOUNT_NOT_VERIFIED') {
+      return res.status(403).json({ message: 'Account not verified', code });
+    }
+    const message =
+      code === 'INVALID_EMAIL' ? 'Invalid email' :
+      code === 'INVALID_PASSWORD' ? 'Invalid password' :
+      'Invalid credentials';
     res.status(400).json({
-      error: 'Invalid credentials',
-      message: 'Invalid credentials',
+      error: message,
+      message,
+      code,
     });
   }
 };
@@ -56,15 +94,26 @@ export const login = async (req, res) => {
 export const verifyEmail = async (req, res) => {
   try {
     const result = await authService.verifyEmail(req.body.email, req.body.code);
-    console.log("ResultController",result);
-    res.json({ token: result.token,result });
+    res.json({ token: result.token, result });
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
 };
 
+export const reengageLogin = async (req, res) => {
+  try {
+    const result = await authService.reengageLogin(req.body?.token, req);
+    res.json(result);
+  } catch (error) {
+    res.status(error.statusCode || 400).json({
+      message: error.message,
+      code: error.code || 'INVALID_LINK',
+    });
+  }
+};
+
 export const linkedInAuth = async (req, res) => {
-  console.log("code",req.body.code);
+  console.log("code", req.body.code);
   try {
     const result = await authService.linkedInAuth(req.body.code);
     res.json({ token: result.token });
@@ -78,25 +127,26 @@ export const linkedInAuth = async (req, res) => {
 // Contrôleur pour envoyer un OTP
 export const sendOTP = async (req, res) => {
   const { userId, phoneNumber } = req.body;
-console.log("userId in sndotp controller",userId);
   if (!userId || !phoneNumber) {
     return res.status(400).json({ error: 'userId and phoneNumber are required' });
   }
 
   try {
     const result = await authService.sendOTPWithTwilio(userId, phoneNumber);
-    console.log("result in otp controller",result)
     return res.status(200).json(result);
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    const status = error.status || 500;
+    return res.status(status).json({
+      error: error.message || 'Failed to send OTP',
+      code: error.code || null,
+      moreInfo: error.moreInfo || null,
+    });
   }
 };
 
 // Contrôleur pour vérifier un OTP
 export const verifyOTP = async (req, res) => {
   const { userId, otp } = req.body;
-  console.log("userId",userId);
-console.log("userandotp",otp);
   if (!userId || !otp) {
     return res.status(400).json({ error: 'userId and otp are required' });
   }
@@ -127,33 +177,43 @@ export async function verifyAccount(req, res) {
 
 };
 //generer du code pour la verification email 
-export async function generateVerificationCode(req,res){
-  const { email } = req.body;
-  const result = await authService.generateVerificationCodeForRecovery(email);
-  console.log("resultControllerrecovry",result);
-  return res.status(200).json(result);  // Compte vérifié avec succès
+export async function generateVerificationCode(req, res) {
+  try {
+    const { email } = req.body;
+    // generateVerificationCodeForRecovery() sends the code by email itself —
+    // it must never come back in this response, or anyone who knows a
+    // registered email could read the password-reset code off the wire and
+    // take over the account without ever touching the victim's inbox.
+    await authService.generateVerificationCodeForRecovery(email);
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    return sendPasswordResetError(res, error, 'generateVerificationCode');
+  }
 };
 
 //controlleur pour changement de mot de passe
 export async function changePassword(req, res) {
   try {
-      const { email, newPassword } = req.body;
-console.log("email",email);
-console.log("password",newPassword);
-      // Validation des champs
-      if (!email || !newPassword) {
-          return res.status(400).json({ message: 'Email et nouveau mot de passe requis.' });
-      }
+    const { newPassword } = req.body;
+    const email = req.user?.email;
 
-      // Appel du service pour changer le mot de passe
-      const result = await authService.changePassword(email, newPassword);
+    if (!newPassword) {
+      return res.status(400).json({ error: 'PASSWORD_REQUIRED' });
+    }
 
-      return res.status(200).json({ message: result });
+    const result = await authService.changePassword(email, newPassword);
+    // The caller's JWT still carries mustChangePassword:true (JWTs are
+    // immutable) — mint a fresh one now the flag is cleared, so the
+    // authenticate middleware's PASSWORD_CHANGE_REQUIRED block doesn't
+    // lock the user out of their own next request.
+    const { user, ...message } = result;
+    const token = user ? authService.generateToken(user._id, user) : undefined;
+    return res.status(200).json({ message, ...(token ? { token } : {}) });
   } catch (error) {
-      return res.status(500).json({ message: error.message });
+    return sendPasswordResetError(res, error, 'changePassword');
   }
 };
-export async function linkedinSignIn(req, res){
+export async function linkedinSignIn(req, res) {
   try {
     const { code } = req.body;
     const { token, user } = await authService.linkedinSignIn(code);
@@ -166,12 +226,17 @@ export async function linkedinSignIn(req, res){
 
 export async function sendVerificationEmail(req, res) {
   const { email, code } = req.body;
-  console.log("email",email);
-  console.log("code",code);
+  console.log("email", email);
+  console.log("code", code);
   console.log("📩 Calling sendVerificationEmail...");
-  const result = await authService.sendVerificationEmail(email, code);
-  console.log("📩 sendVerificationEmail result:", result);
-  res.json({ message: result });
+
+  try {
+    const result = await authService.sendVerificationEmail(email, code);
+    console.log("📩 sendVerificationEmail result:", result);
+    res.status(200).json({ message: result });
+  } catch (error) {
+    return sendPasswordResetError(res, error, 'sendVerificationEmail');
+  }
 }
 export const checkFirstLogin = async (req, res) => {
   const { userId } = req.body;
@@ -210,9 +275,54 @@ export const changeUserType = async (req, res) => {
     return res.status(500).json({ error: error.message });
   }
 };
-export const checkUserType = async (req, res) => {
-  const { userId } = req.body;
-  const userType = await authService.checkUserType(userId);
-  res.json({ userType });
+/** Rattache le compte connecté à un produit HARX (« callcentre »). */
+export const setProduct = async (req, res) => {
+  try {
+    const userId = req.user?.userId || req.user?.id;
+    if (!userId) return res.status(401).json({ message: 'Authentication required' });
+    const result = await authService.setProduct(userId, req.body?.product);
+    return res.json({ success: true, data: result });
+  } catch (error) {
+    return res.status(400).json({ success: false, message: error?.message || 'Produit invalide' });
+  }
 };
 
+export const checkUserType = async (req, res) => {
+  const { userId } = req.body || {};
+  let result;
+  try {
+    result = await authService.checkUserType(userId);
+  } catch (error) {
+    // Un identifiant inconnu ou illisible (session périmée) ne doit pas faire tomber le service.
+    const unknown = /not found/i.test(error?.message || '');
+    return res.status(unknown ? 404 : 400).json({ success: false, message: unknown ? 'User not found' : 'Invalid user' });
+  }
+  // Keep legacy `userType` top-level for existing clients; also return full payload.
+  if (result && typeof result === 'object') {
+    return res.json({
+      userType: result.userType,
+      mustChangePassword: result.mustChangePassword,
+      employerCompanyId: result.employerCompanyId,
+      product: result.product ?? null,
+      ...result,
+    });
+  }
+  res.json({ userType: result });
+};
+
+
+
+export const resendVerification = async (req, res) => {
+  const { email } = req.body;
+  try {
+    // generateVerificationCodeForRecovery() already sends the email itself —
+    // the code must never also be echoed back in this response.
+    await authService.generateVerificationCodeForRecovery(email);
+    res.status(200).json({
+      message: 'Verification code resent successfully',
+    });
+  } catch (error) {
+    console.error("Error in resendVerification:", error.message);
+    res.status(500).json({ message: error.message || 'Failed to resend verification code' });
+  }
+};

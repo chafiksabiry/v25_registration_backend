@@ -1,5 +1,26 @@
 import User from '../models/User.js';
 import Timezone from '../models/Timezone.js';
+import bcrypt from 'bcryptjs';
+import authService from './authService.js';
+import { createEmailChangeService } from './emailChangeService.js';
+import { sendAppEmail } from './brevoMail.js';
+
+const emailChange = createEmailChangeService({
+  findUserById: (id) => User.findById(id),
+  findUserByEmail: (email, exceptId) => User.findOne({ email, _id: { $ne: exceptId } }),
+  sendVerificationEmail: (email, code) => authService.sendVerificationEmail(email, code),
+  sendEmailChangedNotice: (oldEmail, newEmail) => sendAppEmail({
+    to: oldEmail,
+    subject: 'Votre e-mail de connexion a été modifié',
+    text: `L'e-mail de connexion de votre compte HARX a été remplacé par ${newEmail}. Si vous n'êtes pas à l'origine de cette modification, contactez immédiatement le support.`,
+    html: `<p>L'e-mail de connexion de votre compte HARX a été remplacé par <strong>${String(newEmail).replace(/[<>&]/g, '')}</strong>.</p><p>Si vous n'êtes pas à l'origine de cette modification, contactez immédiatement le support.</p>`,
+  }),
+  signToken: (user) => authService.generateToken(user._id, user),
+});
+
+function generate6DigitCode() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
 
 class UserService {
   
@@ -98,6 +119,197 @@ class UserService {
 
 
 
+
+  // Update editable user profile fields (fullName only — email/phone/password
+  // each have their own confirmation flow below).
+  async updateUserProfile(userId, { fullName }) {
+    if (!userId) {
+      throw new Error('User ID is required');
+    }
+    if (typeof fullName !== 'string') {
+      throw new Error('No editable field provided');
+    }
+
+    const trimmed = fullName.trim();
+    if (trimmed.length < 2) {
+      throw new Error('Full name must be at least 2 characters');
+    }
+    if (trimmed.length > 120) {
+      throw new Error('Full name must be at most 120 characters');
+    }
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { $set: { fullName: trimmed } },
+      { new: true, runValidators: true }
+    )
+      .select('-password -verificationCode')
+      .lean();
+
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    return {
+      _id: user._id,
+      email: user.email,
+      fullName: user.fullName,
+      phone: user.phone,
+      isVerified: user.isVerified,
+      typeUser: user.typeUser,
+      firstTime: user.firstTime,
+      createdAt: user.createdAt
+    };
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // EMAIL CHANGE — 2 steps, code sent via Brevo SMTP to the NEW email.
+  // ──────────────────────────────────────────────────────────────────────────
+  requestEmailChange(userId, payload) {
+    return emailChange.requestEmailChange(userId, payload);
+  }
+
+  confirmEmailChange(userId, payload) {
+    return emailChange.confirmEmailChange(userId, payload);
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // PASSWORD CHANGE — 2 steps, code sent via Brevo SMTP to the CURRENT email.
+  // ──────────────────────────────────────────────────────────────────────────
+  async requestPasswordChange(userId) {
+    if (!userId) throw new Error('User ID is required');
+
+    const user = await User.findById(userId);
+    if (!user) throw new Error('User not found');
+    if (!user.email) throw new Error('No email registered on this account');
+
+    const code = generate6DigitCode();
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
+    user.pendingChanges = user.pendingChanges || {};
+    user.pendingChanges.passwordChange = { code, expiresAt };
+    await user.save();
+
+    await authService.sendVerificationEmail(user.email, code);
+    return { success: true, message: 'Verification code sent to your current email' };
+  }
+
+  async confirmPasswordChange(userId, { currentPassword, newPassword, code }) {
+    if (!userId) throw new Error('User ID is required');
+    if (!code || typeof code !== 'string') throw new Error('Verification code is required');
+    if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 8) {
+      throw new Error('New password must be at least 8 characters');
+    }
+    if (newPassword.length > 128) {
+      throw new Error('New password must be at most 128 characters');
+    }
+
+    const user = await User.findById(userId).select('+password');
+    if (!user) throw new Error('User not found');
+
+    const pending = user.pendingChanges?.passwordChange;
+    if (!pending?.code) {
+      throw new Error('No pending password change found — request a new code');
+    }
+    if (pending.expiresAt && new Date() > pending.expiresAt) {
+      throw new Error('Verification code has expired — request a new one');
+    }
+    if (String(pending.code) !== String(code).trim()) {
+      throw new Error('Invalid verification code');
+    }
+
+    if (user.password) {
+      if (!currentPassword || typeof currentPassword !== 'string') {
+        throw new Error('Current password is required');
+      }
+      const ok = await user.comparePassword(currentPassword);
+      if (!ok) throw new Error('Current password is incorrect');
+    }
+
+    user.password = newPassword;
+    user.pendingChanges.passwordChange = undefined;
+    user.mustChangePassword = false;
+    if (user.employerCompanyId && user.invitationStatus !== 'active') {
+      user.invitationStatus = 'active';
+    }
+    await user.save();
+
+    return { success: true };
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // PHONE CHANGE — 2 steps, OTP sent via Twilio SMS to the NEW phone.
+  // ──────────────────────────────────────────────────────────────────────────
+  async requestPhoneChange(userId, { newPhone }) {
+    if (!userId) throw new Error('User ID is required');
+    const trimmed = (newPhone || '').trim();
+    if (!trimmed || trimmed.length < 5 || trimmed.length > 32) {
+      throw new Error('Phone number must be between 5 and 32 characters');
+    }
+    if (!/^\+?[0-9\s().-]{5,32}$/.test(trimmed)) {
+      throw new Error('Invalid phone number format');
+    }
+
+    const user = await User.findById(userId);
+    if (!user) throw new Error('User not found');
+
+    const otp = generate6DigitCode();
+    const otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 min
+
+    user.pendingChanges = user.pendingChanges || {};
+    user.pendingChanges.phoneChange = { newPhone: trimmed, otp, otpExpiresAt };
+    await user.save();
+
+    // Re-use the authService SMS helper but pass the target phone + freshly-stored otp.
+    // We don't call sendOTPWithTwilio here because it writes a NEW otp into
+    // verificationCode (used by login). Instead, we send directly via Twilio.
+    const twilio = (await import('twilio')).default;
+    if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN || !process.env.TWILIO_PHONE_NUMBER) {
+      throw new Error('Server misconfiguration: Missing SMS credentials');
+    }
+    const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+    const { verificationSms } = await import('../utils/harxMessages.js');
+    await client.messages.create({
+      body: verificationSms(otp),
+      to: trimmed,
+      from: process.env.TWILIO_PHONE_NUMBER
+    });
+
+    return { success: true, message: 'OTP sent to the new phone number' };
+  }
+
+  async confirmPhoneChange(userId, { otp }) {
+    if (!userId) throw new Error('User ID is required');
+    if (!otp || typeof otp !== 'string') throw new Error('OTP is required');
+
+    const user = await User.findById(userId);
+    if (!user) throw new Error('User not found');
+
+    const pending = user.pendingChanges?.phoneChange;
+    if (!pending?.newPhone || !pending?.otp) {
+      throw new Error('No pending phone change found — request a new code');
+    }
+    if (pending.otpExpiresAt && new Date() > pending.otpExpiresAt) {
+      throw new Error('OTP has expired — request a new one');
+    }
+    if (String(pending.otp) !== String(otp).trim()) {
+      throw new Error('Invalid OTP');
+    }
+
+    user.phone = pending.newPhone;
+    user.pendingChanges.phoneChange = undefined;
+    await user.save();
+
+    return {
+      success: true,
+      data: {
+        _id: user._id,
+        email: user.email,
+        fullName: user.fullName,
+        phone: user.phone
+      }
+    };
+  }
 }
 
 export default new UserService(); 

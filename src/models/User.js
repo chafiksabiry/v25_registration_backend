@@ -22,8 +22,9 @@ const userSchema = new mongoose.Schema({
   },
   phone: {
     type: String,
+    // Staff invited by email (employerCompanyId) add their phone number later.
     required: function() {
-      return !this.linkedInId;
+      return !this.linkedInId && !this.employerCompanyId;
     }
   },
   linkedInId: {
@@ -64,6 +65,25 @@ const userSchema = new mongoose.Schema({
       coordinates: String // format: "lat,lng"
     }
   }],
+  // Pending account changes — held until the user proves possession of
+  // the new email / phone (or current email for password) via Brevo / OTP.
+  pendingChanges: {
+    emailChange: {
+      newEmail: String,
+      code: String,
+      expiresAt: Date,
+      attempts: { type: Number, default: 0 }
+    },
+    passwordChange: {
+      code: String,
+      expiresAt: Date
+    },
+    phoneChange: {
+      newPhone: String,
+      otp: String,
+      otpExpiresAt: Date
+    }
+  },
   createdAt: {
     type: Date,
     default: Date.now
@@ -72,10 +92,83 @@ const userSchema = new mongoose.Schema({
     type :String,
     default: null,
   },
+  /** Produit HARX du compte (ex. « callcentre ») : la connexion mène à ce produit. */
+  product: {
+    type: String,
+    enum: ['callcentre', null],
+    default: null,
+  },
   firstTime: {
     type: Boolean,
     default: true
-  }
+  },
+  /** Call-center staff: company that employs this rep. */
+  employerCompanyId: {
+    type: mongoose.Schema.Types.ObjectId,
+    default: null,
+    index: true,
+  },
+  /**
+   * Emplois d'un agent (un compte peut travailler pour plusieurs centres). `employerCompanyId` reste le centre par
+   * défaut et vaut entrée active tant que la liste ne le contredit pas (voir utils/employments.js).
+   */
+  employments: {
+    type: [
+      new mongoose.Schema(
+        {
+          companyId: { type: mongoose.Schema.Types.ObjectId, required: true },
+          status: { type: String, enum: ['active', 'ended'], default: 'active' },
+          startedAt: { type: Date, default: Date.now },
+          endedAt: { type: Date, default: null },
+        },
+        { _id: false }
+      ),
+    ],
+    default: [],
+  },
+  /** Set when a call center provisions the account with a temporary password. */
+  mustChangePassword: {
+    type: Boolean,
+    default: false,
+  },
+  invitationStatus: {
+    type: String,
+    enum: ['none', 'pending', 'invited', 'active'],
+    default: 'none',
+  },
+  invitedAt: {
+    type: Date,
+    default: null,
+  },
+  invitedByUserId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null,
+  },
+  /** Set by scripts/importV1Reps.js for accounts migrated from HARX v1. */
+  source: {
+    type: String,
+    default: null,
+  },
+  importBatch: {
+    type: String,
+    default: null,
+    index: true,
+  },
+  /**
+   * One-click link sent to migrated HARX v1 reps. Only the SHA-256 of the token is stored;
+   * the link stays valid until expiresAt so mail-scanner prefetches and re-visits keep working.
+   */
+  reengagement: {
+    tokenHash: { type: String, default: null, index: true },
+    expiresAt: { type: Date, default: null },
+    lastUsedAt: { type: Date, default: null },
+  },
+  /** Profile data carried over from HARX v1 (segment, languages, activities...). */
+  legacyV1: {
+    type: mongoose.Schema.Types.Mixed,
+    default: null,
+  },
 });
 
 userSchema.pre('save', async function(next) {

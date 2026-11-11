@@ -1,0 +1,592 @@
+import crypto from 'crypto';
+import mongoose from 'mongoose';
+import User from '../models/User.js';
+import CompanyMembership from '../models/CompanyMembership.js';
+import AgentInvitation from '../models/AgentInvitation.js';
+import { teamMemberInvitationEmail } from '../utils/harxMessages.js';
+import { appLoginUrl, sendAppEmail } from './brevoMail.js';
+import { roleConflict } from './teamRoleConflicts.js';
+import { assertCanAddSeat } from './companyProduct.js';
+import { activeEmployments, hasEmployment, resolveActiveCompanyId } from '../utils/employments.js';
+import {
+  allPermissions,
+  emptyPermissions,
+  presetPermissions,
+  sanitizePermissions,
+  PERMISSION_GROUPS,
+  agentPermissions,
+  isCallCenterAgent,
+  isClientPortalUser,
+} from '../constants/companyPermissions.js';
+import { clientPortalSession } from './callCenterClientPortalService.js';
+
+function generateTempPassword(length = 12) {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@$%';
+  const bytes = crypto.randomBytes(length);
+  let out = '';
+  for (let i = 0; i < length; i += 1) {
+    out += alphabet[bytes[i] % alphabet.length];
+  }
+  return out;
+}
+
+function normalizeEmail(email) {
+  return String(email || '').trim().toLowerCase();
+}
+
+function httpError(message, statusCode) {
+  const err = new Error(message);
+  err.statusCode = statusCode;
+  return err;
+}
+
+async function findCompany(companyId) {
+  if (!companyId || !mongoose.Types.ObjectId.isValid(companyId)) {
+    throw httpError('Valid companyId is required', 400);
+  }
+  const company = await mongoose.connection.db.collection('companies').findOne({
+    _id: new mongoose.Types.ObjectId(companyId),
+  });
+  if (!company) throw httpError('Company not found', 404);
+  return company;
+}
+
+function isOwner(company, userId) {
+  return String(company.userId || '') === String(userId || '');
+}
+
+async function loadCaller(callerUserId) {
+  if (!callerUserId || !mongoose.Types.ObjectId.isValid(callerUserId)) {
+    throw httpError('Authentication required', 401);
+  }
+  const caller = await User.findById(callerUserId);
+  if (!caller) throw httpError('Caller not found', 401);
+  return caller;
+}
+
+async function assertCan(callerUserId, companyId, permission) {
+  const caller = await loadCaller(callerUserId);
+  const company = await findCompany(companyId);
+  if (isOwner(company, caller._id)) {
+    return { caller, company, isOwner: true, permissions: allPermissions() };
+  }
+  const membership = await CompanyMembership.findOne({
+    companyId: company._id,
+    userId: caller._id,
+  });
+  if (!membership || !membership.permissions?.[permission]) {
+    throw httpError('You do not have permission to manage this company team', 403);
+  }
+  return {
+    caller,
+    company,
+    isOwner: false,
+    permissions: sanitizePermissions(membership.permissions),
+  };
+}
+
+function companyLabel(company) {
+  return company.name || company.companyName || company.title || 'HARX';
+}
+
+async function sendInviteEmail({ to, firstName, email, tempPassword, companyName, preset, inviterName }) {
+  const loginUrl = appLoginUrl();
+  const message = teamMemberInvitationEmail({
+    firstName,
+    email,
+    tempPassword,
+    companyName,
+    preset,
+    inviterName,
+    loginUrl,
+  });
+  await sendAppEmail({
+    to,
+    subject: message.subject,
+    html: message.html,
+  });
+}
+
+const ONLINE_WINDOW_MS = 70 * 1000;
+
+function isOnline(date) {
+  if (!date) return false;
+  const time = new Date(date).getTime();
+  return Number.isFinite(time) && Date.now() - time < ONLINE_WINDOW_MS;
+}
+
+function serializeMember(doc, user) {
+  return {
+    userId: String(doc.userId),
+    email: doc.email || user?.email || '',
+    fullName: doc.fullName || user?.fullName || '',
+    phone: user?.phone || '',
+    isOwner: false,
+    preset: doc.preset || 'custom',
+    status: doc.status || 'pending',
+    online: doc.status === 'active' && isOnline(doc.lastSeenAt),
+    lastSeenAt: doc.lastSeenAt || null,
+    connectedAt: doc.connectedAt || null,
+    permissions: sanitizePermissions(doc.permissions),
+    invitedAt: doc.invitedAt || null,
+    createdAt: doc.createdAt || null,
+  };
+}
+
+class CompanyMemberService {
+  catalog() {
+    return {
+      groups: PERMISSION_GROUPS,
+      presets: ['admin', 'operator', 'readonly'],
+    };
+  }
+
+  /** Emplois actifs de l'agent avec le nom de chaque centre (ses propres emplois seulement). */
+  async agentEmployments(caller) {
+    const active = activeEmployments(caller);
+    if (!active.length) return [];
+    const ids = active.map((e) => e.companyId).filter((id) => mongoose.Types.ObjectId.isValid(id)).map((id) => new mongoose.Types.ObjectId(id));
+    const docs = await mongoose.connection.db.collection('companies').find({ _id: { $in: ids } }).project({ name: 1, companyName: 1, title: 1 }).toArray();
+    const nameById = new Map(docs.map((c) => [String(c._id), c.name || c.companyName || c.title || '']));
+    return active.map((e) => ({ companyId: e.companyId, companyName: nameById.get(e.companyId) || '', status: e.status, startedAt: e.startedAt }));
+  }
+
+  /**
+   * Session de la personne connectée. `requestedCompanyId` = centre actif choisi par un agent qui travaille pour
+   * plusieurs centres : accepté seulement s'il fait partie de ses emplois, sinon son centre par défaut.
+   */
+  async session(callerUserId, requestedCompanyId = null) {
+    const caller = await loadCaller(callerUserId);
+    const owned = await mongoose.connection.db.collection('companies').findOne({
+      $or: [
+        { userId: caller._id },
+        { userId: String(caller._id) },
+      ],
+    });
+    if (owned) {
+      return {
+        isOwner: true,
+        companyId: String(owned._id),
+        companyIds: [String(owned._id)],
+        permissions: allPermissions(),
+        preset: 'owner',
+      };
+    }
+    // Contact d'un client (portail en lecture seule) : traité avant le repli « titulaire » ci-dessous, qui donnerait tout.
+    if (isClientPortalUser(caller)) return clientPortalSession(caller);
+    const membership = await CompanyMembership.findOne({ userId: caller._id }).sort({ createdAt: -1 });
+    // Un agent employé par un centre : sa société est celle du centre actif (l'un de ses emplois), avec les seuls droits d'un agent.
+    if ((!membership || hasEmployment(caller, requestedCompanyId)) && isCallCenterAgent(caller)) {
+      const employments = await this.agentEmployments(caller);
+      return {
+        isOwner: false,
+        isAgent: true,
+        companyId: resolveActiveCompanyId(caller, requestedCompanyId),
+        companyIds: employments.map((e) => e.companyId),
+        employments,
+        permissions: agentPermissions(),
+        preset: 'agent',
+      };
+    }
+    // No membership document means the account is not a restricted teammate
+    // (company owner, or a user created before team invites). Keep full access.
+    if (!membership) {
+      return { isOwner: true, companyId: null, companyIds: [], permissions: allPermissions(), preset: 'owner' };
+    }
+    await this.markPresent(caller._id);
+    const fresh = await CompanyMembership.findById(membership._id);
+    return {
+      isOwner: false,
+      isAgent: false,
+      companyId: String(membership.companyId),
+      companyIds: [String(membership.companyId)],
+      permissions: sanitizePermissions(membership.permissions),
+      preset: (fresh || membership).preset || 'custom',
+    };
+  }
+
+  async markPresent(userId) {
+    if (!userId) return null;
+    const membership = await CompanyMembership.findOne({ userId }).sort({ createdAt: -1 });
+    if (!membership) return null;
+    const now = new Date();
+    if (membership.status !== 'active' || !membership.connectedAt) {
+      membership.connectedAt = membership.connectedAt || now;
+      membership.status = 'active';
+    }
+    membership.lastSeenAt = now;
+    await membership.save();
+    await User.updateOne({ _id: userId }, { $set: { invitationStatus: 'active' } });
+    return membership;
+  }
+
+  async markAway(userId) {
+    if (!userId) return null;
+    const membership = await CompanyMembership.findOne({ userId }).sort({ createdAt: -1 });
+    if (!membership) return null;
+    membership.lastSeenAt = null;
+    await membership.save();
+    return membership;
+  }
+
+  async openPresence(userId, companyId) {
+    const caller = await loadCaller(userId);
+    const company = await findCompany(companyId);
+    if (isOwner(company, caller._id)) {
+      return { role: 'owner', companyId: String(company._id) };
+    }
+    const membership = await CompanyMembership.findOne({
+      companyId: company._id,
+      userId: caller._id,
+    });
+    if (!membership) throw httpError('You do not have permission to view this company team', 403);
+    const fresh = await this.markPresent(caller._id);
+    return {
+      role: 'member',
+      companyId: String(company._id),
+      status: fresh?.status || 'active',
+    };
+  }
+
+  async list(callerUserId, companyId) {
+    const { company } = await assertCan(callerUserId, companyId, 'members.view');
+    const owner = await User.findById(company.userId).select('fullName email phone');
+    const docs = await CompanyMembership.find({ companyId: company._id }).sort({ createdAt: -1 });
+    const userIds = docs.map((d) => d.userId);
+    const users = await User.find({ _id: { $in: userIds } }).select('fullName email phone');
+    const byId = new Map(users.map((u) => [String(u._id), u]));
+
+    const ownerRow = {
+      userId: String(company.userId || ''),
+      email: owner?.email || '',
+      fullName: owner?.fullName || 'Propriétaire',
+      phone: owner?.phone || '',
+      isOwner: true,
+      preset: 'owner',
+      status: 'active',
+      permissions: allPermissions(),
+      invitedAt: null,
+      createdAt: null,
+    };
+
+    const pending = await AgentInvitation.find({ companyId: company._id, kind: 'member', status: 'pending' }).sort({ createdAt: -1 });
+    const pendingRows = pending.map((i) => ({
+      userId: String(i.userId || ''),
+      email: i.email,
+      fullName: i.fullName || '',
+      phone: '',
+      isOwner: false,
+      preset: i.preset || 'custom',
+      status: 'invited',
+      online: false,
+      permissions: sanitizePermissions(i.permissions),
+      invitedAt: i.invitedAt || null,
+      createdAt: i.createdAt || null,
+      existingAccount: true,
+    }));
+
+    return [
+      ownerRow,
+      ...docs
+        .filter((d) => String(d.userId) !== String(company.userId))
+        .map((d) => serializeMember(d, byId.get(String(d.userId)))),
+      ...pendingRows,
+    ];
+  }
+
+  async inviteExistingAccount({ caller, company, existingUser, preset, rights, sendEmail }) {
+    const email = normalizeEmail(existingUser.email);
+    let invitation = await AgentInvitation.findOne({ companyId: company._id, email });
+    if (invitation && invitation.status === 'accepted' && invitation.kind === 'member') {
+      throw httpError('Cette personne fait déjà partie de votre équipe.', 409);
+    }
+    if (invitation && invitation.kind !== 'member' && invitation.status !== 'declined') {
+      throw httpError('Cette personne est déjà invitée comme agent de votre centre.', 409);
+    }
+    const fields = {
+      kind: 'member',
+      preset,
+      permissions: rights,
+      fullName: existingUser.fullName || '',
+      status: 'pending',
+      invitedAt: new Date(),
+      respondedAt: undefined,
+      userId: existingUser._id,
+      invitedByUserId: caller._id,
+    };
+    if (invitation) {
+      Object.assign(invitation, fields);
+      await invitation.save();
+    } else {
+      invitation = await AgentInvitation.create({ companyId: company._id, email, ...fields });
+    }
+
+    let emailSent = false;
+    let emailError = null;
+    if (sendEmail) {
+      try {
+        const message = teamMemberInvitationEmail({
+          firstName: (existingUser.fullName || '').trim().split(/\s+/)[0] || '',
+          companyName: companyLabel(company),
+          preset,
+          inviterName: caller?.fullName || '',
+          email,
+          loginUrl: appLoginUrl(),
+        });
+        await sendAppEmail({ to: email, subject: message.subject, html: message.html });
+        emailSent = true;
+      } catch (e) {
+        emailError = e.message || 'Failed to send invitation email';
+      }
+    }
+
+    return {
+      member: {
+        userId: String(existingUser._id),
+        email,
+        fullName: existingUser.fullName || '',
+        phone: existingUser.phone || '',
+        isOwner: false,
+        preset,
+        status: 'invited',
+        online: false,
+        permissions: sanitizePermissions(rights),
+        invitedAt: invitation.invitedAt,
+        existingAccount: true,
+      },
+      invitationId: String(invitation._id),
+      existingAccount: true,
+      emailSent,
+      emailError,
+    };
+  }
+
+  async invite(callerUserId, payload) {
+    const {
+      companyId,
+      firstName,
+      lastName,
+      email,
+      phone,
+      preset = 'operator',
+      permissions,
+      sendEmail = true,
+    } = payload || {};
+
+    const { caller, company } = await assertCan(callerUserId, companyId, 'members.invite');
+    await assertCanAddSeat(company._id);
+    const normalizedEmail = normalizeEmail(email);
+    if (!normalizedEmail || !normalizedEmail.includes('@')) {
+      throw httpError('Valid email is required', 400);
+    }
+    const givenName = String(firstName || '').trim();
+    const familyName = String(lastName || '').trim();
+    if (!givenName) throw httpError('First name is required', 400);
+
+    const resolvedPreset = presetPermissions(preset) ? String(preset).toLowerCase() : 'custom';
+    const base = presetPermissions(preset) || emptyPermissions();
+    const rights = permissions ? sanitizePermissions({ ...base, ...permissions }) : base;
+    if (!Object.values(rights).some(Boolean)) {
+      throw httpError('Select at least one permission', 400);
+    }
+
+    // Une adresse peut être invitée un nombre illimité de fois mais n'a qu'un compte HARX : si elle en a déjà
+    // un, on enregistre une invitation que la personne accepte après connexion (jamais de mot de passe créé).
+    const conflict = await roleConflict('member', { company, companyId: company._id, email: normalizedEmail });
+    if (conflict) throw httpError(conflict, 409);
+
+    const existingUser = await User.findOne({ email: normalizedEmail }).select('_id fullName email phone');
+    if (existingUser) {
+      const already = await CompanyMembership.findOne({ companyId: company._id, userId: existingUser._id }).select('_id');
+      if (already || String(company.userId) === String(existingUser._id)) {
+        throw httpError('Cette personne fait déjà partie de votre équipe.', 409);
+      }
+      return this.inviteExistingAccount({ caller, company, existingUser, preset: resolvedPreset, rights, sendEmail });
+    }
+    const existingMembership = await CompanyMembership.findOne({ email: normalizedEmail }).select('_id');
+    if (existingMembership) {
+      throw httpError('Cet e-mail existe déjà. Invitation impossible.', 409);
+    }
+
+    const tempPassword = generateTempPassword();
+    const user = new User({
+      email: normalizedEmail,
+      fullName: `${givenName} ${familyName}`.trim(),
+      phone: String(phone || '').trim() || '0000000000',
+      password: tempPassword,
+      typeUser: 'company-member',
+      isVerified: true,
+      firstTime: true,
+      mustChangePassword: true,
+      invitationStatus: 'pending',
+      invitedByUserId: caller._id,
+      employerCompanyId: company._id,
+    });
+    await user.save();
+
+    const membership = await CompanyMembership.create({
+      companyId: company._id,
+      userId: user._id,
+      email: normalizedEmail,
+      fullName: user.fullName || `${givenName} ${familyName}`.trim(),
+      permissions: rights,
+      preset: resolvedPreset,
+      status: 'pending',
+      invitedByUserId: caller._id,
+    });
+
+    let emailSent = false;
+    let emailError = null;
+    if (sendEmail) {
+      try {
+        await sendInviteEmail({
+          to: normalizedEmail,
+          firstName: givenName,
+          email: normalizedEmail,
+          tempPassword,
+          companyName: companyLabel(company),
+          preset: resolvedPreset,
+          inviterName: caller?.fullName || '',
+        });
+        emailSent = true;
+        membership.status = 'invited';
+        membership.invitedAt = new Date();
+        await membership.save();
+        user.invitationStatus = 'invited';
+        user.invitedAt = new Date();
+        await user.save();
+      } catch (e) {
+        emailError = e.message || 'Failed to send invitation email';
+      }
+    }
+
+    return {
+      member: serializeMember(membership, user),
+      emailSent,
+      emailError,
+      temporaryPassword: emailSent ? undefined : tempPassword,
+    };
+  }
+
+  async reinvite(callerUserId, companyId, memberUserId, payload = {}) {
+    const { company } = await assertCan(callerUserId, companyId, 'members.invite');
+    if (String(company.userId) === String(memberUserId)) {
+      throw httpError('The owner cannot be reinvited', 400);
+    }
+    if (!memberUserId || !mongoose.Types.ObjectId.isValid(memberUserId)) {
+      throw httpError('Valid member userId is required', 400);
+    }
+
+    const membership = await CompanyMembership.findOne({
+      companyId: company._id,
+      userId: memberUserId,
+    });
+    if (!membership) throw httpError('Member not found', 404);
+
+    const user = await User.findById(memberUserId);
+    if (!user) throw httpError('Member not found', 404);
+    if (user.invitationStatus === 'active') {
+      throw httpError('Ce membre a déjà activé son compte.', 409);
+    }
+
+    const requestedEmail = payload?.email ? normalizeEmail(payload.email) : '';
+    const currentEmail = normalizeEmail(user.email || membership.email);
+    const targetEmail = requestedEmail || currentEmail;
+    if (!targetEmail || !targetEmail.includes('@')) {
+      throw httpError('Valid email is required', 400);
+    }
+
+    if (targetEmail !== currentEmail) {
+      const takenUser = await User.findOne({ email: targetEmail, _id: { $ne: user._id } }).select('_id');
+      const takenMembership = await CompanyMembership.findOne({
+        email: targetEmail,
+        userId: { $ne: user._id },
+      }).select('_id');
+      if (takenUser || takenMembership) {
+        throw httpError('Cet e-mail existe déjà. Invitation impossible.', 409);
+      }
+      user.email = targetEmail;
+      membership.email = targetEmail;
+    }
+
+    const tempPassword = generateTempPassword();
+    const firstName = String(user.fullName || membership.fullName || '').trim().split(/\s+/)[0] || '';
+    user.password = tempPassword;
+    user.mustChangePassword = true;
+    user.firstTime = true;
+    user.invitationStatus = 'pending';
+    membership.status = 'pending';
+    await user.save();
+    await membership.save();
+
+    let emailSent = false;
+    let emailError = null;
+    try {
+      await sendInviteEmail({
+        to: targetEmail,
+        firstName,
+        email: targetEmail,
+        tempPassword,
+        companyName: companyLabel(company),
+        preset: membership.preset,
+      });
+      emailSent = true;
+      membership.status = 'invited';
+      membership.invitedAt = new Date();
+      user.invitationStatus = 'invited';
+      user.invitedAt = new Date();
+      await user.save();
+      await membership.save();
+    } catch (e) {
+      emailError = e.message || 'Failed to send invitation email';
+    }
+
+    return {
+      member: serializeMember(membership, user),
+      emailSent,
+      emailError,
+      temporaryPassword: emailSent ? undefined : tempPassword,
+    };
+  }
+
+  async update(callerUserId, companyId, memberUserId, payload) {
+    await assertCan(callerUserId, companyId, 'members.edit');
+    const company = await findCompany(companyId);
+    if (String(company.userId) === String(memberUserId)) {
+      throw httpError('Owner permissions cannot be changed', 400);
+    }
+    const membership = await CompanyMembership.findOne({
+      companyId: company._id,
+      userId: memberUserId,
+    });
+    if (!membership) throw httpError('Member not found', 404);
+
+    const preset = payload?.preset;
+    const base = presetPermissions(preset) || sanitizePermissions(membership.permissions);
+    membership.permissions = payload?.permissions
+      ? sanitizePermissions({ ...base, ...payload.permissions })
+      : base;
+    membership.preset = presetPermissions(preset)
+      ? String(preset).toLowerCase()
+      : 'custom';
+    await membership.save();
+    const user = await User.findById(memberUserId).select('fullName email phone');
+    return serializeMember(membership, user);
+  }
+
+  async remove(callerUserId, companyId, memberUserId) {
+    await assertCan(callerUserId, companyId, 'members.remove');
+    const company = await findCompany(companyId);
+    if (String(company.userId) === String(memberUserId)) {
+      throw httpError('The owner cannot be removed', 400);
+    }
+    const deleted = await CompanyMembership.findOneAndDelete({
+      companyId: company._id,
+      userId: memberUserId,
+    });
+    if (!deleted) throw httpError('Member not found', 404);
+    return { userId: String(memberUserId) };
+  }
+}
+
+export default new CompanyMemberService();
