@@ -22,6 +22,7 @@ import {
   updateClient,
   getWorkspaceState,
   saveWorkspaceState,
+  updateCompanyContact,
 } from '../controllers/callCenterClientController.js';
 
 import {
@@ -85,6 +86,8 @@ router.put('/operation-profiles/:gigId', setOperationProfile);
 // État du portail conservé côté serveur (files, mise en route, lignes testées ; académie et préférences de la personne)
 router.get('/workspace-state', getWorkspaceState);
 router.put('/workspace-state', saveWorkspaceState);
+// Coordonnées de l'entreprise (e-mail, téléphone, adresse) : titulaire seulement, jeton de connexion exigé ; nom, pays, EIN et KYB jamais modifiables ici
+router.put('/company-profile', authenticateUserJwt, updateCompanyContact);
 
 // Planning des agents : l'agent lit son planning et fait ses demandes ; le centre planifie et répond
 router.get('/schedule/my-shifts', listMyShifts);

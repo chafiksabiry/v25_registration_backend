@@ -26,3 +26,4 @@ export const setOperationProfile = handle((req) => service.setOperationProfile(c
 export const saveOnboardingFeedback = handle((req) => service.saveOnboardingFeedback(callerId(req), companyOf(req), req.body), 'Failed to save onboarding feedback');
 export const getWorkspaceState = handle((req) => workspace.getWorkspaceState(callerId(req), companyOf(req)), 'Failed to read workspace state');
 export const saveWorkspaceState = handle((req) => workspace.saveWorkspaceState(callerId(req), companyOf(req), req.body), 'Failed to save workspace state');
+export const updateCompanyContact = handle((req) => workspace.updateCompanyContact(callerId(req), companyOf(req), req.body), 'Failed to update company profile');
