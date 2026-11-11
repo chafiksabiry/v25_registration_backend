@@ -1,5 +1,6 @@
 //import { Request, Response } from 'express';
 import authService from '../services/authService.js';
+import { sendSignUpEvent } from '../services/metaCapi.js';
 
 function sendPasswordResetError(res, error, scope) {
   const status = Number(error?.statusCode) || 500;
@@ -10,7 +11,20 @@ function sendPasswordResetError(res, error, scope) {
 
 export const register = async (req, res) => {
   try {
-    const result = await authService.register(req.body, req);
+    // Champs de mesure publicitaire (API de conversions Meta) : retirés du corps avant la création du compte.
+    const { metaEventId, marketingConsent, fbp, fbc, sourceUrl, ...accountData } = req.body || {};
+    const result = await authService.register(accountData, req);
+    // Après la réussite uniquement ; ne bloque jamais l'inscription (promesse non attendue, jamais rejetée).
+    sendSignUpEvent({
+      email: accountData.email,
+      eventId: metaEventId,
+      marketingConsent,
+      ip: req.ip,
+      userAgent: req.headers['user-agent'],
+      fbp,
+      fbc,
+      sourceUrl,
+    });
     res.status(201).json({
       message: 'Registration successful',
       data: { _id: result.result._id }
