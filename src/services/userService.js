@@ -2,6 +2,21 @@ import User from '../models/User.js';
 import Timezone from '../models/Timezone.js';
 import bcrypt from 'bcryptjs';
 import authService from './authService.js';
+import { createEmailChangeService } from './emailChangeService.js';
+import { sendAppEmail } from './brevoMail.js';
+
+const emailChange = createEmailChangeService({
+  findUserById: (id) => User.findById(id),
+  findUserByEmail: (email, exceptId) => User.findOne({ email, _id: { $ne: exceptId } }),
+  sendVerificationEmail: (email, code) => authService.sendVerificationEmail(email, code),
+  sendEmailChangedNotice: (oldEmail, newEmail) => sendAppEmail({
+    to: oldEmail,
+    subject: 'Votre e-mail de connexion a été modifié',
+    text: `L'e-mail de connexion de votre compte HARX a été remplacé par ${newEmail}. Si vous n'êtes pas à l'origine de cette modification, contactez immédiatement le support.`,
+    html: `<p>L'e-mail de connexion de votre compte HARX a été remplacé par <strong>${String(newEmail).replace(/[<>&]/g, '')}</strong>.</p><p>Si vous n'êtes pas à l'origine de cette modification, contactez immédiatement le support.</p>`,
+  }),
+  signToken: (user) => authService.generateToken(user._id, user),
+});
 
 function generate6DigitCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -150,66 +165,12 @@ class UserService {
   // ──────────────────────────────────────────────────────────────────────────
   // EMAIL CHANGE — 2 steps, code sent via Brevo SMTP to the NEW email.
   // ──────────────────────────────────────────────────────────────────────────
-  async requestEmailChange(userId, { newEmail }) {
-    if (!userId) throw new Error('User ID is required');
-    const trimmed = (newEmail || '').trim().toLowerCase();
-    if (!trimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-      throw new Error('Invalid email address');
-    }
-
-    const user = await User.findById(userId);
-    if (!user) throw new Error('User not found');
-    if (user.email === trimmed) {
-      throw new Error('New email must differ from the current one');
-    }
-
-    const conflict = await User.findOne({ email: trimmed, _id: { $ne: user._id } });
-    if (conflict) {
-      throw new Error('This email is already used by another account');
-    }
-
-    const code = generate6DigitCode();
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 min
-
-    user.pendingChanges = user.pendingChanges || {};
-    user.pendingChanges.emailChange = { newEmail: trimmed, code, expiresAt };
-    await user.save();
-
-    await authService.sendVerificationEmail(trimmed, code);
-    return { success: true, message: 'Verification code sent to the new email' };
+  requestEmailChange(userId, payload) {
+    return emailChange.requestEmailChange(userId, payload);
   }
 
-  async confirmEmailChange(userId, { code }) {
-    if (!userId) throw new Error('User ID is required');
-    if (!code || typeof code !== 'string') throw new Error('Verification code is required');
-
-    const user = await User.findById(userId);
-    if (!user) throw new Error('User not found');
-
-    const pending = user.pendingChanges?.emailChange;
-    if (!pending?.newEmail || !pending?.code) {
-      throw new Error('No pending email change found — request a new code');
-    }
-    if (pending.expiresAt && new Date() > pending.expiresAt) {
-      throw new Error('Verification code has expired — request a new one');
-    }
-    if (String(pending.code) !== String(code).trim()) {
-      throw new Error('Invalid verification code');
-    }
-
-    user.email = pending.newEmail;
-    user.pendingChanges.emailChange = undefined;
-    await user.save();
-
-    return {
-      success: true,
-      data: {
-        _id: user._id,
-        email: user.email,
-        fullName: user.fullName,
-        phone: user.phone
-      }
-    };
+  confirmEmailChange(userId, payload) {
+    return emailChange.confirmEmailChange(userId, payload);
   }
 
   // ──────────────────────────────────────────────────────────────────────────

@@ -75,16 +75,36 @@ export const updateUserProfile = async (req, res) => {
   }
 };
 
+// Erreurs du flux e-mail : { success:false, code, message } (+ error pour compatibilité)
+function handleEmailChangeError(res, error, defaultMessage) {
+  if (error?.code && error?.status) {
+    return res.status(error.status).json({
+      success: false,
+      code: error.code,
+      message: error.message,
+      error: error.message
+    });
+  }
+  console.error(defaultMessage + ':', error?.message);
+  return res.status(500).json({
+    success: false,
+    code: 'internal_error',
+    message: 'Une erreur est survenue.',
+    error: 'Une erreur est survenue.'
+  });
+}
+
 // EMAIL CHANGE — Brevo
 export const requestEmailChange = async (req, res) => {
   try {
     const { userId } = req.params;
     const result = await userService.requestEmailChange(userId, {
-      newEmail: req.body?.newEmail
+      newEmail: req.body?.newEmail,
+      currentPassword: req.body?.currentPassword
     });
     return res.status(200).json(result);
   } catch (error) {
-    return handleControllerError(res, error, 'Error requesting email change');
+    return handleEmailChangeError(res, error, 'Error requesting email change');
   }
 };
 
@@ -96,7 +116,7 @@ export const confirmEmailChange = async (req, res) => {
     });
     return res.status(200).json({ ...result, message: 'Email updated successfully' });
   } catch (error) {
-    return handleControllerError(res, error, 'Error confirming email change');
+    return handleEmailChangeError(res, error, 'Error confirming email change');
   }
 };
 

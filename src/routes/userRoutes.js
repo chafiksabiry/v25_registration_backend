@@ -11,7 +11,7 @@ import {
   requestPhoneChange,
   confirmPhoneChange
 } from '../controllers/userController.js';
-import { authenticate } from '../middleware/auth.js';
+import { authenticate, requireSelf } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -22,8 +22,8 @@ router.get('/:userId', getUserDetails);
 router.patch('/:userId', updateUserProfile);
 
 // Email change with Brevo email confirmation
-router.post('/:userId/email/request-change', requestEmailChange);
-router.post('/:userId/email/confirm-change', confirmEmailChange);
+router.post('/:userId/email/request-change', authenticate, requireSelf, requestEmailChange);
+router.post('/:userId/email/confirm-change', authenticate, requireSelf, confirmEmailChange);
 
 // Password change with Brevo email confirmation
 router.post('/:userId/password/request-change', requestPasswordChange);
