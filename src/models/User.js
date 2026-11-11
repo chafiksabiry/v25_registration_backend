@@ -71,7 +71,8 @@ const userSchema = new mongoose.Schema({
     emailChange: {
       newEmail: String,
       code: String,
-      expiresAt: Date
+      expiresAt: Date,
+      attempts: { type: Number, default: 0 }
     },
     passwordChange: {
       code: String,
