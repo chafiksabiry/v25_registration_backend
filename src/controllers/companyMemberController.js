@@ -15,7 +15,7 @@ export const getCompanyMemberCatalog = (_req, res) => {
 
 export const getMyCompanyAccess = async (req, res) => {
   try {
-    const data = await companyMemberService.session(callerId(req));
+    const data = await companyMemberService.session(callerId(req), req.query.companyId || null);
     return res.json({ success: true, data });
   } catch (error) {
     return fail(res, error, 'Failed to resolve company access');

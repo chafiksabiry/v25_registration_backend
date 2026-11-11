@@ -17,6 +17,8 @@ import {
   adminObjectives,
   adminUpdateObjectives,
   adminOnboardingSatisfaction,
+  adminCountries,
+  adminUpdateCountryRetractionDays,
 } from '../controllers/adminController.js';
 import { authenticate } from '../middleware/auth.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
@@ -40,5 +42,7 @@ router.patch('/plans/rep/:planId', authenticate, requireAdmin, adminUpdateRepPla
 router.get('/objectives', authenticate, requireAdmin, adminObjectives);
 router.patch('/objectives', authenticate, requireAdmin, adminUpdateObjectives);
 router.get('/onboarding-satisfaction', authenticate, requireAdmin, adminOnboardingSatisfaction);
+router.get('/countries', authenticate, requireAdmin, adminCountries);
+router.patch('/countries/:countryId/retraction-days', authenticate, requireAdmin, adminUpdateCountryRetractionDays);
 
 export default router;

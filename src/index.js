@@ -12,7 +12,9 @@ import adminRoutes from './routes/adminRoutes.js';
 import plansRoutes from './routes/plansRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import newsletterRoutes from './routes/newsletterRoutes.js';
+import countryWaitlistRoutes from './routes/countryWaitlistRoutes.js';
 import callCenterRoutes from './routes/callCenterRoutes.js';
+import agentInvitationRoutes from './routes/agentInvitationRoutes.js';
 import companyMemberRoutes from './routes/companyMemberRoutes.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { attachTeamPresence } from './realtime/teamPresence.js';
@@ -26,8 +28,27 @@ const PORT = process.env.PORT;
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/filemanager')
   .then(() => console.log('Connected to MongoDB'))
   .catch(err => console.error('MongoDB connection error:', err));
+// CORS allow-list (never reflect an arbitrary origin with credentials in production).
+// Extra origins: CORS_ORIGIN (comma-separated) and the origin of FRONTEND_URL.
+const originOf = (value) => {
+  try { return new URL(String(value).trim()).origin; } catch { return ''; }
+};
+const allowedOrigins = new Set([
+  'https://harx.ai',
+  'https://www.harx.ai',
+  'https://api.harx.ai',
+  'https://harxv25callcenterfront.netlify.app',
+  'https://harx26connection-recette.netlify.app',
+  'https://harx25register.netlify.app',
+  ...String(process.env.CORS_ORIGIN || '').split(',').map(originOf),
+  originOf(process.env.FRONTEND_URL || ''),
+  ...(process.env.NODE_ENV === 'production'
+    ? []
+    : ['http://localhost:5157', 'http://localhost:5173', 'http://localhost:3000']),
+].filter(Boolean));
 const corsOptions = {
-  origin: true, // Allow any origin dynamically (for debugging CORS issues)
+  // No Origin header (curl, server-to-server) is allowed; browsers must come from the allow-list.
+  origin: (origin, callback) => callback(null, !origin || allowedOrigins.has(origin)),
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-User-Id'],
   credentials: true,
@@ -64,15 +85,20 @@ app.get('/', (req, res) => {
   res.status(200).json({ status: 'OK', message: 'Server is running' });
 });
 
-// Global soft limit — high enough that shared proxy IPs don't lock out signup.
-// Auth abuse is handled by a tighter limiter on /api/auth only.
+// Global soft limit for the rest of the API. Login and signup are not counted
+// here: a busy shared IP was filling this bucket and blocking /api/auth with 429
+// before the password was checked. Auth abuse stays on authLimiter.
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: Number(process.env.RATE_LIMIT_GLOBAL_MAX || 1000),
+  max: Number(process.env.RATE_LIMIT_GLOBAL_MAX || 10000),
   standardHeaders: true,
   legacyHeaders: false,
   // With trust proxy = 1 above, req.ip is the real client when X-Forwarded-For is set.
-  skip: (req) => req.path === '/' || req.path === '/health',
+  skip: (req) =>
+    req.method === 'OPTIONS' ||
+    req.path === '/' ||
+    req.path === '/health' ||
+    req.path.startsWith('/api/auth'),
 });
 
 // Stricter on auth endpoints (register/login/OTP) — per real client IP.
@@ -96,7 +122,9 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/plans', plansRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/newsletter', newsletterRoutes);
+app.use('/api/country-waitlist', countryWaitlistRoutes);
 app.use('/api/call-center', callCenterRoutes);
+app.use('/api/agent-invitations', agentInvitationRoutes);
 app.use('/api/company-members', companyMemberRoutes);
 
 // Error handling

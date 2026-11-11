@@ -13,7 +13,7 @@ export const register = async (req, res) => {
     const result = await authService.register(req.body, req);
     res.status(201).json({
       message: 'Registration successful',
-      data: { code: result.verificationCode, _id: result.result._id }
+      data: { _id: result.result._id }
     });
   } catch (error) {
     res.status(400).json({ message: error.message });
@@ -192,8 +192,12 @@ export async function verifyAccount(req, res) {
 export async function generateVerificationCode(req, res) {
   try {
     const { email } = req.body;
-    const result = await authService.generateVerificationCodeForRecovery(email);
-    return res.status(200).json(result);
+    // generateVerificationCodeForRecovery() sends the code by email itself —
+    // it must never come back in this response, or anyone who knows a
+    // registered email could read the password-reset code off the wire and
+    // take over the account without ever touching the victim's inbox.
+    await authService.generateVerificationCodeForRecovery(email);
+    return res.status(200).json({ success: true });
   } catch (error) {
     return sendPasswordResetError(res, error, 'generateVerificationCode');
   }
@@ -283,15 +287,35 @@ export const changeUserType = async (req, res) => {
     return res.status(500).json({ error: error.message });
   }
 };
+/** Rattache le compte connecté à un produit HARX (« callcentre »). */
+export const setProduct = async (req, res) => {
+  try {
+    const userId = req.user?.userId || req.user?.id;
+    if (!userId) return res.status(401).json({ message: 'Authentication required' });
+    const result = await authService.setProduct(userId, req.body?.product);
+    return res.json({ success: true, data: result });
+  } catch (error) {
+    return res.status(400).json({ success: false, message: error?.message || 'Produit invalide' });
+  }
+};
+
 export const checkUserType = async (req, res) => {
-  const { userId } = req.body;
-  const result = await authService.checkUserType(userId);
+  const { userId } = req.body || {};
+  let result;
+  try {
+    result = await authService.checkUserType(userId);
+  } catch (error) {
+    // Un identifiant inconnu ou illisible (session périmée) ne doit pas faire tomber le service.
+    const unknown = /not found/i.test(error?.message || '');
+    return res.status(unknown ? 404 : 400).json({ success: false, message: unknown ? 'User not found' : 'Invalid user' });
+  }
   // Keep legacy `userType` top-level for existing clients; also return full payload.
   if (result && typeof result === 'object') {
     return res.json({
       userType: result.userType,
       mustChangePassword: result.mustChangePassword,
       employerCompanyId: result.employerCompanyId,
+      product: result.product ?? null,
       ...result,
     });
   }
@@ -303,11 +327,11 @@ export const checkUserType = async (req, res) => {
 export const resendVerification = async (req, res) => {
   const { email } = req.body;
   try {
-    const { verificationCode } = await authService.generateVerificationCodeForRecovery(email);
-    await authService.sendVerificationEmail(email, verificationCode);
+    // generateVerificationCodeForRecovery() already sends the email itself —
+    // the code must never also be echoed back in this response.
+    await authService.generateVerificationCodeForRecovery(email);
     res.status(200).json({
       message: 'Verification code resent successfully',
-      data: { code: verificationCode }
     });
   } catch (error) {
     console.error("Error in resendVerification:", error.message);

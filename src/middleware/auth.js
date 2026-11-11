@@ -25,3 +25,16 @@ export const authenticate = (req, res, next) => {
     res.status(401).json({ message: 'Invalid token' });
   }
 };
+
+// Le JWT (signé par authService : `userId`) doit appartenir au compte visé par :userId.
+export const requireSelf = (req, res, next) => {
+  const tokenId = req.user?.userId ?? req.user?.id ?? req.user?._id;
+  if (!tokenId || String(tokenId) !== String(req.params.userId)) {
+    return res.status(403).json({
+      success: false,
+      code: 'forbidden',
+      message: 'Accès refusé.',
+    });
+  }
+  next();
+};
