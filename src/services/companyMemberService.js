@@ -5,7 +5,7 @@ import CompanyMembership from '../models/CompanyMembership.js';
 import CompanyRole from '../models/CompanyRole.js';
 import AgentInvitation from '../models/AgentInvitation.js';
 import { teamMemberInvitationEmail } from '../utils/harxMessages.js';
-import { appLoginUrl, sendAppEmail } from './brevoMail.js';
+import { appInvitationLoginUrl, appLoginUrl, sendAppEmail } from './brevoMail.js';
 import { roleConflict } from './teamRoleConflicts.js';
 import { assertCanAddSeat } from './companyProduct.js';
 import { activeEmployments, hasEmployment, resolveActiveCompanyId } from '../utils/employments.js';
@@ -338,7 +338,7 @@ class CompanyMemberService {
           preset,
           inviterName: caller?.fullName || '',
           email,
-          loginUrl: appLoginUrl(),
+          loginUrl: appInvitationLoginUrl(),
           accessLines: describeGrantedAccess(rights, 'fr'),
           accessLinesEn: describeGrantedAccess(rights, 'en'),
         });

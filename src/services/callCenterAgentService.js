@@ -4,7 +4,7 @@ import User from '../models/User.js';
 import AgentInvitation from '../models/AgentInvitation.js';
 import CompanyMembership from '../models/CompanyMembership.js';
 import { agentInvitationNoticeEmail, inviteEmail } from '../utils/harxMessages.js';
-import { appLoginUrl, sendAppEmail } from './brevoMail.js';
+import { appInvitationLoginUrl, appLoginUrl, sendAppEmail } from './brevoMail.js';
 import { isCompanyAccount, roleConflict } from './teamRoleConflicts.js';
 import { COMPANY_ACCOUNT_MESSAGE } from './teamRoleDecision.js';
 import { assertCanAddSeat } from './companyProduct.js';
@@ -152,7 +152,7 @@ async function sendInvitationNotice({ user, company }) {
   const message = agentInvitationNoticeEmail({
     firstName,
     companyName: company?.name || company?.companyName || company?.title,
-    loginUrl: appLoginUrl(),
+    loginUrl: appInvitationLoginUrl(),
   });
   return sendAppEmail({ to: user.email, subject: message.subject, html: message.html });
 }

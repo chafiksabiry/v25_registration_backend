@@ -65,6 +65,15 @@ export function appLoginUrl() {
   return `${base}/auth/signin`;
 }
 
+/**
+ * Lien des invitations envoyées à une personne qui a DÉJÀ un compte : la connexion s'ouvre sur l'onglet « Équipe » (secrétaire ou
+ * responsable), puis l'écran des invitations propose d'accepter. `AGENT_INVITE_LOGIN_URL` (si définie) fixe l'adresse de connexion.
+ */
+export function appInvitationLoginUrl() {
+  const url = appLoginUrl();
+  return `${url}${url.includes('?') ? '&' : '?'}audience=team`;
+}
+
 export async function sendAppEmail({ to, subject, html, text }) {
   const senderEmail = process.env.BREVO_SENDER_EMAIL || process.env.BREVO_FROM_EMAIL || process.env.SMTP_FROM_EMAIL;
   let apiError = null;
