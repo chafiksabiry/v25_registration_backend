@@ -325,6 +325,58 @@ class AuthService {
   }
 
   /**
+   * Exchange the token from an invitation e-mail (secrétaire invitée) for a session JWT. Clicking the link proves control of
+   * the mailbox, like the e-mailed sign-in code. The JWT carries the real `mustChangePassword` flag of the account: a temporary
+   * password still has to be replaced in the portal; an existing account keeps its password.
+   */
+  async inviteLogin(rawToken, req) {
+    const token = String(rawToken || '').trim();
+    const fail = (message, code, statusCode) => {
+      const error = new Error(message);
+      error.code = code;
+      error.statusCode = statusCode;
+      return error;
+    };
+    if (token.length < 32 || token.length > 128) {
+      throw fail('Invalid link', 'INVALID_LINK', 400);
+    }
+
+    const user = await User.findOne({ 'inviteLogin.tokenHash': hashReengagementToken(token) });
+    if (!user) throw fail('Invalid link', 'INVALID_LINK', 400);
+    const expiresAt = user.inviteLogin?.expiresAt;
+    if (!expiresAt || expiresAt < new Date()) {
+      throw fail('This link has expired', 'LINK_EXPIRED', 410);
+    }
+
+    const clientIp = getClientIp(req);
+    const locationInfo = await this.enrichIPInfo(clientIp);
+
+    await userRepository.update(user._id, {
+      isVerified: true,
+      firstTime: false,
+      'inviteLogin.lastUsedAt': new Date(),
+      $push: {
+        ipHistory: {
+          ip: clientIp,
+          action: 'login',
+          ...(locationInfo && { locationInfo }),
+        },
+      },
+    });
+
+    return {
+      token: this.generateToken(user._id, {
+        email: user.email,
+        fullName: user.fullName,
+        typeUser: user.typeUser,
+        isVerified: true,
+        mustChangePassword: user.mustChangePassword,
+        employerCompanyId: user.employerCompanyId,
+      }),
+    };
+  }
+
+  /**
    * The re-engagement e-mail points to a public page where the REP types their address; the
    * personal one-click link is then e-mailed to it. The answer never says whether the address
    * is known, so the page cannot be used to list accounts.

@@ -126,6 +126,18 @@ export const reengageLogin = async (req, res) => {
   }
 };
 
+export const inviteLogin = async (req, res) => {
+  try {
+    const result = await authService.inviteLogin(req.body?.token, req);
+    res.json(result);
+  } catch (error) {
+    res.status(error.statusCode || 400).json({
+      message: error.message,
+      code: error.code || 'INVALID_LINK',
+    });
+  }
+};
+
 export const reengageRequest = async (req, res) => {
   try {
     await authService.requestReengageLink(req.body?.email);

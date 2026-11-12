@@ -165,6 +165,15 @@ const userSchema = new mongoose.Schema({
     lastUsedAt: { type: Date, default: null },
     lastRequestedAt: { type: Date, default: null },
   },
+  /**
+   * Lien d'accès direct d'une invitation (secrétaire invitée par un centre) : seul le SHA-256 du jeton est stocké ;
+   * il reste valable jusqu'à expiresAt.
+   */
+  inviteLogin: {
+    tokenHash: { type: String, default: null, index: true },
+    expiresAt: { type: Date, default: null },
+    lastUsedAt: { type: Date, default: null },
+  },
   /** Profile data carried over from HARX v1 (segment, languages, activities...). */
   legacyV1: {
     type: mongoose.Schema.Types.Mixed,
