@@ -622,11 +622,16 @@ class CompanyMemberService {
     if (String(company.userId) === String(memberUserId)) {
       throw httpError('The owner cannot be removed', 400);
     }
-    const deleted = await CompanyMembership.findOneAndDelete({
-      companyId: company._id,
-      userId: memberUserId,
-    });
-    if (!deleted) throw httpError('Member not found', 404);
+    const validId = mongoose.Types.ObjectId.isValid(memberUserId);
+    const deleted = validId
+      ? await CompanyMembership.findOneAndDelete({ companyId: company._id, userId: memberUserId })
+      : null;
+    // Une personne qui avait déjà un compte reçoit une invitation en attente (pas encore d'appartenance) : la liste l'affiche,
+    // « Retirer » doit donc l'annuler elle aussi.
+    const cancelled = validId
+      ? await AgentInvitation.findOneAndDelete({ companyId: company._id, kind: 'member', status: 'pending', userId: memberUserId })
+      : null;
+    if (!deleted && !cancelled) throw httpError('Member not found', 404);
     return { userId: String(memberUserId) };
   }
 
