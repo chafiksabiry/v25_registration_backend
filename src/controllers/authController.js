@@ -1,4 +1,5 @@
 //import { Request, Response } from 'express';
+import { sanitizeAttribution } from '../utils/attribution.js';
 import authService from '../services/authService.js';
 import { sendSignUpEvent } from '../services/metaCapi.js';
 
@@ -12,7 +13,10 @@ function sendPasswordResetError(res, error, scope) {
 export const register = async (req, res) => {
   try {
     // Champs de mesure publicitaire (API de conversions Meta) : retirés du corps avant la création du compte.
-    const { metaEventId, marketingConsent, fbp, fbc, sourceUrl, ...accountData } = req.body || {};
+    const { metaEventId, marketingConsent, fbp, fbc, sourceUrl, attribution, ...accountData } = req.body || {};
+    // Origine de l'inscription (utm_) : seuls les cinq paramètres standard, filtrés ; absent sans consentement côté front.
+    const origin = sanitizeAttribution(attribution);
+    if (origin) accountData.attribution = origin;
     const result = await authService.register(accountData, req);
     // Après la réussite uniquement ; ne bloque jamais l'inscription (promesse non attendue, jamais rejetée).
     sendSignUpEvent({

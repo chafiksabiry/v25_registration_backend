@@ -174,6 +174,17 @@ const userSchema = new mongoose.Schema({
     expiresAt: { type: Date, default: null },
     lastUsedAt: { type: Date, default: null },
   },
+  /**
+   * Origine de l'inscription : paramètres utm_ du lien de campagne, enregistrés seulement avec le consentement « mesure d'audience »
+   * (voir utils/attribution.js).
+   */
+  attribution: {
+    utm_source: { type: String, default: null },
+    utm_medium: { type: String, default: null },
+    utm_campaign: { type: String, default: null },
+    utm_content: { type: String, default: null },
+    utm_term: { type: String, default: null },
+  },
   /** Profile data carried over from HARX v1 (segment, languages, activities...). */
   legacyV1: {
     type: mongoose.Schema.Types.Mixed,
