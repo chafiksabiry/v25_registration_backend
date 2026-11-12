@@ -142,7 +142,7 @@ export function agentInvitationNoticeEmail({ firstName, companyName, loginUrl })
     html: harxEmailShell({
       eyebrow: 'INVITATION',
       title: 'Vous êtes invité sur HARX',
-      intro: `Bonjour ${safeName}, ${org} vous invite à rejoindre son équipe. Vous avez déjà un compte HARX : connectez-vous avec votre e-mail et votre mot de passe habituels, puis acceptez l'invitation.`,
+      intro: `Bonjour ${safeName}, ${org} vous invite à rejoindre son équipe. Vous avez déjà un compte HARX : le bouton ci-dessous vous connecte directement, puis vous pouvez accepter l'invitation.`,
       footer: 'Si vous n\'êtes pas à l\'origine de cette invitation ou si vous ne connaissez pas ce centre, ignorez ce message ou refusez l\'invitation après connexion.',
       bodyHtml: `
         <p style="margin:0;text-align:center;">
