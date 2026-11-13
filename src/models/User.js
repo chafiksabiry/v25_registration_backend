@@ -1,6 +1,21 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
+/** Email envoye a un rep et confirme par Zoho CRM (voir services/emailHistoryService.js). */
+const emailHistoryEntrySchema = new mongoose.Schema(
+  {
+    zohoEmailId: { type: String, required: true },
+    subject: { type: String, required: true },
+    recipient: { type: String, required: true },
+    sentAt: { type: Date, required: true },
+    source: { type: String, default: 'zoho_crm' },
+    method: { type: String, default: 'workflow' },
+    status: { type: String, default: 'sent' },
+    dealId: { type: String, default: null },
+  },
+  { _id: false }
+);
+
 const userSchema = new mongoose.Schema({
   email: {
     type: String,
@@ -158,12 +173,14 @@ const userSchema = new mongoose.Schema({
   /**
    * One-click link sent to migrated HARX v1 reps. Only the SHA-256 of the token is stored;
    * the link stays valid until expiresAt so mail-scanner prefetches and re-visits keep working.
+   * emailHistory : emails d'activation confirmes par Zoho CRM (ajout seul, via $push ; jamais de remplacement).
    */
   reengagement: {
     tokenHash: { type: String, default: null, index: true },
     expiresAt: { type: Date, default: null },
     lastUsedAt: { type: Date, default: null },
     lastRequestedAt: { type: Date, default: null },
+    emailHistory: { type: [emailHistoryEntrySchema], default: undefined },
   },
   /**
    * Lien d'accès direct d'une invitation (secrétaire invitée par un centre) : seul le SHA-256 du jeton est stocké ;
