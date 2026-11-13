@@ -17,13 +17,17 @@
  *   --tokens-out <path>  required with --apply: CSV (email,token) of one-click login links for the mailer.
  *                        Contains secrets: created with mode 600, never commit it.
  *   --token-days <n>     validity of the one-click links (default 90)
+ *   --crm-pipeline <p>   only import lines whose crmPipeline equals <p> (others are counted as outOfScope)
+ *   --crm-stage <s>      only import lines whose crmStage equals <s>
  *   --rollback <id>      delete the users imported under that batch id that have not signed in since
  *
  * Rules:
  *   - MONGODB_URI is required and read from the environment only.
- *   - Existing users (same e-mail) are never modified.
+ *   - Existing users (same e-mail, or same legacyV1.crmDealId) are never modified: the only write is insertMany of new users.
+ *   - Duplicates inside the file (same e-mail or same crmDealId) are skipped and counted.
  *   - Imported users have no password and are not verified; the agent profile is created
  *     later by the normal onboarding flow (agentService), so no agents/wallets are written here.
+ *   - When the JSONL line carries `crmDealId` (Zoho deal id), it is stored in `legacyV1.crmDealId`.
  */
 import dotenv from 'dotenv';
 import fs from 'fs';
@@ -49,6 +53,8 @@ const EXPECT_DB = opt('--expect-db');
 const TOKENS_OUT = opt('--tokens-out');
 const TOKEN_DAYS = Number(opt('--token-days', 90)) || 90;
 const BATCH_ID = opt('--batch-id', `v1-reps-${new Date().toISOString().slice(0, 7)}`);
+const CRM_PIPELINE = opt('--crm-pipeline');
+const CRM_STAGE = opt('--crm-stage');
 const CHUNK = 500;
 const SOURCE = 'harx_v1_import';
 
@@ -84,6 +90,7 @@ function buildUser(rep, now, token) {
       experience: rep.experience,
       gender: rep.gender,
       birthDate: rep.birthDate,
+      crmDealId: rep.crmDealId ? String(rep.crmDealId) : null,
     },
   };
 }
@@ -139,17 +146,38 @@ async function main() {
 
   const users = db.collection('users');
   if (APPLY && !fs.existsSync(TOKENS_OUT)) fs.writeFileSync(TOKENS_OUT, 'email,token\n', { mode: 0o600 });
-  const totals = { read: 0, filtered: 0, existing: 0, toInsert: 0, inserted: 0, errors: 0 };
+  const totals = {
+    read: 0, filtered: 0, outOfScope: 0, duplicateInFile: 0,
+    existing: 0, existingByEmail: 0, existingByDealOnly: 0,
+    toInsert: 0, inserted: 0, errors: 0,
+  };
+  const seenEmails = new Set();
+  const seenDeals = new Set();
   const bySegment = {};
   let chunk = [];
 
   const flush = async () => {
     if (!chunk.length) return;
     const emails = chunk.map((r) => r.email);
-    const found = new Set(
+    const dealIds = chunk.map((r) => (r.crmDealId ? String(r.crmDealId) : null)).filter(Boolean);
+    const foundEmails = new Set(
       (await users.find({ email: { $in: emails } }, { projection: { email: 1 } }).toArray()).map((u) => u.email)
     );
-    const fresh = chunk.filter((r) => !found.has(r.email));
+    const foundDeals = new Set(
+      dealIds.length
+        ? (
+            await users
+              .find({ 'legacyV1.crmDealId': { $in: dealIds } }, { projection: { 'legacyV1.crmDealId': 1 } })
+              .toArray()
+          ).map((u) => String(u.legacyV1.crmDealId))
+        : []
+    );
+    const isExisting = (r) => foundEmails.has(r.email) || (r.crmDealId && foundDeals.has(String(r.crmDealId)));
+    const fresh = chunk.filter((r) => !isExisting(r));
+    totals.existingByEmail += chunk.filter((r) => foundEmails.has(r.email)).length;
+    totals.existingByDealOnly += chunk.filter(
+      (r) => !foundEmails.has(r.email) && r.crmDealId && foundDeals.has(String(r.crmDealId))
+    ).length;
     totals.existing += chunk.length - fresh.length;
     totals.toInsert += fresh.length;
     for (const r of fresh) bySegment[r.segment] = (bySegment[r.segment] || 0) + 1;
@@ -183,6 +211,17 @@ async function main() {
       totals.filtered += 1;
       continue;
     }
+    if ((CRM_PIPELINE && rep.crmPipeline !== CRM_PIPELINE) || (CRM_STAGE && rep.crmStage !== CRM_STAGE)) {
+      totals.outOfScope += 1;
+      continue;
+    }
+    const dealKey = rep.crmDealId ? String(rep.crmDealId) : null;
+    if (seenEmails.has(rep.email) || (dealKey && seenDeals.has(dealKey))) {
+      totals.duplicateInFile += 1;
+      continue;
+    }
+    seenEmails.add(rep.email);
+    if (dealKey) seenDeals.add(dealKey);
     if (eligible >= LIMIT) break;
     eligible += 1;
     chunk.push(rep);
