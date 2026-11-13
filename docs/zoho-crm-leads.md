@@ -19,19 +19,18 @@
 - Nouvelles tentatives (erreur réseau, 5xx, 429, 401) : attentes de 1 s, 5 s, 20 s, puis abandon journalisé.
 - Si Zoho refuse un champ personnalisé inexistant (`INVALID_DATA`), le prospect est créé avec les champs standard seuls.
 - Champs standard : `Last_Name` (nom complet), `Company`, `Email`, `Country`, `Lead_Source`.
-- Champs personnalisés (noms d'API, **à créer par un administrateur Zoho** dans Paramètres > Personnalisation > Modules et champs > Leads, type « ligne unique ») : `Account_Type`, `Offer`, `UTM_Source`, `UTM_Medium`, `UTM_Campaign`, `Referrer`.
+- Champs personnalisés (noms d'API, **à créer par un administrateur Zoho** dans Paramètres > Personnalisation > Modules et champs > Leads, type « ligne unique ») : `Account_Type`, `Offer`, `UTM_Source`, `UTM_Medium`, `UTM_Campaign`. (Le `referrer` n'est ni stocké ni envoyé : décision du propriétaire en cours.)
 
 ## Procédure Zoho (Self Client)
 1. Console développeurs du centre de données du compte (ex. `api-console.zoho.eu`) > **Self Client** : relever l'identifiant et le secret.
-2. Onglet « Generate Code » : portées `ZohoCRM.modules.leads.CREATE,ZohoCRM.modules.leads.READ` (la recherche exige la lecture), durée choisie, puis générer le code.
+2. Onglet « Generate Code » : portée de création `ZohoCRM.modules.Leads.CREATE` (documentation « Insert Records » v8) ; portée de lecture pour la recherche anti-doublon : **à confirmer** sur la page « Search Records » (non lue) avant de la poser, durée choisie, puis générer le code.
 3. Échanger ce code (à usage unique, valable quelques minutes) contre les jetons : `POST {accounts}/oauth/v2/token` avec `grant_type=authorization_code`, `client_id`, `client_secret`, `code`. Conserver le `refresh_token` (ne expire pas) ; l'access token (1 h) est renouvelé automatiquement par le serveur.
 4. Poser les variables dans Railway, activer en dernier (`ZOHO_CRM_ENABLED=true`).
 5. L'utilisateur Zoho qui a généré le code doit avoir les droits de créer et lire les prospects.
 
 ## Sources et niveau de vérification
-Les pages officielles `www.zoho.com/crm/developer/docs/` n'étaient **pas consultables en direct** depuis l'environnement de développement (hôte non autorisé) ; seuls les extraits de recherche ont été lus :
-- Endpoint d'insertion/upsert v8 et `duplicate_check_fields` : <https://www.zoho.com/crm/developer/docs/api/v8/upsert-records.html> (confirmé par extrait).
-- Recherche par e-mail v8 (`/{module}/search?email=`) : <https://www.zoho.com/crm/developer/docs/api/v8/search-records.html> (confirmé par extrait ; réponse 204 = aucun résultat, à confirmer sur la page).
-- Self Client, échange de code, jeton valable 1 h, refresh token permanent : <https://help.zoho.com/portal/en/community/topic/kaizen-2-oauth2-0-and-self-client-api> (billet communautaire Zoho, non la documentation de référence).
-
-**À vérifier par la recette avant activation** (non confirmé dans la documentation officielle lue) : noms exacts des portées `ZohoCRM.modules.leads.CREATE/READ`, domaines `accounts.zoho.*` / `www.zohoapis.*` par centre de données (table `DATA_CENTERS`), forme exacte des réponses d'erreur (`INVALID_DATA`, `DUPLICATE_DATA`). Référence : <https://www.zoho.com/crm/developer/docs/api/v8/oauth-overview.html>.
+- **Création (lue par le CTO sur la documentation officielle)** : « Insert Records » v8, <https://www.zoho.com/crm/developer/docs/api/v8/insert-records.html> : portée `ZohoCRM.modules.Leads.CREATE` ; endpoint `{api-domain}/crm/v8/Leads` (ex. `https://www.zohoapis.com/crm/v8/Leads`) ; portée manquante = erreur `OAUTH_SCOPE_MISMATCH` (HTTP 401), traitée sans nouvelle tentative.
+- **Recherche anti-doublon** : page officielle « Search Records » v8, <https://www.zoho.com/crm/developer/docs/api/v8/search-records.html>. Non lisible depuis l'environnement de développement : nom de la portée de lecture et réponse 204 = aucun résultat **à confirmer**.
+- **Domaine api et domaine des comptes par centre de données** (table `DATA_CENTERS`) : **à confirmer en recette avec un compte de test avant activation** ; <https://www.zoho.com/crm/developer/docs/api/v8/oauth-overview.html>.
+- Self Client, échange de code, jeton d'accès valable 1 h, jeton d'actualisation permanent : billet communautaire Zoho <https://help.zoho.com/portal/en/community/topic/kaizen-2-oauth2-0-and-self-client-api> (non la documentation de référence).
+- Les formes d'erreur `INVALID_DATA` et `DUPLICATE_DATA` restent à confirmer en recette.

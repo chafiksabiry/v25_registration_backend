@@ -30,7 +30,6 @@ export const CUSTOM_FIELDS = {
   utmSource: 'UTM_Source',
   utmMedium: 'UTM_Medium',
   utmCampaign: 'UTM_Campaign',
-  referrer: 'Referrer',
 };
 
 const clean = (v, max = 200) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : undefined);
@@ -66,7 +65,6 @@ export function buildLeadRecord(input, leadSource = DEFAULT_LEAD_SOURCE) {
     [CUSTOM_FIELDS.utmSource]: clean(attribution.utm_source, 100),
     [CUSTOM_FIELDS.utmMedium]: clean(attribution.utm_medium, 100),
     [CUSTOM_FIELDS.utmCampaign]: clean(attribution.utm_campaign, 100),
-    [CUSTOM_FIELDS.referrer]: clean(attribution.referrer, 300),
   };
   Object.keys(custom).forEach((k) => custom[k] === undefined && delete custom[k]);
   return { standard, custom };
@@ -99,7 +97,13 @@ async function getAccessToken(cfg, fetchImpl, now) {
 async function zohoCall(cfg, fetchImpl, now, path, init) {
   const token = await getAccessToken(cfg, fetchImpl, now);
   const res = await fetchImpl(`${cfg.dc.api}/crm/${API_VERSION}${path}`, { ...init, headers: { ...(init?.headers || {}), Authorization: `Zoho-oauthtoken ${token}` } });
-  if (res.status === 401) { resetTokenCache(); throw new ZohoError('401', { retryable: true }); }
+  if (res.status === 401) {
+    resetTokenCache();
+    const b = await res.json().catch(() => ({}));
+    // OAUTH_SCOPE_MISMATCH : la portée manque, réessayer ne sert à rien (documentation « Insert Records » v8).
+    if (b?.code === 'OAUTH_SCOPE_MISMATCH') throw new ZohoError('portée Zoho manquante (OAUTH_SCOPE_MISMATCH)');
+    throw new ZohoError('401', { retryable: true });
+  }
   if (res.status === 204) return { status: 204, body: null };
   const body = await res.json().catch(() => ({}));
   // Zoho répond parfois 4xx avec un code par enregistrement (ex. INVALID_DATA) : le code du corps est lu par l'appelant.

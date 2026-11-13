@@ -45,7 +45,7 @@ test('création : champs, Lead_Source, domaine du centre de données', async () 
   assert.ok(p.url.startsWith('https://www.zohoapis.eu/crm/v8/Leads'));
   assert.equal(p.init.headers.Authorization, 'Zoho-oauthtoken at');
   const rec = JSON.parse(p.init.body).data[0];
-  assert.deepEqual(rec, { Last_Name: 'Ana B', Company: 'Acme', Email: 'a@b.fr', Lead_Source: 'Web HARX', Country: 'France', Account_Type: 'company', Offer: 'accueil', UTM_Source: 'linkedin', UTM_Medium: 'social', UTM_Campaign: 'c1', Referrer: 'linkedin.com' });
+  assert.deepEqual(rec, { Last_Name: 'Ana B', Company: 'Acme', Email: 'a@b.fr', Lead_Source: 'Web HARX', Country: 'France', Account_Type: 'company', Offer: 'accueil', UTM_Source: 'linkedin', UTM_Medium: 'social', UTM_Campaign: 'c1' });  // le referrer n'est pas envoyé (décision propriétaire en cours)
 });
 
 test('Lead_Source toujours renseigné, même sans variable ni origine', () => {
@@ -111,4 +111,13 @@ test('le secret et l\'e-mail ne sont jamais écrits dans le journal', async () =
   } finally { [console.error, console.warn] = orig; }
   assert.ok(lines.length && lines.every((l) => !l.includes('sec') || !l.includes('a@b.fr')));
   assert.ok(!lines.join('').includes('a@b.fr'));
+});
+
+test('portée manquante (401 OAUTH_SCOPE_MISMATCH) : journalisé, aucune nouvelle tentative', async () => {
+  resetTokenCache();
+  const m = mock({ search: () => json(401, { code: 'OAUTH_SCOPE_MISMATCH' }) });
+  const waits = [];
+  const r = await createLeadForSignup(input, { env, fetchImpl: m.f, sleep: async (ms) => waits.push(ms) });
+  assert.deepEqual(r, { status: 'failed', attempts: 1 });
+  assert.equal(waits.length, 0);
 });
