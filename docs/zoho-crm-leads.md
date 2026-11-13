@@ -14,6 +14,9 @@
 | `ZOHO_DC` | Centre de données : `com`, `eu`, `in`, `com.au`, `jp`, `ca`, `sa`, `com.cn` (défaut `com`). Doit être celui du compte Zoho CRM. |
 | `ZOHO_LEAD_SOURCE` | Valeur de `Lead_Source` (défaut `Site web HARX`). Lead_Source est toujours envoyé. |
 
+## Champs réellement disponibles à l'inscription
+Le front envoie à `POST /auth/register` : `fullName`, `email`, `password`, `phone`, des champs de mesure et `attribution` (utm_*, sous consentement). **Ni offre, ni type de compte, ni nom d'entreprise, ni pays** : le type arrive plus tard par `POST /auth/change-user-type` (`company`, `rep`, `call-center`). Le prospect créé à l'inscription contient donc `Last_Name`, `Company` (repli sur le nom complet), `Email`, `Lead_Source` et les utm_*. `Account_Type`, `Offer` et `Country` ne sont pas remplis tant que la décision du propriétaire (complétion au changement de type, offre, pays) n'est pas prise.
+
 ## Comportement
 - Recherche préalable `GET /crm/v8/Leads/search?email=…` ; prospect trouvé : rien n'est créé. Sinon `POST /crm/v8/Leads`.
 - Nouvelles tentatives (erreur réseau, 5xx, 429, 401) : attentes de 1 s, 5 s, 20 s, puis abandon journalisé.

@@ -31,15 +31,10 @@ export const register = async (req, res) => {
       sourceUrl,
     });
     // Prospect Zoho CRM : après la réussite, sans attendre, jamais bloquant (désactivé par défaut, voir services/zohoLead.js).
-    createLeadForSignup({
-      email: accountData.email,
-      fullName: accountData.fullName,
-      companyName: accountData.companyName || accountData.company,
-      country: accountData.country,
-      accountType: accountData.typeUser,
-      offer: accountData.offer || accountData.plan || accountData.selectedPlan,
-      attribution: origin || undefined,
-    });
+    // Seuls champs réellement envoyés à /auth/register par le front : fullName, email, attribution (utm_*).
+    // Type de compte, offre, pays, entreprise : non transmis à l'inscription (décision en cours).
+    createLeadForSignup({ email: accountData.email, fullName: accountData.fullName, attribution: origin || undefined });
+
     res.status(201).json({
       message: 'Registration successful',
       data: { _id: result.result._id }
