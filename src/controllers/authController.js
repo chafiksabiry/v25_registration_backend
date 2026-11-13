@@ -2,6 +2,7 @@
 import { sanitizeAttribution } from '../utils/attribution.js';
 import authService from '../services/authService.js';
 import { sendSignUpEvent } from '../services/metaCapi.js';
+import { createLeadForSignup } from '../services/zohoLead.js';
 
 function sendPasswordResetError(res, error, scope) {
   const status = Number(error?.statusCode) || 500;
@@ -28,6 +29,16 @@ export const register = async (req, res) => {
       fbp,
       fbc,
       sourceUrl,
+    });
+    // Prospect Zoho CRM : après la réussite, sans attendre, jamais bloquant (désactivé par défaut, voir services/zohoLead.js).
+    createLeadForSignup({
+      email: accountData.email,
+      fullName: accountData.fullName,
+      companyName: accountData.companyName || accountData.company,
+      country: accountData.country,
+      accountType: accountData.typeUser,
+      offer: accountData.offer || accountData.plan || accountData.selectedPlan,
+      attribution: origin || undefined,
     });
     res.status(201).json({
       message: 'Registration successful',
