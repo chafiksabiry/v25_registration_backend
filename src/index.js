@@ -16,6 +16,7 @@ import countryWaitlistRoutes from './routes/countryWaitlistRoutes.js';
 import callCenterRoutes from './routes/callCenterRoutes.js';
 import agentInvitationRoutes from './routes/agentInvitationRoutes.js';
 import companyMemberRoutes from './routes/companyMemberRoutes.js';
+import whatsappRoutes from './routes/whatsappRoutes.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { attachTeamPresence } from './realtime/teamPresence.js';
 
@@ -78,7 +79,8 @@ app.get('/email/harx-banner.jpg', (_req, res) => {
 });
 
 app.use(helmet());
-app.use(express.json());
+// Corps brut conservé : nécessaire pour valider la signature X-Hub-Signature-256 du webhook WhatsApp (Meta).
+app.use(express.json({ verify: (req, _res, buf) => { req.rawBody = buf; } }));
 
 // Health Check (excluded from rate limiting)
 app.get('/', (req, res) => {
@@ -126,6 +128,7 @@ app.use('/api/country-waitlist', countryWaitlistRoutes);
 app.use('/api/call-center', callCenterRoutes);
 app.use('/api/agent-invitations', agentInvitationRoutes);
 app.use('/api/company-members', companyMemberRoutes);
+app.use('/api/whatsapp', whatsappRoutes);
 
 // Error handling
 app.use(errorHandler);

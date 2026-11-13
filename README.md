@@ -2,6 +2,29 @@
 
 
 
+## Agent IA WhatsApp
+
+Un agent (Claude) répond automatiquement aux messages WhatsApp : il cherche la solution dans la base de connaissances HARX (`v25_knowledgebase_backend`, `POST /api/rag/query`) et guide l'utilisateur étape par étape. Il escalade vers un humain s'il n'a pas de solution fiable (`WhatsappConversation.escalated`).
+
+- Webhook Meta : `GET|POST /api/whatsapp/webhook` (signature `X-Hub-Signature-256` vérifiée, déduplication des messages, réponse `200` immédiate puis traitement en arrière-plan).
+- Code : `src/services/whatsappAgent/`, `src/controllers/whatsappWebhookController.js`, `src/routes/whatsappRoutes.js`, `src/models/WhatsappConversation.js`.
+- Doit tourner sur un serveur persistant (Railway) : le traitement continue après la réponse `200`, ce que Netlify Functions ne garantit pas.
+
+Variables d'environnement (sans elles, le webhook répond `503`) :
+
+| Variable | Rôle |
+|---|---|
+| `WHATSAPP_VERIFY_TOKEN` | Secret choisi, saisi chez Meta pour vérifier le webhook |
+| `WHATSAPP_APP_SECRET` | App Secret Meta (validation de signature) |
+| `WHATSAPP_ACCESS_TOKEN` | Token permanent (utilisateur système) |
+| `WHATSAPP_PHONE_NUMBER_ID` | ID du numéro WhatsApp Business |
+| `WHATSAPP_API_VERSION` | Optionnel, défaut `v21.0` |
+| `ANTHROPIC_API_KEY` | Clé API Claude |
+| `WHATSAPP_AGENT_MODEL` | Optionnel, défaut `claude-sonnet-5-5` |
+| `KB_BASE_URL` | URL de `v25_knowledgebase_backend` |
+| `WHATSAPP_KB_COMPANY_ID` | Company dont le corpus est interrogé (V1 : une seule) |
+| `WHATSAPP_KB_GIG_ID` | Optionnel, restreint la recherche à un gig |
+
 ## Getting started
 
 To make it easy for you to get started with GitLab, here's a list of recommended next steps.
