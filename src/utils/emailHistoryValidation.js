@@ -1,11 +1,13 @@
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-const ZOHO_EMAIL_ID_RE = /^[A-Za-z0-9._:-]{4,128}$/;
+// Identifiant Zoho de l'email, ou "<idCampagne>:<email destinataire>" pour un envoi Zoho Campaigns.
+const ZOHO_EMAIL_ID_RE = /^[A-Za-z0-9._:@+-]{4,300}$/;
 const DEAL_ID_RE = /^\d{6,25}$/;
 // ISO 8601 avec fuseau obligatoire (Z ou +hh:mm) : une date sans fuseau est ambigue.
 const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/;
 
 export const MAX_BULK_ENTRIES = 100; // express.json() limite le corps a 100 ko par defaut
-export const METHODS = ['workflow', 'manual', 'other'];
+export const METHODS = ['workflow', 'campaign', 'manual', 'other'];
+export const SOURCES = ['zoho_crm', 'zoho_campaigns'];
 // Statuts acceptables pour un email DEJA envoye. `failed` en est exclu : un echec n'est pas un envoi.
 export const RECORDABLE_STATUSES = ['sent', 'delivered', 'opened', 'clicked', 'bounced'];
 // Transitions autorisees : on n'ecrit jamais un statut plus faible par-dessus un plus avance.
@@ -63,12 +65,15 @@ export function normalizeEmailEntry(raw, now = new Date()) {
   const method = text(raw.method) ?? 'workflow';
   if (!METHODS.includes(method)) return { ok: false, error: `method must be one of: ${METHODS.join(', ')}` };
 
+  const source = text(raw.source) ?? 'zoho_crm';
+  if (!SOURCES.includes(source)) return { ok: false, error: `source must be one of: ${SOURCES.join(', ')}` };
+
   const status = text(raw.status) ?? 'sent';
   if (!RECORDABLE_STATUSES.includes(status)) {
     return { ok: false, error: `status must be one of: ${RECORDABLE_STATUSES.join(', ')}` };
   }
 
-  const value = { zohoEmailId, subject, recipient, sentAt, source: 'zoho_crm', method, status };
+  const value = { zohoEmailId, subject, recipient, sentAt, source, method, status };
   if (dealId) value.dealId = dealId;
   return { ok: true, value };
 }
