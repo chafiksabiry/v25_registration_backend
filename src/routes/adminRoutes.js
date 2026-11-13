@@ -22,7 +22,7 @@ import {
 } from '../controllers/adminController.js';
 import { authenticate } from '../middleware/auth.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
-import emailLogRoutes from './emailLogRoutes.js';
+import emailHistoryRoutes from './emailHistoryRoutes.js';
 
 const router = express.Router();
 
@@ -45,6 +45,6 @@ router.patch('/objectives', authenticate, requireAdmin, adminUpdateObjectives);
 router.get('/onboarding-satisfaction', authenticate, requireAdmin, adminOnboardingSatisfaction);
 router.get('/countries', authenticate, requireAdmin, adminCountries);
 router.patch('/countries/:countryId/retraction-days', authenticate, requireAdmin, adminUpdateCountryRetractionDays);
-router.use('/email-logs', authenticate, requireAdmin, emailLogRoutes);
+router.use('/email-history', authenticate, requireAdmin, emailHistoryRoutes);
 
 export default router;
