@@ -24,6 +24,7 @@
  *   - Existing users (same e-mail) are never modified.
  *   - Imported users have no password and are not verified; the agent profile is created
  *     later by the normal onboarding flow (agentService), so no agents/wallets are written here.
+ *   - When the JSONL line carries `crmDealId` (Zoho deal id), it is stored in `legacyV1.crmDealId`.
  */
 import dotenv from 'dotenv';
 import fs from 'fs';
@@ -84,6 +85,7 @@ function buildUser(rep, now, token) {
       experience: rep.experience,
       gender: rep.gender,
       birthDate: rep.birthDate,
+      crmDealId: rep.crmDealId ? String(rep.crmDealId) : null,
     },
   };
 }
