@@ -16,6 +16,7 @@ import countryWaitlistRoutes from './routes/countryWaitlistRoutes.js';
 import callCenterRoutes from './routes/callCenterRoutes.js';
 import agentInvitationRoutes from './routes/agentInvitationRoutes.js';
 import companyMemberRoutes from './routes/companyMemberRoutes.js';
+import zohoWebhookRoutes from './routes/zohoWebhookRoutes.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { attachTeamPresence } from './realtime/teamPresence.js';
 
@@ -126,6 +127,7 @@ app.use('/api/country-waitlist', countryWaitlistRoutes);
 app.use('/api/call-center', callCenterRoutes);
 app.use('/api/agent-invitations', agentInvitationRoutes);
 app.use('/api/company-members', companyMemberRoutes);
+app.use('/api/integrations/zoho', zohoWebhookRoutes);
 
 // Error handling
 app.use(errorHandler);
