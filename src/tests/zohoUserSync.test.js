@@ -219,3 +219,31 @@ test('adresse avec « + » dans l\'URL : conservée telle quelle, encodée (%2B)
   } finally { await new Promise((r) => server.close(r)); }
   assert.deepEqual(users.docs.map((d) => d.email).sort(), ['body+wins@example.org', 'jean.dupont+test2@example.org', 'marie.martin+test3@example.org']);
 });
+
+test('multipart/form-data et texte brut (JSON ou k=v) acceptés ; 401 journalisé sans valeurs', async () => {
+  const users = fakeUsers();
+  const logs = [];
+  const app = express();
+  app.use(express.json());
+  app.use('/api/integrations/zoho', createZohoWebhookRouter({ getSecret: () => SECRET, getCollection: async () => users, log: (...a) => logs.push(a.join(' ')), now: () => new Date('2026-11-15T07:00:00Z') }));
+  const server = http.createServer(app);
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const base = `http://127.0.0.1:${server.address().port}/api/integrations/zoho/sync-user`;
+  try {
+    const fd = new FormData(); fd.append('token', SECRET); fd.append('email', 'multi.part@example.org'); fd.append('first_name', 'Multi');
+    assert.equal((await (await fetch(base, { method: 'POST', body: fd })).json()).status, 'created');
+    const txtJson = await fetch(base, { method: 'POST', headers: { 'content-type': 'text/plain' }, body: JSON.stringify({ token: SECRET, email: 'text.json@example.org' }) });
+    assert.equal((await txtJson.json()).status, 'created');
+    const txtKv = await fetch(base, { method: 'POST', headers: { 'content-type': 'text/plain' }, body: `token=${SECRET}&email=text.kv@example.org` });
+    assert.equal((await txtKv.json()).status, 'created');
+    const bad = new FormData(); bad.append('token', 'mauvais'); bad.append('email', 'secret.value@example.org');
+    assert.equal((await fetch(base, { method: 'POST', body: bad })).status, 401);
+    const file = new FormData(); file.append('f', new Blob(['x']), 'x.txt');
+    assert.equal((await fetch(base, { method: 'POST', body: file })).status, 400);
+  } finally { await new Promise((r) => server.close(r)); }
+  assert.deepEqual(users.docs.map((d) => d.email).sort(), ['multi.part@example.org', 'text.json@example.org', 'text.kv@example.org']);
+  const line = logs.find((l) => l.includes('[zoho-webhook] 401'));
+  assert.ok(line, 'le 401 doit être journalisé');
+  assert.ok(line.includes('multipart/form-data') && line.includes('"bodyKeys":["token","email"]'));
+  assert.ok(!line.includes('mauvais') && !line.includes('secret.value'), 'aucune valeur dans le journal');
+});
