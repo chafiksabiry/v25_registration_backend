@@ -140,3 +140,28 @@ test('noms : les valeurs vides ou "NONE" de Zoho ne deviennent jamais un nom', (
   const doc = buildUserDoc({ fullName: 'X', phone: null }, { newUserType: 'rep', now: new Date('2026-01-02T00:00:00Z'), batchPrefix: 'p' });
   assert.equal(doc.importBatch, 'p-2026-01');
 });
+
+test('paramètres dans l\'URL (Zoho sans corps) acceptés ; le corps l\'emporte sur l\'URL', async () => {
+  const users = fakeUsers();
+  const app = express();
+  app.use(express.json());
+  app.use('/api/integrations/zoho', createZohoWebhookRouter({ getSecret: () => SECRET, getCollection: async () => users, now: () => new Date('2026-11-15T07:00:00Z') }));
+  const server = http.createServer(app);
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const base = `http://127.0.0.1:${server.address().port}/api/integrations/zoho/sync-user`;
+  try {
+    const q = new URLSearchParams({ email: 'Query.User@Example.org', first_name: 'Query', last_name: 'User' });
+    const r1 = await fetch(`${base}?${q}`, { method: 'POST', headers: { 'x-zoho-webhook-token': SECRET } });
+    assert.deepEqual(await r1.json(), { ok: true, status: 'created' });
+    const r2 = await fetch(`${base}?email=ignore@example.org`, {
+      method: 'POST',
+      headers: { 'x-zoho-webhook-token': SECRET, 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'body.wins@example.org' }),
+    });
+    assert.deepEqual(await r2.json(), { ok: true, status: 'created' });
+    const r3 = await fetch(`${base}?email=a@example.org&email=b@example.org`, { method: 'POST', headers: { 'x-zoho-webhook-token': SECRET } });
+    assert.equal(r3.status, 400);
+  } finally { await new Promise((r) => server.close(r)); }
+  assert.deepEqual(users.docs.map((d) => d.email).sort(), ['body.wins@example.org', 'query.user@example.org']);
+  assert.equal(users.docs.find((d) => d.email === 'query.user@example.org').fullName, 'Query User');
+});

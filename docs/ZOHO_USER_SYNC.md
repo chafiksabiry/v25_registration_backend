@@ -9,6 +9,7 @@
   `password: null`, `typeUser: "rep"`, `isVerified: false`, `firstTime: true`, `invitationStatus: "none"`,
   `source: "zoho_crm_sync"`, `importBatch: "zoho-webhook-AAAA-MM"`.
 - Upsert **atomique** (`$setOnInsert`) sur l'index unique `email` : pas de doublon, même avec des appels simultanés ou répétés.
+- Les données peuvent arriver dans le corps (JSON ou formulaire) **ou dans l'URL** (paramètres de requête) : le corps l'emporte.
 - Adresses invalides, de test ou au domaine mal saisi (`gmai.com`, `gmail.co`, `kkk@…`) : `status: "skipped"`, rien n'est écrit.
 - Aucune suppression, aucune création de collection ni d'index, aucun nouveau champ dans le schéma.
 - Un nom Zoho vide ou « NONE » n'est jamais enregistré comme nom ; à défaut, la partie locale de l'adresse sert de `fullName`.
