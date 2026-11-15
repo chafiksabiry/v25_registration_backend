@@ -53,7 +53,9 @@ export function createSyncUserHandler(opts = {}) {
 
   return async (req, res, next) => {
     try {
-      const p = normalizePayload(req.body);
+      // Zoho envoie selon la configuration : dans le corps (JSON ou formulaire) ou dans l'URL (paramètres de requête).
+      // Le corps l'emporte sur l'URL.
+      const p = normalizePayload({ ...(req.query || {}), ...(req.body || {}) });
       if (!p.email || !EMAIL_RE.test(p.email)) {
         return res.status(400).json({ ok: false, error: 'valid_email_required' });
       }
