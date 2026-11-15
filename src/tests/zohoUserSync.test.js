@@ -186,3 +186,15 @@ test('secret transmis comme paramètre `token` (Zoho sans en-tête) : accepté s
   } finally { await new Promise((r) => server.close(r)); }
   assert.deepEqual(users.docs.map((d) => d.email).sort(), ['body.token@example.org', 'param.token@example.org']);
 });
+
+import { suspiciousEmailReason } from '../utils/emailQuality.js';
+test('extension de domaine invalide : refusée ; extensions réelles (génériques ou pays) acceptées', () => {
+  for (const bad of ['jean@gmail.comg', 'jean@gmail.cmo', 'jean@gmail.coom', 'jean@yahoo.comm', 'jean@orange.frr', 'jean@gmail.com.']) {
+    assert.ok(suspiciousEmailReason(bad), `devrait être refusée : ${bad}`);
+  }
+  assert.equal(suspiciousEmailReason('jean@gmail.comg'), 'extension_invalide');
+  for (const ok of ['sophie@gmail.com', 'sophie@orange.fr', 'sophie@harx.ai', 'sophie@entreprise.sn', 'sophie@societe.ma',
+    'sophie@exemple.tn', 'sophie@univ.edu', 'sophie@boite.co.uk', 'sophie@agence.io', 'sophie@asso.org', 'sophie+tag@gmail.com']) {
+    assert.equal(suspiciousEmailReason(ok), null, `devrait être acceptée : ${ok}`);
+  }
+});
