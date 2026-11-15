@@ -27,6 +27,7 @@ Générer un secret : `node -e "console.log(require('crypto').randomBytes(32).to
 1. Setup → Automation → Actions → **Webhooks** → Configure Webhook (module **Deals**).
 2. URL : `https://<votre-api>/api/integrations/zoho/sync-user`, méthode **POST**.
 3. En-tête : `X-Zoho-Webhook-Token: <ZOHO_WEBHOOK_SECRET>`.
+   **Si votre écran Zoho n'offre pas de section « Header » utilisable**, ajoutez à la place un *Custom Parameter* nommé `token` dont la valeur est le secret. Moins sûr : le secret voyage dans l'URL et peut apparaître dans les journaux HTTP. Changez-le (puis redéployez) si vous le soupçonnez exposé.
 4. Paramètres : `email` = e-mail du **contact lié au Deal** (Contact Name → Email), `first_name`, `last_name`, `phone`.
 5. Ajouter ce webhook comme **action instantanée** du workflow « Réactivation Reps 2026 », à côté de la notification e-mail.
 

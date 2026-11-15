@@ -165,3 +165,24 @@ test('paramètres dans l\'URL (Zoho sans corps) acceptés ; le corps l\'emporte 
   assert.deepEqual(users.docs.map((d) => d.email).sort(), ['body.wins@example.org', 'query.user@example.org']);
   assert.equal(users.docs.find((d) => d.email === 'query.user@example.org').fullName, 'Query User');
 });
+
+test('secret transmis comme paramètre `token` (Zoho sans en-tête) : accepté s\'il est bon, refusé sinon', async () => {
+  const users = fakeUsers();
+  const app = express();
+  app.use(express.json());
+  app.use('/api/integrations/zoho', createZohoWebhookRouter({ getSecret: () => SECRET, getCollection: async () => users, now: () => new Date('2026-11-15T07:00:00Z') }));
+  const server = http.createServer(app);
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const base = `http://127.0.0.1:${server.address().port}/api/integrations/zoho/sync-user`;
+  try {
+    const ok = await fetch(`${base}?token=${SECRET}&email=param.token@example.org`, { method: 'POST' });
+    assert.deepEqual(await ok.json(), { ok: true, status: 'created' });
+    const bad = await fetch(`${base}?token=mauvais&email=nope@example.org`, { method: 'POST' });
+    assert.equal(bad.status, 401);
+    const inBody = await fetch(base, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: SECRET, email: 'body.token@example.org' }) });
+    assert.equal((await inBody.json()).status, 'created');
+    const none = await fetch(`${base}?email=notoken@example.org`, { method: 'POST' });
+    assert.equal(none.status, 401);
+  } finally { await new Promise((r) => server.close(r)); }
+  assert.deepEqual(users.docs.map((d) => d.email).sort(), ['body.token@example.org', 'param.token@example.org']);
+});
