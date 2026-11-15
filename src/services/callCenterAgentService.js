@@ -5,6 +5,7 @@ import AgentInvitation from '../models/AgentInvitation.js';
 import CompanyMembership from '../models/CompanyMembership.js';
 import { agentInvitationNoticeEmail, inviteEmail } from '../utils/harxMessages.js';
 import { appLoginUrl, sendAppEmail } from './brevoMail.js';
+import { resolveInviteProduct, tagInviteAccounts } from '../utils/invitedProduct.js';
 import { isCompanyAccount, roleConflict } from './teamRoleConflicts.js';
 import { COMPANY_ACCOUNT_MESSAGE } from './teamRoleDecision.js';
 import { assertCanAddSeat } from './companyProduct.js';
@@ -180,6 +181,17 @@ export function serializeAgentUser(user, agentId = null, forCompanyId = null) {
   };
 }
 
+/** Produit de l'invitation (inviteur, sinon propriétaire) ; le propriétaire et l'inviteur sont étiquetés s'ils ne le sont pas encore. */
+async function inviteProduct(caller, company) {
+  const product = await resolveInviteProduct({
+    caller,
+    company,
+    findUserById: (id) => User.findById(id).select('product').lean(),
+  });
+  await tagInviteAccounts(User, [company.userId, caller?._id], product);
+  return product;
+}
+
 function activeOtherEmployments(user, companyId) {
   return activeEmployments(user).some((e) => e.companyId !== String(companyId));
 }
@@ -197,6 +209,7 @@ class CallCenterAgentService {
 
     const { caller, company } = await resolveCallerCompany(callerUserId, companyId);
     await assertCanAddSeat(companyId);
+    const product = await inviteProduct(caller, company);
 
     const normalizedEmail = normalizeEmail(email);
     if (!normalizedEmail || !normalizedEmail.includes('@')) {
@@ -226,7 +239,7 @@ class CallCenterAgentService {
       }
       // An address has at most one HARX account but can be invited by any number of call centres:
       // the person accepts after signing in, so nothing about the account is created or changed here.
-      return this.inviteExistingAccount({ caller, company, companyId, existing, sendEmail, typed: { fullName: buildFullName(givenFirstName, givenLastName), phone: phoneValue } });
+      return this.inviteExistingAccount({ caller, company, companyId, existing, sendEmail, product, typed: { fullName: buildFullName(givenFirstName, givenLastName), phone: phoneValue } });
     }
 
     const tempPassword = generateTempPassword();
@@ -238,6 +251,7 @@ class CallCenterAgentService {
       phone: phoneValue,
       password: tempPassword,
       typeUser: 'rep',
+      product,
       isVerified: true,
       firstTime: true,
       mustChangePassword: true,
@@ -286,7 +300,7 @@ class CallCenterAgentService {
     };
   }
 
-  async inviteExistingAccount({ caller, company, companyId, existing, sendEmail, typed = {} }) {
+  async inviteExistingAccount({ caller, company, companyId, existing, sendEmail, product, typed = {} }) {
     const email = normalizeEmail(existing.email);
     let invitation = await AgentInvitation.findOne({ companyId, email });
     if (invitation && invitation.kind === 'member' && invitation.status !== 'declined') {
@@ -318,6 +332,9 @@ class CallCenterAgentService {
         phone: typed.phone || '',
       });
     }
+
+    // Compte existant : il arrivera dans Call Centre à sa prochaine connexion (jamais d'écrasement d'un produit défini).
+    await tagInviteAccounts(User, [existing._id], product);
 
     let emailSent = false;
     let emailError = null;
@@ -540,7 +557,8 @@ class CallCenterAgentService {
   }
 
   async resendInvite(callerUserId, companyId, agentUserId) {
-    await resolveCallerCompany(callerUserId, companyId);
+    const { caller, company: ownCompany } = await resolveCallerCompany(callerUserId, companyId);
+    const product = await inviteProduct(caller, ownCompany);
 
     if (!agentUserId || !mongoose.Types.ObjectId.isValid(agentUserId)) {
       const err = new Error('Valid agent userId is required');
@@ -563,6 +581,7 @@ class CallCenterAgentService {
         invitation.status = 'pending';
         invitation.invitedAt = new Date();
         await invitation.save();
+        await tagInviteAccounts(User, [user._id], product);
         await sendInvitationNotice({ user, company: companyForNotice });
         return {
           agent: serializeInvitedAccount(user, invitation),
@@ -578,6 +597,7 @@ class CallCenterAgentService {
     }
 
     const tempPassword = generateTempPassword();
+    if (!user.product) user.product = product;
     user.password = tempPassword;
     user.mustChangePassword = true;
     user.invitationStatus = 'invited';

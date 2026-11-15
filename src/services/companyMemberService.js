@@ -7,6 +7,7 @@ import { teamMemberInvitationEmail } from '../utils/harxMessages.js';
 import { appLoginUrl, sendAppEmail } from './brevoMail.js';
 import { roleConflict } from './teamRoleConflicts.js';
 import { assertCanAddSeat } from './companyProduct.js';
+import { resolveInviteProduct, tagInviteAccounts } from '../utils/invitedProduct.js';
 import { activeEmployments, hasEmployment, resolveActiveCompanyId } from '../utils/employments.js';
 import {
   allPermissions,
@@ -83,6 +84,17 @@ async function assertCan(callerUserId, companyId, permission) {
     isOwner: false,
     permissions: sanitizePermissions(membership.permissions),
   };
+}
+
+/** Produit de l'invitation (inviteur, sinon propriétaire) ; le propriétaire et l'inviteur sont étiquetés s'ils ne le sont pas encore. */
+async function inviteProduct(caller, company) {
+  const product = await resolveInviteProduct({
+    caller,
+    company,
+    findUserById: (id) => User.findById(id).select('product').lean(),
+  });
+  await tagInviteAccounts(User, [company.userId, caller?._id], product);
+  return product;
 }
 
 function companyLabel(company) {
@@ -294,7 +306,7 @@ class CompanyMemberService {
     ];
   }
 
-  async inviteExistingAccount({ caller, company, existingUser, preset, rights, sendEmail }) {
+  async inviteExistingAccount({ caller, company, existingUser, preset, rights, sendEmail, product }) {
     const email = normalizeEmail(existingUser.email);
     let invitation = await AgentInvitation.findOne({ companyId: company._id, email });
     if (invitation && invitation.status === 'accepted' && invitation.kind === 'member') {
@@ -320,6 +332,9 @@ class CompanyMemberService {
     } else {
       invitation = await AgentInvitation.create({ companyId: company._id, email, ...fields });
     }
+
+    // Compte existant : il arrivera dans Call Centre à sa prochaine connexion (jamais d'écrasement d'un produit défini).
+    await tagInviteAccounts(User, [existingUser._id], product);
 
     let emailSent = false;
     let emailError = null;
@@ -375,6 +390,7 @@ class CompanyMemberService {
 
     const { caller, company } = await assertCan(callerUserId, companyId, 'members.invite');
     await assertCanAddSeat(company._id);
+    const product = await inviteProduct(caller, company);
     const normalizedEmail = normalizeEmail(email);
     if (!normalizedEmail || !normalizedEmail.includes('@')) {
       throw httpError('Valid email is required', 400);
@@ -401,7 +417,7 @@ class CompanyMemberService {
       if (already || String(company.userId) === String(existingUser._id)) {
         throw httpError('Cette personne fait déjà partie de votre équipe.', 409);
       }
-      return this.inviteExistingAccount({ caller, company, existingUser, preset: resolvedPreset, rights, sendEmail });
+      return this.inviteExistingAccount({ caller, company, existingUser, preset: resolvedPreset, rights, sendEmail, product });
     }
     const existingMembership = await CompanyMembership.findOne({ email: normalizedEmail }).select('_id');
     if (existingMembership) {
@@ -415,6 +431,7 @@ class CompanyMemberService {
       phone: String(phone || '').trim() || '0000000000',
       password: tempPassword,
       typeUser: 'company-member',
+      product,
       isVerified: true,
       firstTime: true,
       mustChangePassword: true,
@@ -469,7 +486,7 @@ class CompanyMemberService {
   }
 
   async reinvite(callerUserId, companyId, memberUserId, payload = {}) {
-    const { company } = await assertCan(callerUserId, companyId, 'members.invite');
+    const { caller, company } = await assertCan(callerUserId, companyId, 'members.invite');
     if (String(company.userId) === String(memberUserId)) {
       throw httpError('The owner cannot be reinvited', 400);
     }
@@ -511,6 +528,8 @@ class CompanyMemberService {
 
     const tempPassword = generateTempPassword();
     const firstName = String(user.fullName || membership.fullName || '').trim().split(/\s+/)[0] || '';
+    const product = await inviteProduct(caller, company);
+    if (!user.product) user.product = product;
     user.password = tempPassword;
     user.mustChangePassword = true;
     user.firstTime = true;

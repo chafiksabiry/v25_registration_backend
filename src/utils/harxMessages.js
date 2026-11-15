@@ -95,7 +95,7 @@ export function inviteEmail({ firstName, email, tempPassword, companyName, login
   const org = escapeHtml(companyName || 'your call center');
   const safeEmail = escapeHtml(email);
   const safePassword = escapeHtml(tempPassword);
-  const safeUrl = escapeHtml(loginUrl);
+  const safeUrl = escapeHtml(withProduct(loginUrl));
   return {
     subject: `HARX — Invitation à rejoindre ${companyName || 'votre centre'}`,
     html: harxEmailShell({
@@ -192,7 +192,13 @@ const MEMBER_ROLES = {
   readonly: { label: 'Consultation', text: 'Voit tout, ne modifie rien.' },
 };
 
-const withProduct = (url) => (String(url).includes('?') ? url : `${url}?product=callcentre`);
+/** Ajoute ?product=callcentre (ou &product=callcentre si l'URL a déjà une requête) ; sans doublon. */
+export function withProduct(url) {
+  const u = String(url);
+  if (/[?&]product=/.test(u)) return u;
+  if (!u.includes('?')) return `${u}?product=callcentre`;
+  return /[?&]$/.test(u) ? `${u}product=callcentre` : `${u}&product=callcentre`;
+}
 
 /**
  * Invitation à rejoindre l'équipe d'un centre d'appels (manager, administrateur, consultation).
