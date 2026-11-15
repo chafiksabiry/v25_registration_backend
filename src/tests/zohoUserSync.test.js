@@ -198,3 +198,24 @@ test('extension de domaine invalide : refusée ; extensions réelles (génériqu
     assert.equal(suspiciousEmailReason(ok), null, `devrait être acceptée : ${ok}`);
   }
 });
+
+test('adresse avec « + » dans l\'URL : conservée telle quelle, encodée (%2B) ou non', async () => {
+  const users = fakeUsers();
+  const app = express();
+  app.use(express.json());
+  app.use('/api/integrations/zoho', createZohoWebhookRouter({ getSecret: () => SECRET, getCollection: async () => users, now: () => new Date('2026-11-15T07:00:00Z') }));
+  const server = http.createServer(app);
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const base = `http://127.0.0.1:${server.address().port}/api/integrations/zoho/sync-user`;
+  const h = { 'x-zoho-webhook-token': SECRET };
+  try {
+    const a = await fetch(`${base}?email=jean.dupont+test2@example.org`, { method: 'POST', headers: h });
+    assert.deepEqual(await a.json(), { ok: true, status: 'created' });
+    const b = await fetch(`${base}?email=marie.martin%2Btest3@example.org`, { method: 'POST', headers: h });
+    assert.deepEqual(await b.json(), { ok: true, status: 'created' });
+    // le corps l'emporte toujours sur l'URL
+    const c = await fetch(`${base}?email=ignore+me@example.org`, { method: 'POST', headers: { ...h, 'content-type': 'application/json' }, body: JSON.stringify({ email: 'body+wins@example.org' }) });
+    assert.deepEqual(await c.json(), { ok: true, status: 'created' });
+  } finally { await new Promise((r) => server.close(r)); }
+  assert.deepEqual(users.docs.map((d) => d.email).sort(), ['body+wins@example.org', 'jean.dupont+test2@example.org', 'marie.martin+test3@example.org']);
+});
