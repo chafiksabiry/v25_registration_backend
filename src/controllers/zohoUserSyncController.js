@@ -12,6 +12,21 @@ const pick = (body, ...keys) => {
 };
 const cleanName = (v) => (PLACEHOLDER_NAMES.has(String(v).trim().toLowerCase()) ? '' : String(v).trim());
 
+/**
+ * Valeur brute d'un paramètre d'URL, décodée en %XX mais sans transformer « + » en espace.
+ * Si le paramètre apparaît plusieurs fois, la requête est ambiguë : on ne renvoie rien (elle sera refusée).
+ */
+export function rawQueryParam(req, key) {
+  const qs = String(req.originalUrl || req.url || '').split('?')[1] || '';
+  const values = [];
+  for (const part of qs.split('&')) {
+    const [k, ...v] = part.split('=');
+    if (k === key) values.push(v.join('='));
+  }
+  if (values.length !== 1) return '';
+  try { return decodeURIComponent(values[0]); } catch { return ''; }
+}
+
 /** Accepte JSON ou formulaire, avec les noms de champs usuels de Zoho. N'invente aucune donnée. */
 export function normalizePayload(body = {}) {
   const email = pick(body, 'email', 'Email', 'contact_email').toLowerCase();
@@ -55,7 +70,14 @@ export function createSyncUserHandler(opts = {}) {
     try {
       // Zoho envoie selon la configuration : dans le corps (JSON ou formulaire) ou dans l'URL (paramètres de requête).
       // Le corps l'emporte sur l'URL.
-      const p = normalizePayload({ ...(req.query || {}), ...(req.body || {}) });
+      const params = { ...(req.query || {}), ...(req.body || {}) };
+      // Express lit un « + » non encodé de l'URL comme une espace : « jean+test@x.org » deviendrait « jean test@x.org ».
+      // Une adresse ne contient jamais d'espace : on relit donc la valeur brute de l'URL, où « + » reste « + ».
+      if (!req.body?.email) {
+        const raw = rawQueryParam(req, 'email');
+        if (raw) params.email = raw;
+      }
+      const p = normalizePayload(params);
       if (!p.email || !EMAIL_RE.test(p.email)) {
         return res.status(400).json({ ok: false, error: 'valid_email_required' });
       }
