@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 
 const URI =
   process.argv[2] ||
-  'mongodb://mongo:DiGaBWUZXCkIxlZMuntztBaFJcOlUJIg@maglev.proxy.rlwy.net:40270/harx?authSource=admin';
+  '' /* MONGODB_URI required: no committed URI */;
 
 async function main() {
   await mongoose.connect(URI);
