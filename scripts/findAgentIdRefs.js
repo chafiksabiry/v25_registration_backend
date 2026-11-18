@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 const AGENT_ID = '6a3d78b5fdf970b023cd2390';
 const URI =
   process.env.MONGODB_URI ||
-  'mongodb://mongo:DiGaBWUZXCkIxlZMuntztBaFJcOlUJIg@maglev.proxy.rlwy.net:40270/harx?authSource=admin';
+  '' /* MONGODB_URI required: no committed URI */;
 
 async function main() {
   await mongoose.connect(URI);
