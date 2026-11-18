@@ -58,3 +58,14 @@ export const removeCallCenterAgentEmployment = async (req, res) => {
     return res.status(status).json({ success: false, message: error.message || 'Failed to remove agent' });
   }
 };
+
+export const setCallCenterAgentListen = async (req, res) => {
+  try {
+    const companyId = req.body?.companyId || req.query.companyId;
+    const result = await callCenterAgentService.setAgentListen(callerId(req), companyId, req.params.userId, req.body?.listen);
+    return res.json({ success: true, data: result });
+  } catch (error) {
+    const status = error.statusCode || 500;
+    return res.status(status).json({ success: false, message: error.message || 'Failed to update recordings access' });
+  }
+};

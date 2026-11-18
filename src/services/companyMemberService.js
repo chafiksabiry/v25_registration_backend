@@ -6,7 +6,8 @@ import AgentInvitation from '../models/AgentInvitation.js';
 import { teamMemberInvitationEmail } from '../utils/harxMessages.js';
 import { appLoginUrl, sendAppEmail } from './brevoMail.js';
 import { roleConflict } from './teamRoleConflicts.js';
-import { assertCanAddSeat } from './companyProduct.js';
+import { assertCanAddSeat, getCompanyProductForAccess } from './companyProduct.js';
+import AgentListenGrant from '../models/AgentListenGrant.js';
 import { activeEmployments, hasEmployment, resolveActiveCompanyId } from '../utils/employments.js';
 import {
   allPermissions,
@@ -15,6 +16,8 @@ import {
   sanitizePermissions,
   PERMISSION_GROUPS,
   agentPermissions,
+  effectiveMemberPermissions,
+  nextListenGrantedAt,
   isCallCenterAgent,
   isClientPortalUser,
 } from '../constants/companyPermissions.js';
@@ -115,7 +118,7 @@ function isOnline(date) {
   return Number.isFinite(time) && Date.now() - time < ONLINE_WINDOW_MS;
 }
 
-function serializeMember(doc, user) {
+function serializeMember(doc, user, product = null) {
   return {
     userId: String(doc.userId),
     email: doc.email || user?.email || '',
@@ -127,7 +130,8 @@ function serializeMember(doc, user) {
     online: doc.status === 'active' && isOnline(doc.lastSeenAt),
     lastSeenAt: doc.lastSeenAt || null,
     connectedAt: doc.connectedAt || null,
-    permissions: sanitizePermissions(doc.permissions),
+    // Droits réels (écoute des enregistrements comprise, selon l'offre) : ce que l'écran Équipe affiche et modifie.
+    permissions: effectiveMemberPermissions(doc, product),
     invitedAt: doc.invitedAt || null,
     createdAt: doc.createdAt || null,
   };
@@ -178,13 +182,14 @@ class CompanyMemberService {
     // Un agent employé par un centre : sa société est celle du centre actif (l'un de ses emplois), avec les seuls droits d'un agent.
     if ((!membership || hasEmployment(caller, requestedCompanyId)) && isCallCenterAgent(caller)) {
       const employments = await this.agentEmployments(caller);
+      const activeCompanyId = resolveActiveCompanyId(caller, requestedCompanyId);
       return {
         isOwner: false,
         isAgent: true,
-        companyId: resolveActiveCompanyId(caller, requestedCompanyId),
+        companyId: activeCompanyId,
         companyIds: employments.map((e) => e.companyId),
         employments,
-        permissions: agentPermissions(),
+        permissions: await this.agentPermissionsFor(caller._id, activeCompanyId),
         preset: 'agent',
       };
     }
@@ -195,14 +200,25 @@ class CompanyMemberService {
     }
     await this.markPresent(caller._id);
     const fresh = await CompanyMembership.findById(membership._id);
+    const product = await getCompanyProductForAccess(membership.companyId);
     return {
       isOwner: false,
       isAgent: false,
       companyId: String(membership.companyId),
       companyIds: [String(membership.companyId)],
-      permissions: sanitizePermissions(membership.permissions),
+      permissions: effectiveMemberPermissions(fresh || membership, product),
       preset: (fresh || membership).preset || 'custom',
     };
+  }
+
+  /** Droits d'un agent dans ce centre : défaut de l'offre, puis décision enregistrée du titulaire sur l'écoute. */
+  async agentPermissionsFor(userId, companyId) {
+    if (!companyId || !mongoose.Types.ObjectId.isValid(String(companyId))) return agentPermissions({ product: 'unknown' });
+    const [product, grant] = await Promise.all([
+      getCompanyProductForAccess(companyId),
+      AgentListenGrant.findOne({ companyId: new mongoose.Types.ObjectId(String(companyId)), userId }).lean(),
+    ]);
+    return agentPermissions({ product, listen: typeof grant?.listen === 'boolean' ? grant.listen : null });
   }
 
   async markPresent(userId) {
@@ -250,6 +266,7 @@ class CompanyMemberService {
 
   async list(callerUserId, companyId) {
     const { company } = await assertCan(callerUserId, companyId, 'members.view');
+    const product = await getCompanyProductForAccess(company._id);
     const owner = await User.findById(company.userId).select('fullName email phone');
     const docs = await CompanyMembership.find({ companyId: company._id }).sort({ createdAt: -1 });
     const userIds = docs.map((d) => d.userId);
@@ -279,7 +296,7 @@ class CompanyMemberService {
       preset: i.preset || 'custom',
       status: 'invited',
       online: false,
-      permissions: sanitizePermissions(i.permissions),
+      permissions: effectiveMemberPermissions(i, product),
       invitedAt: i.invitedAt || null,
       createdAt: i.createdAt || null,
       existingAccount: true,
@@ -289,12 +306,12 @@ class CompanyMemberService {
       ownerRow,
       ...docs
         .filter((d) => String(d.userId) !== String(company.userId))
-        .map((d) => serializeMember(d, byId.get(String(d.userId)))),
+        .map((d) => serializeMember(d, byId.get(String(d.userId)), product)),
       ...pendingRows,
     ];
   }
 
-  async inviteExistingAccount({ caller, company, existingUser, preset, rights, sendEmail }) {
+  async inviteExistingAccount({ caller, company, existingUser, preset, rights, listenGrantedAt = null, sendEmail }) {
     const email = normalizeEmail(existingUser.email);
     let invitation = await AgentInvitation.findOne({ companyId: company._id, email });
     if (invitation && invitation.status === 'accepted' && invitation.kind === 'member') {
@@ -307,6 +324,7 @@ class CompanyMemberService {
       kind: 'member',
       preset,
       permissions: rights,
+      listenGrantedAt,
       fullName: existingUser.fullName || '',
       status: 'pending',
       invitedAt: new Date(),
@@ -350,7 +368,7 @@ class CompanyMemberService {
         preset,
         status: 'invited',
         online: false,
-        permissions: sanitizePermissions(rights),
+        permissions: effectiveMemberPermissions({ permissions: rights, preset, listenGrantedAt }, null),
         invitedAt: invitation.invitedAt,
         existingAccount: true,
       },
@@ -383,12 +401,16 @@ class CompanyMemberService {
     const familyName = String(lastName || '').trim();
     if (!givenName) throw httpError('First name is required', 400);
 
+    // Offre Accueil : le profil par défaut « operator » n'écoute pas les enregistrements ; seule une case cochée
+    // (permissions['calls.listen'] === true) ou le profil admin accorde l'écoute.
+    const product = await getCompanyProductForAccess(company._id);
     const resolvedPreset = presetPermissions(preset) ? String(preset).toLowerCase() : 'custom';
-    const base = presetPermissions(preset) || emptyPermissions();
+    const base = presetPermissions(preset, { product }) || emptyPermissions();
     const rights = permissions ? sanitizePermissions({ ...base, ...permissions }) : base;
     if (!Object.values(rights).some(Boolean)) {
       throw httpError('Select at least one permission', 400);
     }
+    const listenGrantedAt = nextListenGrantedAt({ rights, preset: resolvedPreset, requested: permissions });
 
     // Une adresse peut être invitée un nombre illimité de fois mais n'a qu'un compte HARX : si elle en a déjà
     // un, on enregistre une invitation que la personne accepte après connexion (jamais de mot de passe créé).
@@ -401,7 +423,7 @@ class CompanyMemberService {
       if (already || String(company.userId) === String(existingUser._id)) {
         throw httpError('Cette personne fait déjà partie de votre équipe.', 409);
       }
-      return this.inviteExistingAccount({ caller, company, existingUser, preset: resolvedPreset, rights, sendEmail });
+      return this.inviteExistingAccount({ caller, company, existingUser, preset: resolvedPreset, rights, listenGrantedAt, sendEmail });
     }
     const existingMembership = await CompanyMembership.findOne({ email: normalizedEmail }).select('_id');
     if (existingMembership) {
@@ -431,6 +453,7 @@ class CompanyMemberService {
       fullName: user.fullName || `${givenName} ${familyName}`.trim(),
       permissions: rights,
       preset: resolvedPreset,
+      listenGrantedAt,
       status: 'pending',
       invitedByUserId: caller._id,
     });
@@ -461,7 +484,7 @@ class CompanyMemberService {
     }
 
     return {
-      member: serializeMember(membership, user),
+      member: serializeMember(membership, user, product),
       emailSent,
       emailError,
       temporaryPassword: emailSent ? undefined : tempPassword,
@@ -519,6 +542,7 @@ class CompanyMemberService {
     await user.save();
     await membership.save();
 
+    const product = await getCompanyProductForAccess(company._id);
     let emailSent = false;
     let emailError = null;
     try {
@@ -542,7 +566,7 @@ class CompanyMemberService {
     }
 
     return {
-      member: serializeMember(membership, user),
+      member: serializeMember(membership, user, product),
       emailSent,
       emailError,
       temporaryPassword: emailSent ? undefined : tempPassword,
@@ -561,17 +585,25 @@ class CompanyMemberService {
     });
     if (!membership) throw httpError('Member not found', 404);
 
+    const product = await getCompanyProductForAccess(company._id);
     const preset = payload?.preset;
-    const base = presetPermissions(preset) || sanitizePermissions(membership.permissions);
+    // Point de départ : le profil demandé (Accueil : « operator » sans écoute), sinon les droits réels du membre.
+    const base = presetPermissions(preset, { product }) || effectiveMemberPermissions(membership, product);
     membership.permissions = payload?.permissions
       ? sanitizePermissions({ ...base, ...payload.permissions })
       : base;
     membership.preset = presetPermissions(preset)
       ? String(preset).toLowerCase()
       : 'custom';
+    membership.listenGrantedAt = nextListenGrantedAt({
+      rights: membership.permissions,
+      preset: membership.preset,
+      requested: payload?.permissions,
+      previous: membership.listenGrantedAt,
+    });
     await membership.save();
     const user = await User.findById(memberUserId).select('fullName email phone');
-    return serializeMember(membership, user);
+    return serializeMember(membership, user, product);
   }
 
   async remove(callerUserId, companyId, memberUserId) {

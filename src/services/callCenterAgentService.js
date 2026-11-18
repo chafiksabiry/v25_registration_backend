@@ -7,7 +7,9 @@ import { agentInvitationNoticeEmail, inviteEmail } from '../utils/harxMessages.j
 import { appLoginUrl, sendAppEmail } from './brevoMail.js';
 import { isCompanyAccount, roleConflict } from './teamRoleConflicts.js';
 import { COMPANY_ACCOUNT_MESSAGE } from './teamRoleDecision.js';
-import { assertCanAddSeat } from './companyProduct.js';
+import { assertCanAddSeat, getCompanyProductForAccess } from './companyProduct.js';
+import AgentListenGrant from '../models/AgentListenGrant.js';
+import { agentPermissions, LISTEN_KEY } from '../constants/companyPermissions.js';
 import { serializeInvitedAccount } from '../utils/invitedAccount.js';
 import { activeEmployments, hasEmployment, withEmployment, withoutEmployment } from '../utils/employments.js';
 
@@ -379,7 +381,58 @@ class CallCenterAgentService {
       if (mine) invitedByUser.delete(row.userId);
       return mine && mine.invitationStatus === 'active' ? { ...mine, agentId: row.agentId } : row;
     });
-    return [...merged, ...invitedByUser.values()];
+    return this.withListenAccess(companyId, [...merged, ...invitedByUser.values()]);
+  }
+
+  /**
+   * Ajoute à chaque ligne l'écoute des enregistrements : `canListenRecordings` (droit réel) et `listenDecision`
+   * (décision enregistrée du titulaire : true, false, ou null = défaut de l'offre ; Accueil : pas d'écoute par défaut).
+   */
+  async withListenAccess(companyId, rows) {
+    const product = await getCompanyProductForAccess(companyId);
+    const ids = rows.map((r) => r.userId).filter((id) => mongoose.Types.ObjectId.isValid(id));
+    const grants = ids.length
+      ? await AgentListenGrant.find({ companyId: new mongoose.Types.ObjectId(String(companyId)), userId: { $in: ids } }).lean()
+      : [];
+    const byUser = new Map(grants.map((g) => [String(g.userId), g.listen]));
+    return rows.map((row) => {
+      const decision = byUser.has(row.userId) ? byUser.get(row.userId) : null;
+      return { ...row, canListenRecordings: agentPermissions({ product, listen: decision })[LISTEN_KEY], listenDecision: decision };
+    });
+  }
+
+  /**
+   * Le titulaire accorde (`listen: true`) ou retire (`listen: false`) l'écoute des enregistrements à un agent de son
+   * centre (employé, ou invité en attente). Seul le titulaire du centre peut le faire (resolveCallerCompany).
+   */
+  async setAgentListen(callerUserId, companyId, agentUserId, listen) {
+    const { caller } = await resolveCallerCompany(callerUserId, companyId);
+    if (typeof listen !== 'boolean') {
+      const err = new Error('`listen` must be true or false');
+      err.statusCode = 400;
+      throw err;
+    }
+    if (!agentUserId || !mongoose.Types.ObjectId.isValid(agentUserId)) {
+      const err = new Error('Valid agent userId is required');
+      err.statusCode = 400;
+      throw err;
+    }
+    const agent = await User.findById(agentUserId).select('typeUser employments employerCompanyId');
+    const invited = agent
+      ? await AgentInvitation.exists({ companyId, userId: agent._id, kind: { $ne: 'member' }, status: { $in: ['pending', 'accepted'] } })
+      : null;
+    if (!agent || (!hasEmployment(agent, companyId) && !invited)) {
+      const err = new Error('Agent not found in this company');
+      err.statusCode = 404;
+      throw err;
+    }
+    await AgentListenGrant.findOneAndUpdate(
+      { companyId: new mongoose.Types.ObjectId(String(companyId)), userId: agent._id },
+      { $set: { listen, decidedByUserId: caller._id, decidedAt: new Date() } },
+      { upsert: true, new: true }
+    );
+    const [row] = await this.withListenAccess(companyId, [{ userId: String(agent._id) }]);
+    return row;
   }
 
   /** Pending invitations addressed to the signed-in person's e-mail. */
@@ -452,6 +505,7 @@ class CallCenterAgentService {
             email: invitation.email,
             fullName: invitation.fullName || '',
             permissions: invitation.permissions || {},
+            listenGrantedAt: invitation.listenGrantedAt || null,
             preset: ['admin', 'operator', 'readonly'].includes(invitation.preset) ? invitation.preset : 'custom',
             status: 'active',
             invitedByUserId: invitation.invitedByUserId || null,

@@ -107,3 +107,17 @@ export async function assertCanAddSeat(companyId, db) {
     throw err;
   }
 }
+
+/**
+ * Palier du centre pour décider des droits d'accès (écoute des enregistrements) : en cas d'échec de lecture, renvoie
+ * 'unknown' pour que l'écoute reste sur accord explicite (on ne donne pas l'écoute faute de savoir).
+ */
+export async function getCompanyProductForAccess(companyId, db) {
+  if (!companyId) return null;
+  try {
+    return await getCompanyProduct(companyId, db);
+  } catch (error) {
+    console.error('Lecture du produit du centre impossible, écoute sur accord explicite :', error?.message || error);
+    return 'unknown';
+  }
+}
