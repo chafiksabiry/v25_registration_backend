@@ -17,8 +17,11 @@ import User from '../src/models/User.js';
 
 dotenv.config();
 
-const DEFAULT_URI =
-  'mongodb://mongo:DiGaBWUZXCkIxlZMuntztBaFJcOlUJIg@maglev.proxy.rlwy.net:40270/harx?authSource=admin';
+const DEFAULT_URI = process.env.MONGODB_URI;
+if (!DEFAULT_URI) {
+  console.error('MONGODB_URI environment variable is required (set it in your shell, never in the code).');
+  process.exit(1);
+}
 const TEMP_PASSWORD = process.env.RESTORE_TEMP_PASSWORD || 'HarxRestore2026!';
 const APPLY = process.argv.includes('--apply');
 const DRY_RUN = process.argv.includes('--dry-run') || !APPLY;
