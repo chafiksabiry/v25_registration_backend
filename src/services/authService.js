@@ -5,6 +5,7 @@ import userRepository from '../repositories/userRepository.js';
 import { parseProduct } from '../utils/accountProduct.js';
 import User from '../models/User.js'; // Modèle utilisateur
 import Timezone from '../models/Timezone.js';
+import { buildTimezoneDoc } from '../utils/timezoneInfo.js';
 import twilio from 'twilio';
 import { getClientIp } from '../utils/ipHelper.js';
 import ipInfoService from './ipInfoService.js';
@@ -96,12 +97,26 @@ class AuthService {
         zoneName: locationInfo.timezone
       });
 
-      if (!timezone) {
-        console.warn(`Timezone not found for country: ${locationInfo.countryCode}, zone: ${locationInfo.timezone}`);
+      if (timezone) return timezone._id;
+
+      // zoneName is unique: the zone may exist under another country code.
+      const byZone = await Timezone.findOne({ zoneName: locationInfo.timezone });
+      if (byZone) return byZone._id;
+
+      // Not seeded yet (e.g. Africa/Tunis): add it from ICU data rather than
+      // leaving the user without a timezone.
+      const doc = buildTimezoneDoc(locationInfo.countryCode, locationInfo.timezone);
+      if (!doc) {
+        console.warn(`Timezone not found and could not be derived for country: ${locationInfo.countryCode}, zone: ${locationInfo.timezone}`);
         return null;
       }
-
-      return timezone._id;
+      const created = await Timezone.findOneAndUpdate(
+        { zoneName: doc.zoneName },
+        { $setOnInsert: { ...doc, lastUpdated: new Date() } },
+        { upsert: true, new: true }
+      );
+      console.log(`Timezone added to the reference list: ${doc.zoneName} (${doc.countryCode}, offset ${doc.gmtOffset}s)`);
+      return created._id;
     } catch (error) {
       console.error('Error in findTimezone:', error);
       return null;
