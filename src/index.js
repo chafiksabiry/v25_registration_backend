@@ -22,6 +22,12 @@ import { attachTeamPresence } from './realtime/teamPresence.js';
 
 dotenv.config();
 
+// Every token of this service is signed and checked with JWT_SECRET: there is no fallback secret.
+if (!process.env.JWT_SECRET) {
+  console.error('JWT_SECRET is not set: the registration service refuses to start (tokens can be neither signed nor checked).');
+  process.exit(1);
+}
+
 const app = express();
 app.set('trust proxy', 1); // Use '1' to trust the first proxy (Netlify/Railway)
 const PORT = process.env.PORT;

@@ -750,6 +750,18 @@ class AuthService {
 
     return { isFirstLogin: user.firstTime };
   }
+  /** Type of an account: null when none was chosen yet, undefined when the account does not exist. */
+  async currentUserType(userId) {
+    let user;
+    try {
+      user = await userRepository.findById(userId);
+    } catch {
+      return undefined;
+    }
+    if (!user) return undefined;
+    return user.typeUser || null;
+  }
+
   async changeUserType(userId, newType) {
     try {
       const allowed = ['company', 'rep', 'call-center'];
