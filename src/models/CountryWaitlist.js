@@ -6,12 +6,14 @@ const countryWaitlistSchema = new mongoose.Schema(
     email: { type: String, required: true, trim: true, lowercase: true },
     country: { type: String, required: true, trim: true, uppercase: true, match: /^[A-Z]{2}$/ },
     product: { type: String, default: 'callcentre', trim: true, lowercase: true },
+    /** `country` : pays pas encore ouvert (aucun compte). `numbers` : abonné Nomad Solo qui attend un numéro dans ce pays. */
+    kind: { type: String, enum: ['country', 'numbers'], default: 'country' },
     companyName: { type: String, trim: true, default: '' },
     locale: { type: String, trim: true, default: null },
     confirmationSentAt: { type: Date, default: null },
   },
   { timestamps: true }
 );
-countryWaitlistSchema.index({ email: 1, product: 1, country: 1 }, { unique: true });
+countryWaitlistSchema.index({ email: 1, product: 1, country: 1, kind: 1 }, { unique: true });
 
 export default mongoose.model('CountryWaitlist', countryWaitlistSchema);
