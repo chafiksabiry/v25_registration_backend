@@ -486,6 +486,8 @@ class CallCenterAgentService {
     invitation.userId = user._id;
     invitation.respondedAt = new Date();
     await invitation.save();
+    // Refus : la décision d'écoute préparée par le titulaire pour cet agent disparaît (rien de réutilisé plus tard).
+    if (!accept && invitation.kind !== 'member') await this.forgetListenGrant(invitation.companyId, user._id);
     if (accept && invitation.kind !== 'member') {
       // Agent d'un centre : l'emploi s'AJOUTE à ceux que la personne a déjà, sans toucher aux autres centres.
       const account = await User.findById(user._id);

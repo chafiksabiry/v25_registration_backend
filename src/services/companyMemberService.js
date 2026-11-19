@@ -18,6 +18,7 @@ import {
   agentPermissions,
   effectiveMemberPermissions,
   resolveMemberListen,
+  listenIsOptIn,
   productForWrite,
   isCallCenterAgent,
   isClientPortalUser,
@@ -71,6 +72,21 @@ async function loadCaller(callerUserId) {
 /** Titulaire PROUVÉ : l'appelant est le propriétaire de la société ET son identité vient d'un JWT valide. */
 function ownerProven(company, callerUserId, provenUserId) {
   return Boolean(provenUserId) && String(provenUserId) === String(callerUserId) && isOwner(company, callerUserId);
+}
+
+/**
+ * `listenGrant` présent : il faut le titulaire PROUVÉ. Sans JWT valide → 401 (se reconnecter) ; un autre que le titulaire → 403.
+ * Rien n'est ignoré en silence : l'écran affiche l'erreur.
+ */
+export function assertListenGrantAllowed(company, callerUserId, provenUserId, listenGrant) {
+  if (listenGrant === undefined || listenGrant === null) return;
+  if (typeof listenGrant !== 'boolean') throw Object.assign(httpError('listenGrant must be a boolean', 400), { code: 'LISTEN_GRANT_INVALID' });
+  if (!isOwner(company, callerUserId)) {
+    throw Object.assign(httpError("Seul le titulaire du compte peut accorder ou retirer l'écoute des enregistrements.", 403), { code: 'LISTEN_OWNER_ONLY' });
+  }
+  if (!provenUserId || String(provenUserId) !== String(callerUserId)) {
+    throw Object.assign(httpError("Reconnectez-vous pour modifier l'écoute des enregistrements.", 401), { code: 'LISTEN_REAUTH_REQUIRED' });
+  }
 }
 
 async function assertCan(callerUserId, companyId, permission) {
@@ -180,6 +196,7 @@ class CompanyMemberService {
         companyIds: [String(owned._id)],
         permissions: allPermissions(),
         preset: 'owner',
+        listenOptIn: listenIsOptIn(await getCompanyProductForAccess(owned._id)),
       };
     }
     // Contact d'un client (portail en lecture seule) : traité avant le repli « titulaire » ci-dessous, qui donnerait tout.
@@ -197,6 +214,7 @@ class CompanyMemberService {
         employments,
         permissions: await this.agentPermissionsFor(caller._id, activeCompanyId),
         preset: 'agent',
+        listenOptIn: activeCompanyId ? listenIsOptIn(await getCompanyProductForAccess(activeCompanyId)) : false,
       };
     }
     // No membership document means the account is not a restricted teammate
@@ -214,6 +232,7 @@ class CompanyMemberService {
       companyIds: [String(membership.companyId)],
       permissions: effectiveMemberPermissions(fresh || membership, product),
       preset: (fresh || membership).preset || 'custom',
+      listenOptIn: listenIsOptIn(product),
     };
   }
 
@@ -400,6 +419,7 @@ class CompanyMemberService {
     } = payload || {};
 
     const { caller, company } = await assertCan(callerUserId, companyId, 'members.invite');
+    assertListenGrantAllowed(company, caller._id, provenUserId, listenGrant);
     await assertCanAddSeat(company._id);
     const normalizedEmail = normalizeEmail(email);
     if (!normalizedEmail || !normalizedEmail.includes('@')) {
@@ -592,6 +612,7 @@ class CompanyMemberService {
   async update(callerUserId, companyId, memberUserId, payload, { provenUserId = null } = {}) {
     await assertCan(callerUserId, companyId, 'members.edit');
     const company = await findCompany(companyId);
+    assertListenGrantAllowed(company, callerUserId, provenUserId, payload?.listenGrant);
     if (String(company.userId) === String(memberUserId)) {
       throw httpError('Owner permissions cannot be changed', 400);
     }

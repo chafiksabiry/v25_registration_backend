@@ -11,7 +11,7 @@ function provenId(req) {
 
 function fail(res, error, fallback) {
   const status = error.statusCode || 500;
-  return res.status(status).json({ success: false, message: error.message || fallback });
+  return res.status(status).json({ success: false, message: error.message || fallback, ...(error.code ? { code: error.code } : {}) });
 }
 
 export const getCompanyMemberCatalog = (_req, res) => {

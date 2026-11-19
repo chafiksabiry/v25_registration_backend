@@ -123,7 +123,11 @@ export function presetPermissions(preset, { product = null } = {}) {
 
 /** Écoute d'un membre sur une offre à écoute explicite : admin sauf retrait par le titulaire ; sinon accord du titulaire. */
 function optInListen(preset, grantedAt, revokedAt) {
-  return String(preset || '').toLowerCase() === 'admin' ? !revokedAt : Boolean(grantedAt);
+  const granted = grantedAt ? new Date(grantedAt).getTime() : 0;
+  const revoked = revokedAt ? new Date(revokedAt).getTime() : 0;
+  // Admin : écoute sauf retrait postérieur au dernier accord. Autres : accord sans retrait postérieur.
+  if (String(preset || '').toLowerCase() === 'admin') return !revoked || granted > revoked;
+  return Boolean(granted) && granted > revoked;
 }
 
 /**
@@ -134,7 +138,7 @@ function optInListen(preset, grantedAt, revokedAt) {
 export function effectiveMemberPermissions(doc, product) {
   const out = sanitizePermissions(doc?.permissions);
   if (listenIsOptIn(product)) {
-    out[LISTEN_KEY] = doc?.preset === 'admin' ? !doc?.listenRevokedAt : Boolean(out[LISTEN_KEY] && doc?.listenGrantedAt);
+    out[LISTEN_KEY] = optInListen(doc?.preset, doc?.listenGrantedAt, doc?.listenRevokedAt);
   }
   return out;
 }
