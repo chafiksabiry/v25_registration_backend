@@ -1,3 +1,5 @@
+import { listenIsOptIn } from '../constants/companyPermissions.js';
+import { getCompanyProductForAccess } from '../services/companyProduct.js';
 import callCenterAgentService from '../services/callCenterAgentService.js';
 
 function callerId(req) {
@@ -18,7 +20,9 @@ export const listCallCenterAgents = async (req, res) => {
   try {
     const companyId = req.query.companyId || req.body?.companyId;
     const agents = await callCenterAgentService.listAgents(callerId(req), companyId);
-    return res.json({ success: true, data: agents });
+    // Offre à écoute explicite (dernier palier connu, même règle que /me) : l'écran affiche l'interrupteur d'écoute.
+    const listenOptIn = listenIsOptIn(await getCompanyProductForAccess(companyId));
+    return res.json({ success: true, data: agents, listenOptIn });
   } catch (error) {
     const status = error.statusCode || 500;
     return res.status(status).json({ success: false, message: error.message || 'Failed to list agents' });
@@ -56,5 +60,16 @@ export const removeCallCenterAgentEmployment = async (req, res) => {
   } catch (error) {
     const status = error.statusCode || 500;
     return res.status(status).json({ success: false, message: error.message || 'Failed to remove agent' });
+  }
+};
+
+export const setCallCenterAgentListen = async (req, res) => {
+  try {
+    const companyId = req.body?.companyId || req.query.companyId;
+    const result = await callCenterAgentService.setAgentListen(callerId(req), companyId, req.params.userId, req.body?.listen);
+    return res.json({ success: true, data: result });
+  } catch (error) {
+    const status = error.statusCode || 500;
+    return res.status(status).json({ success: false, message: error.message || 'Failed to update recordings access' });
   }
 };

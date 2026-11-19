@@ -25,6 +25,8 @@ export function authenticateCallCenter(req, res, next) {
         const payload = jwt.verify(token, secret);
         if (payload?.userId) {
           req.user = payload;
+          // Identité prouvée par un JWT valide (et non par l'en-tête X-User-Id) : exigée pour les gestes réservés au titulaire.
+          req.authJwt = true;
           return next();
         }
       } catch {
