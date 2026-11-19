@@ -12,3 +12,20 @@ const t = teamMemberInvitationEmail({ firstName: 'Ada', companyName: 'Acme', pre
 assert.ok(/HARX Telephony/.test(t.subject) && /TELEPHONY/.test(t.html), 'invitation d’équipe : nom du produit');
 assert.ok(!/Call Centre/.test(t.subject + t.html), 'invitation d’équipe : ancien nom absent');
 console.log('telephonyEmails OK');
+
+// Lien de connexion : le produit est toujours porté, avec ? ou & selon l'URL, sans doublon
+import { inviteEmail, withProduct } from '../utils/harxMessages.js';
+assert.equal(withProduct('https://harx.ai/auth/signin'), 'https://harx.ai/auth/signin?product=callcentre');
+assert.equal(withProduct('https://harx.ai/auth/signin?lang=en'), 'https://harx.ai/auth/signin?lang=en&product=callcentre');
+assert.equal(withProduct('https://harx.ai/auth/signin?'), 'https://harx.ai/auth/signin?product=callcentre');
+assert.equal(withProduct('https://harx.ai/auth/signin?a=1&'), 'https://harx.ai/auth/signin?a=1&product=callcentre');
+assert.equal(withProduct('https://harx.ai/auth/signin?product=callcentre'), 'https://harx.ai/auth/signin?product=callcentre');
+assert.equal(withProduct('https://harx.ai/auth/signin?x=1&product=callcentre'), 'https://harx.ai/auth/signin?x=1&product=callcentre');
+// Invitation d'agent : même lien que l'e-mail d'équipe (produit porté)
+const a = inviteEmail({ firstName: 'Ada', email: 'ada@acme.fr', tempPassword: 'x', companyName: 'Acme', loginUrl: 'https://harx.ai/auth/signin' });
+assert.ok(a.html.includes('https://harx.ai/auth/signin?product=callcentre'), 'invitation d’agent : produit dans le lien');
+const a2 = inviteEmail({ firstName: 'Ada', email: 'ada@acme.fr', tempPassword: 'x', companyName: 'Acme', loginUrl: 'https://harx.ai/auth/signin?lang=en' });
+assert.ok(a2.html.includes('lang=en&amp;product=callcentre'), 'invitation d’agent : & ajouté quand l’URL a déjà un ?');
+const tm = teamMemberInvitationEmail({ firstName: 'Ada', companyName: 'Acme', preset: 'admin', email: 'ada@acme.fr', loginUrl: 'https://harx.ai/auth/signin?lang=en' });
+assert.ok(tm.html.includes('lang=en&amp;product=callcentre'), 'invitation d’équipe : & ajouté quand l’URL a déjà un ?');
+console.log('telephonyEmails (lien produit) OK');
