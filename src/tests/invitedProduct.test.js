@@ -64,11 +64,12 @@ import { readFileSync } from 'node:fs';
 const src = (f) => readFileSync(new URL(`../services/${f}`, import.meta.url), 'utf8');
 const members = src('companyMemberService.js');
 const agents = src('callCenterAgentService.js');
-assert.match(members, /typeUser: 'company-member',\s+product,/, 'membre invité créé avec le produit');
+// Membre : la variable s'appelle accountProduct (le service a aussi `product`, produit d'accès de l'entreprise).
+assert.match(members, /typeUser: 'company-member',\s+product: accountProduct,/, 'membre invité créé avec le produit');
 assert.match(agents, /typeUser: 'rep',\s+product,/, 'agent invité créé avec le produit');
-assert.match(members, /if \(!user\.product\) user\.product = product;/, 'réinvitation de membre : produit posé si absent');
+assert.match(members, /if \(!user\.product\) user\.product = accountProduct;/, 'réinvitation de membre : produit posé si absent');
 assert.match(agents, /if \(!user\.product\) user\.product = product;/, 'renvoi d’invitation d’agent : produit posé si absent');
-assert.equal((members.match(/tagInviteAccounts\(User, \[existingUser\._id\], product\)/g) || []).length, 1, 'membre : compte existant étiqueté');
+assert.equal((members.match(/tagInviteAccounts\(User, \[existingUser\._id\], accountProduct\)/g) || []).length, 1, 'membre : compte existant étiqueté');
 assert.equal((agents.match(/tagInviteAccounts\(User, \[existing\._id\], product\)/g) || []).length, 1, 'agent : compte existant étiqueté');
 assert.equal((agents.match(/tagInviteAccounts\(User, \[user\._id\], product\)/g) || []).length, 1, 'agent : relance d’un compte existant étiquetée');
 assert.equal((members.match(/await inviteProduct\(caller, company\)/g) || []).length, 2, 'membre : invitation et réinvitation');

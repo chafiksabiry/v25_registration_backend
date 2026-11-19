@@ -9,7 +9,7 @@
 import mongoose from 'mongoose';
 
 const DEFAULT_URI =
-  'mongodb://mongo:DiGaBWUZXCkIxlZMuntztBaFJcOlUJIg@maglev.proxy.rlwy.net:40270/harx?authSource=admin';
+  '' /* MONGODB_URI required: no committed URI */;
 
 const args = Object.fromEntries(
   process.argv.slice(2).map((part) => {

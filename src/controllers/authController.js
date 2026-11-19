@@ -261,7 +261,20 @@ export const changeUserType = async (req, res) => {
     return res.status(400).json({ error: 'Both userId and newType are required' });
   }
 
+  // Only the account itself or an admin may switch a type. Without a token (right after sign-up, before the
+  // verification code), only an account that has no type yet may receive its first one.
+  const tokenUserId = req.user ? String(req.user.userId ?? req.user.id ?? req.user._id ?? '') : '';
+  const isAdmin = req.user?.typeUser === 'admin';
+  if (req.user && !isAdmin && tokenUserId !== String(userId)) {
+    return res.status(403).json({ error: 'Not allowed for this account' });
+  }
+
   try {
+    if (!req.user) {
+      const current = await authService.currentUserType(userId);
+      if (current === undefined) return res.status(404).json({ error: 'User not found' });
+      if (current) return res.status(401).json({ error: 'Authentication required to change the account type' });
+    }
     // Call the service to change the user type
     const result = await authService.changeUserType(userId, newType);
 
@@ -296,6 +309,12 @@ export const checkUserType = async (req, res) => {
     // Un identifiant inconnu ou illisible (session périmée) ne doit pas faire tomber le service.
     const unknown = /not found/i.test(error?.message || '');
     return res.status(unknown ? 404 : 400).json({ success: false, message: unknown ? 'User not found' : 'Invalid user' });
+  }
+  const tokenUserId = req.user ? String(req.user.userId ?? req.user.id ?? req.user._id ?? '') : '';
+  const allowed = req.user && (req.user.typeUser === 'admin' || tokenUserId === String(userId));
+  // Without the account's own token (sign-in screen, before the code), only the type is disclosed.
+  if (!allowed) {
+    return res.json({ userType: result && typeof result === 'object' ? result.userType : result });
   }
   // Keep legacy `userType` top-level for existing clients; also return full payload.
   if (result && typeof result === 'object') {

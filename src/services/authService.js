@@ -14,6 +14,8 @@ import companyMemberService from './companyMemberService.js';
 import CompanyMembership from '../models/CompanyMembership.js';
 import { activeEmployments, defaultCompanyId } from '../utils/employments.js';
 import { hashReengagementToken } from '../utils/reengagementToken.js';
+import { normalizeOptionalPhone } from '../utils/phone.js';
+import { pickSignupFields } from '../utils/signupFields.js';
 
 
 // Client initialized lazily inside methods to ensure env vars are loaded
@@ -137,12 +139,18 @@ class AuthService {
     }
   }
 
-  async register(userData, req) {
+  async register(rawUserData, req) {
+    // Liste blanche : seuls les champs des formulaires d'inscription sont lus ; isVerified, typeUser,
+    // employerCompanyId, linkedInId, verificationCode... envoyés par le client sont ignorés (voir utils/signupFields.js).
+    const userData = pickSignupFields(rawUserData);
     console.log('Register attempt for email:', userData.email);
     const password = String(userData.password || '');
     if (!(password.length >= 8 && /[A-Za-z]/.test(password) && /[0-9]/.test(password))) {
       throw new Error('Password must be at least 8 characters with letters and numbers');
     }
+
+    // Téléphone facultatif à l'inscription (il est redemandé à l'appel test de l'onboarding). Vide => champ non écrit.
+    const phone = normalizeOptionalPhone(userData.phone);
 
     const email = String(userData.email || '').trim().toLowerCase();
     const existingUser = await userRepository.findByEmail(email);
@@ -150,8 +158,6 @@ class AuthService {
       console.warn("Email already registered");
       throw new Error('Email already registered');
     }
-
-    const phone = String(userData.phone || '').trim();
 
     const verificationCode = this.generateVerificationCode();
     const verificationExpiry = new Date();
@@ -161,9 +167,13 @@ class AuthService {
     const locationInfo = await this.enrichIPInfo(clientIp);
 
     const result = await userRepository.create({
-      ...userData,
+      fullName: userData.fullName,
       email,
-      phone,
+      password,
+      ...(phone ? { phone } : {}),
+      ...(userData.attribution ? { attribution: userData.attribution } : {}),
+      // Champs fixés par le serveur uniquement.
+      isVerified: false,
       verificationCode: {
         code: verificationCode,
         expiresAt: verificationExpiry
@@ -652,6 +662,18 @@ class AuthService {
 
     return { isFirstLogin: user.firstTime };
   }
+  /** Type of an account: null when none was chosen yet, undefined when the account does not exist. */
+  async currentUserType(userId) {
+    let user;
+    try {
+      user = await userRepository.findById(userId);
+    } catch {
+      return undefined;
+    }
+    if (!user) return undefined;
+    return user.typeUser || null;
+  }
+
   async changeUserType(userId, newType) {
     try {
       const allowed = ['company', 'rep', 'call-center'];
