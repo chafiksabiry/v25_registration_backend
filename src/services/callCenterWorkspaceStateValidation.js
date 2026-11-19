@@ -59,7 +59,48 @@ function normalizeOnboarding(o) {
   return { value: { done: Boolean(o.done), currentStep: STEP_IDS.includes(o.currentStep) ? o.currentStep : STEP_IDS[0], timings } };
 }
 
-/** Identité du centre saisie à la mise en route (affichée dans le profil) : texte borné, justificatifs réduits à leur nom. */
+/** Codes réservés ou non ISO que `Intl.DisplayNames` accepte malgré tout. */
+const NON_ISO_REGIONS = new Set(['ZZ', 'UK', 'EU', 'EZ', 'UN', 'QO', 'XA', 'XB']);
+let regionNamesCache;
+const regionNames = () => {
+  if (regionNamesCache !== undefined) return regionNamesCache;
+  try {
+    regionNamesCache = new Intl.DisplayNames(['en'], { type: 'region', fallback: 'none' });
+  } catch {
+    regionNamesCache = null;
+  }
+  return regionNamesCache;
+};
+
+/** Code pays ISO 3166-1 alpha-2 (mis en majuscules) ; undefined s'il est absent ou inconnu. */
+export function isoCountry(v) {
+  if (typeof v !== 'string') return undefined;
+  const cc = v.trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(cc) || NON_ISO_REGIONS.has(cc)) return undefined;
+  const names = regionNames();
+  if (names) {
+    try {
+      if (!names.of(cc)) return undefined;
+    } catch {
+      return undefined;
+    }
+  }
+  return cc;
+}
+
+function normalizeDocument(d) {
+  const doc = { name: str(d?.name, 160), size: Math.max(0, num(d?.size) ?? 0) };
+  if (d?.kind) doc.kind = str(d.kind, 40);
+  const issuingCountry = isoCountry(d?.issuingCountry);
+  if (issuingCountry) doc.issuingCountry = issuingCountry;
+  return doc;
+}
+
+/**
+ * Identité du centre saisie à la mise en route (affichée dans le profil) : texte borné, justificatifs réduits à leur nom.
+ * `identityCountry` (pays de la pièce d'identité) et `documents[].issuingCountry` : code ISO alpha-2 validé, ignoré sinon ;
+ * l'orchestrateur les relit pour l'éligibilité Nomad Solo (numéro FR/GB/US pour un titulaire d'une pièce de ce pays).
+ */
 function normalizeProfile(p) {
   if (!isObj(p)) return { error: 'Le profil du centre doit être un objet.' };
   const out = {
@@ -67,8 +108,10 @@ function normalizeProfile(p) {
     siren: str(p.siren, 40),
     representativeEmail: str(p.representativeEmail, 160),
     kybStatus: p.kybStatus === 'submitted' ? 'submitted' : 'draft',
-    documents: (Array.isArray(p.documents) ? p.documents : []).slice(0, 20).map((d) => ({ name: str(d?.name, 160), size: Math.max(0, num(d?.size) ?? 0), ...(d?.kind ? { kind: str(d.kind, 40) } : {}) })).filter((d) => d.name),
+    documents: (Array.isArray(p.documents) ? p.documents : []).slice(0, 20).map(normalizeDocument).filter((d) => d.name),
   };
+  const identityCountry = isoCountry(p.identityCountry);
+  if (identityCountry) out.identityCountry = identityCountry;
   const phone = String(p.phone ?? '').replace(/[\s().-]/g, '');
   if (/^\+[1-9]\d{7,14}$/.test(phone)) out.phone = phone;
   if (typeof p.country === 'string') out.country = str(p.country, 4).toUpperCase();

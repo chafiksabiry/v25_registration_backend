@@ -64,4 +64,21 @@ assert.match(countryWaitlistEmail({ countryName: 'Allemagne', locale: 'fr' }).ht
 // Échappement HTML du nom de pays.
 assert.ok(!numbersWaitlistEmail({ countryName: '<b>X</b>', locale: 'fr' }).html.includes('<b>X</b>'));
 
+// 5. Français : bonne préposition devant le pays (au Maroc, aux États-Unis, en France, à Malte), jamais « en Maroc ».
+const { frInCountry } = await import('../utils/frCountryPreposition.js');
+const fr = { MA: ['Maroc', 'au Maroc'], US: ['États-Unis', 'aux États-Unis'], FR: ['France', 'en France'], MT: ['Malte', 'à Malte'], GB: ['Royaume-Uni', 'au Royaume-Uni'],
+  IR: ['Iran', 'en Iran'], MX: ['Mexique', 'au Mexique'], DZ: ['Algérie', 'en Algérie'], AE: ['Émirats arabes unis', 'aux Émirats arabes unis'], SG: ['Singapour', 'à Singapour'] };
+for (const [cc, [name, expected]] of Object.entries(fr)) {
+  assert.equal(frInCountry(cc, name), expected, cc);
+  const m = numbersWaitlistEmail({ countryName: name, countryCode: cc, locale: 'fr' });
+  assert.ok(m.html.includes(`disponible ${expected}`), `e-mail ${cc}`);
+  assert.ok(m.subject.endsWith(`disponible ${expected}`), `objet ${cc}`);
+  assert.doesNotMatch(m.subject, / en (Maroc|États-Unis|Malte|Royaume-Uni|Mexique)/);
+}
+// Pays hors table et nom masculin sans « e » final : tournure neutre plutôt qu'une faute.
+assert.equal(frInCountry('ZZ', 'Groland'), 'dans le pays : Groland');
+assert.match(countryWaitlistEmail({ countryName: 'Maroc', countryCode: 'MA', locale: 'fr' }).html, /pas encore ouvert au Maroc\./);
+// Autres langues inchangées.
+assert.match(numbersWaitlistEmail({ countryName: 'Morocco', countryCode: 'MA', locale: 'en' }).html, /available yet in Morocco;/);
+
 console.log('numbersWaitlist OK');
