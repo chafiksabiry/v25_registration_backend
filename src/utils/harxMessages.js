@@ -1,3 +1,5 @@
+import { frInCountry } from './frCountryPreposition.js';
+
 function escapeHtml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -116,9 +118,10 @@ export function inviteEmail({ firstName, email, tempPassword, companyName, login
   };
 }
 
-export function countryWaitlistEmail({ countryName, locale }) {
+export function countryWaitlistEmail({ countryName, countryCode, locale }) {
   const en = String(locale || '').toLowerCase().startsWith('en');
   const country = escapeHtml(countryName);
+  const inCountryFr = frInCountry(countryCode, country);
   return {
     subject: en ? `HARX Telephony — you are on the list for ${countryName}` : `HARX Telephony — vous êtes sur la liste pour ${countryName}`,
     html: harxEmailShell({
@@ -126,7 +129,7 @@ export function countryWaitlistEmail({ countryName, locale }) {
       title: en ? 'Thank you, we noted your interest' : 'Merci, votre demande est enregistrée',
       intro: en
         ? `HARX Telephony is not yet open in ${country}. We have registered your address and will write to you once it is available. Nothing is billed and no account has been created.`
-        : `HARX Telephony n'est pas encore ouvert en ${country}. Nous avons enregistré votre adresse et vous écrirons dès l'ouverture. Rien n'est facturé et aucun compte n'a été créé.`,
+        : `HARX Telephony n'est pas encore ouvert ${inCountryFr}. Nous avons enregistré votre adresse et vous écrirons dès l'ouverture. Rien n'est facturé et aucun compte n'a été créé.`,
       footer: en ? 'If you did not make this request, simply ignore this message.' : 'Si vous n\'êtes pas à l\'origine de cette demande, ignorez simplement ce message.',
       bodyHtml: '',
     }),
@@ -135,10 +138,11 @@ export function countryWaitlistEmail({ countryName, locale }) {
 
 const NUMBERS_WAITLIST_TEXT = {
   fr: {
-    subject: (c) => `HARX Nomad — nous vous prévenons dès qu'un numéro est disponible en ${c}`,
+    // `c` est déjà précédé de sa préposition (« au Maroc », « aux États-Unis », « en France »…).
+    subject: (c) => `HARX Nomad — nous vous prévenons dès qu'un numéro est disponible ${c}`,
     eyebrow: 'LISTE D\'ATTENTE · NUMÉRO',
     title: 'Merci, votre demande est enregistrée',
-    intro: (c) => `Aucun numéro n'est encore disponible en ${c}. Nous vous prévenons dès qu'il y en a un. Votre compte HARX est bien créé.`,
+    intro: (c) => `Aucun numéro n'est encore disponible ${c}. Nous vous prévenons dès qu'il y en a un. Votre compte HARX est bien créé.`,
     footer: 'Si vous n\'êtes pas à l\'origine de cette demande, ignorez simplement ce message.',
   },
   en: {
@@ -165,15 +169,17 @@ const NUMBERS_WAITLIST_TEXT = {
 };
 
 /** Abonné Nomad Solo (compte déjà créé) en attente d'un numéro dans son pays : ni « pays pas encore ouvert », ni « aucun compte créé ». */
-export function numbersWaitlistEmail({ countryName, locale }) {
+export function numbersWaitlistEmail({ countryName, countryCode, locale }) {
   const lang = String(locale || '').toLowerCase().slice(0, 2);
+  const isFr = !NUMBERS_WAITLIST_TEXT[lang] || lang === 'fr';
   const t = NUMBERS_WAITLIST_TEXT[lang] || NUMBERS_WAITLIST_TEXT.fr;
+  const where = (name) => (isFr ? frInCountry(countryCode, name) : name);
   return {
-    subject: t.subject(countryName),
+    subject: t.subject(where(countryName)),
     html: harxEmailShell({
       eyebrow: t.eyebrow,
       title: t.title,
-      intro: t.intro(escapeHtml(countryName)),
+      intro: t.intro(where(escapeHtml(countryName))),
       footer: t.footer,
       bodyHtml: '',
     }),
