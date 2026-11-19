@@ -6,6 +6,7 @@ import {
   resendCallCenterAgentInvite,
   removeCallCenterAgentInvitation,
   removeCallCenterAgentEmployment,
+  setCallCenterAgentListen,
 } from '../controllers/callCenterAgentController.js';
 
 import {
@@ -55,6 +56,8 @@ router.post('/agents/:userId/resend-invite', resendCallCenterAgentInvite);
 router.delete('/agents/:userId', removeCallCenterAgentInvitation);
 // Retire l'agent de CE centre seulement (ses autres centres ne sont pas touchés).
 router.delete('/agents/:userId/employment', removeCallCenterAgentEmployment);
+// Écoute des enregistrements d'un agent (secrétaire) : accordée ou retirée par le titulaire du centre.
+router.patch('/agents/:userId/recordings', authenticateUserJwt, setCallCenterAgentListen);
 
 // Clients du centre et rattachement client / opération
 router.get('/clients', listClients);
