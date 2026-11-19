@@ -14,6 +14,7 @@ import companyMemberService from './companyMemberService.js';
 import CompanyMembership from '../models/CompanyMembership.js';
 import { activeEmployments, defaultCompanyId } from '../utils/employments.js';
 import { hashReengagementToken } from '../utils/reengagementToken.js';
+import { normalizeOptionalPhone } from '../utils/phone.js';
 
 
 // Client initialized lazily inside methods to ensure env vars are loaded
@@ -144,14 +145,15 @@ class AuthService {
       throw new Error('Password must be at least 8 characters with letters and numbers');
     }
 
+    // Téléphone facultatif à l'inscription (il est redemandé à l'appel test de l'onboarding). Vide => champ non écrit.
+    const phone = normalizeOptionalPhone(userData.phone);
+
     const email = String(userData.email || '').trim().toLowerCase();
     const existingUser = await userRepository.findByEmail(email);
     if (existingUser) {
       console.warn("Email already registered");
       throw new Error('Email already registered');
     }
-
-    const phone = String(userData.phone || '').trim();
 
     const verificationCode = this.generateVerificationCode();
     const verificationExpiry = new Date();
@@ -160,10 +162,11 @@ class AuthService {
     const clientIp = getClientIp(req);
     const locationInfo = await this.enrichIPInfo(clientIp);
 
+    const { phone: _rawPhone, ...rest } = userData;
     const result = await userRepository.create({
-      ...userData,
+      ...rest,
       email,
-      phone,
+      ...(phone ? { phone } : {}),
       verificationCode: {
         code: verificationCode,
         expiresAt: verificationExpiry
