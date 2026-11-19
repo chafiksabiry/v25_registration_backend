@@ -28,11 +28,55 @@ export const PERMISSION_GROUPS = [
   },
   {
     id: 'training',
-    actions: ['view', 'edit'],
+    actions: ['view', 'create', 'edit', 'delete'],
   },
   {
     id: 'calls',
-    actions: ['view', 'listen', 'validate'],
+    actions: ['view', 'listen', 'validate', 'export'],
+  },
+  {
+    id: 'dashboard',
+    actions: ['view'],
+  },
+  {
+    id: 'agents',
+    actions: ['view', 'create', 'edit', 'remove'],
+  },
+  {
+    id: 'planning',
+    actions: ['view', 'create', 'edit', 'delete'],
+  },
+  {
+    id: 'emails',
+    actions: ['view', 'create', 'send'],
+  },
+  {
+    id: 'voice',
+    actions: ['view', 'edit'],
+  },
+  {
+    id: 'activation',
+    actions: ['view', 'edit'],
+  },
+  {
+    id: 'quality',
+    actions: ['view', 'review'],
+  },
+  {
+    id: 'operations',
+    actions: ['view'],
+  },
+  {
+    id: 'analytics',
+    actions: ['view'],
+  },
+  {
+    id: 'wallet',
+    actions: ['view', 'deposit', 'withdraw'],
+  },
+  {
+    id: 'subscription',
+    actions: ['view', 'change'],
   },
   {
     id: 'billing',
@@ -173,6 +217,137 @@ export function resolveMemberListen({ product, rights, preset, previousPreset = 
 /** Profil pour l'écriture : en cas de palier illisible, aucune soustraction n'est figée en base. */
 export function productForWrite(product) {
   return product === UNKNOWN_PRODUCT ? null : product;
+}
+
+const GROUP_LABELS = {
+  gigs: 'Gigs',
+  leads: 'Prospects',
+  telephony: 'Téléphonie',
+  scripts: 'Scripts',
+  knowledge: 'Base de connaissances',
+  matching: 'Matching / REPs',
+  training: 'Formation',
+  calls: 'Appels',
+  dashboard: 'Tableau de bord',
+  agents: 'Agents',
+  planning: 'Planification',
+  emails: 'E-mails',
+  voice: 'Assistant vocal',
+  activation: 'Activation des gigs',
+  quality: 'Qualité',
+  operations: 'Opérations',
+  analytics: 'Analytique',
+  wallet: 'Portefeuille',
+  subscription: 'Abonnement',
+  billing: 'Tokens et facturation',
+  members: 'Équipe',
+  settings: 'Réglages',
+};
+
+const ACTION_LABELS = {
+  view: 'Voir',
+  create: 'Créer',
+  edit: 'Modifier',
+  delete: 'Supprimer',
+  activate: 'Activer / pause',
+  import: 'Importer',
+  archive: 'Archiver',
+  export: 'Exporter',
+  search: 'Rechercher',
+  buy: 'Acheter',
+  assign: 'Affecter',
+  terminate: 'Résilier',
+  test: 'Appel test',
+  invite: 'Inviter',
+  decide: 'Accepter / refuser',
+  listen: 'Écouter',
+  validate: 'Valider',
+  remove: 'Retirer',
+  send: 'Envoyer',
+  reply: 'Répondre',
+  review: 'Contrôler',
+  deposit: 'Déposer',
+  withdraw: 'Retirer',
+  change: 'Changer de plan',
+};
+
+const KEY_LABELS = {
+  'knowledge.create': 'Ajouter',
+  'voice.edit': 'Configurer',
+  'members.edit': 'Modifier les droits',
+};
+
+const GROUP_LABELS_EN = {
+  gigs: 'Gigs',
+  leads: 'Prospects',
+  telephony: 'Telephony',
+  scripts: 'Scripts',
+  knowledge: 'Knowledge base',
+  matching: 'Matching / REPs',
+  training: 'Training',
+  calls: 'Calls',
+  dashboard: 'Dashboard',
+  agents: 'Agents',
+  planning: 'Planning',
+  emails: 'Emails',
+  voice: 'Voice assistant',
+  activation: 'Gig activation',
+  quality: 'Quality',
+  operations: 'Operations',
+  analytics: 'Analytics',
+  wallet: 'Wallet',
+  subscription: 'Subscription',
+  billing: 'Tokens and billing',
+  members: 'Team',
+  settings: 'Settings',
+};
+
+const ACTION_LABELS_EN = {
+  view: 'View',
+  create: 'Create',
+  edit: 'Edit',
+  delete: 'Delete',
+  activate: 'Activate / pause',
+  import: 'Import',
+  archive: 'Archive',
+  export: 'Export',
+  search: 'Search',
+  buy: 'Buy',
+  assign: 'Assign',
+  terminate: 'Terminate',
+  test: 'Test call',
+  invite: 'Invite',
+  decide: 'Accept / decline',
+  listen: 'Listen',
+  validate: 'Validate',
+  remove: 'Remove',
+  send: 'Send',
+  reply: 'Reply',
+  review: 'Review',
+  deposit: 'Deposit',
+  withdraw: 'Withdraw',
+  change: 'Change plan',
+};
+
+const KEY_LABELS_EN = {
+  'knowledge.create': 'Add',
+  'voice.edit': 'Configure',
+  'members.edit': 'Edit rights',
+};
+
+export function describeGrantedAccess(permissions, lang = 'fr') {
+  const english = lang === 'en';
+  const groupLabels = english ? GROUP_LABELS_EN : GROUP_LABELS;
+  const actionLabels = english ? ACTION_LABELS_EN : ACTION_LABELS;
+  const keyLabels = english ? KEY_LABELS_EN : KEY_LABELS;
+  const lines = [];
+  for (const group of PERMISSION_GROUPS) {
+    const granted = group.actions.filter((action) => permissions?.[`${group.id}.${action}`] === true);
+    if (!granted.length) continue;
+    const actions = granted.map((action) => keyLabels[`${group.id}.${action}`] || actionLabels[action] || action);
+    lines.push(`${groupLabels[group.id] || group.id} : ${actions.join(', ')}`);
+  }
+  return lines;
 }
 
 export function sanitizePermissions(input) {

@@ -27,10 +27,10 @@ test('health: wait, ok, warn, stop', () => {
 });
 
 const users = [
-  { id: 1, segment: 'A', clicked: true },
-  { id: 2, segment: 'A', clicked: true },
-  { id: 3, segment: 'D', clicked: false },
-  { id: 4, segment: 'D', clicked: true },
+  { id: 1, segment: 'A', requested: true, clicked: true },
+  { id: 2, segment: 'A', requested: true, clicked: true },
+  { id: 3, segment: 'D', requested: true, clicked: false },
+  { id: 4, segment: 'D', requested: false, clicked: true },
 ];
 const agents = [
   { userId: 1, flags: { cv: true, basicProfile: true, photo: true, availability: true } },
@@ -41,9 +41,10 @@ const subs = [{ userId: 1, status: 'trialing' }, { userId: 2, status: 'incomplet
 test('funnel: counts per step and per segment', () => {
   const f = buildFunnel({ users, agents, subs });
   const by = Object.fromEntries(f.steps.map((s) => [s.key, s.count]));
-  assert.deepEqual(by, { imported: 4, clicked: 3, agent: 2, cv: 2, basic: 1, photo: 1, availability: 1, plan: 1 });
+  assert.deepEqual(by, { imported: 4, requested: 4, clicked: 3, agent: 2, cv: 2, basic: 1, photo: 1, availability: 1, plan: 1 });
   assert.deepEqual(f.bySegment, { A: { imported: 2, clicked: 2 }, D: { imported: 2, clicked: 1 } });
   assert.equal(f.steps.find((s) => s.key === 'plan').ofClicked, 1 / 3);
+  assert.equal(f.steps.find((s) => s.key === 'requested').count, 4);
 });
 
 test('health: open and click rates are relative to delivered', () => {
@@ -85,6 +86,12 @@ test('run: validation, full run, and graceful SES failure', async () => {
   const r = await runDashboard(o, d);
   assert.equal(r.exitCode, 0);
   assert.ok(d.writes['o.html'].includes('Parcours'));
+  const j = mk();
+  await runDashboard(parseArgs(['n', 'd', '--ledger', 'l', '--batch-ids', 'b', '--expect-db', 'x', '--out', 'o.html', '--json-out', 'o.json']), j);
+  const data = JSON.parse(j.writes['o.json']);
+  assert.equal(data.version, 1);
+  assert.ok(data.funnel.steps.length > 5 && Array.isArray(data.sesDays));
+  assert.ok(!/@|FAKE|token/i.test(j.writes['o.json'].replace(/"label"[^\n]*/g, '')));
   const d2 = mk({ fetchSesDays: async () => { const e = new Error('denied'); e.name = 'AccessDenied'; throw e; } });
   const r2 = await runDashboard(o, d2);
   assert.equal(r2.exitCode, 0);

@@ -9,6 +9,10 @@ import {
   reinviteCompanyMember,
   updateCompanyMember,
   removeCompanyMember,
+  listCompanyRoles,
+  createCompanyRole,
+  updateCompanyRole,
+  deleteCompanyRole,
 } from '../controllers/companyMemberController.js';
 
 const router = express.Router();
@@ -19,6 +23,10 @@ router.get('/me', getMyCompanyAccess);
 router.get('/', listCompanyMembers);
 router.post('/', inviteCompanyMember);
 router.post('/presence', touchCompanyMemberPresence);
+router.get('/roles', listCompanyRoles);
+router.post('/roles', createCompanyRole);
+router.patch('/roles/:roleId', updateCompanyRole);
+router.delete('/roles/:roleId', deleteCompanyRole);
 router.post('/:userId/reinvite', reinviteCompanyMember);
 router.patch('/:userId', updateCompanyMember);
 router.delete('/:userId', removeCompanyMember);

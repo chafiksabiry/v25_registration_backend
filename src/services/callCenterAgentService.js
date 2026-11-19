@@ -4,7 +4,8 @@ import User from '../models/User.js';
 import AgentInvitation from '../models/AgentInvitation.js';
 import CompanyMembership from '../models/CompanyMembership.js';
 import { agentInvitationNoticeEmail, inviteEmail } from '../utils/harxMessages.js';
-import { appLoginUrl, sendAppEmail } from './brevoMail.js';
+import { appInvitationLoginUrl, appLoginUrl, sendAppEmail } from './brevoMail.js';
+import { issueInviteLoginLink } from './inviteLoginLink.js';
 import { isCompanyAccount, roleConflict } from './teamRoleConflicts.js';
 import { COMPANY_ACCOUNT_MESSAGE } from './teamRoleDecision.js';
 import { assertCanAddSeat, getCompanyProductForAccess } from './companyProduct.js';
@@ -125,14 +126,23 @@ async function ensureAgentProfile(user, { firstName, lastName, email, phone, com
   return String(inserted.insertedId);
 }
 
+/** Lien du bouton : accès direct au portail Téléphonie ; repli sur la page de connexion si le lien ne peut pas être créé. */
+async function directPortalLink(userId, fallback) {
+  try { return await issueInviteLoginLink(userId, { product: 'callcentre' }); } catch (e) {
+    console.error('invite login link:', e.message);
+    return fallback;
+  }
+}
+
 async function sendInviteEmail({
   to,
+  userId,
   firstName,
   email,
   tempPassword,
   companyName,
 }) {
-  const loginUrl = appLoginUrl();
+  const loginUrl = userId ? await directPortalLink(userId, appLoginUrl()) : appLoginUrl();
 
   const message = inviteEmail({
     firstName,
@@ -154,7 +164,7 @@ async function sendInvitationNotice({ user, company }) {
   const message = agentInvitationNoticeEmail({
     firstName,
     companyName: company?.name || company?.companyName || company?.title,
-    loginUrl: appLoginUrl(),
+    loginUrl: await directPortalLink(user._id, appInvitationLoginUrl()),
   });
   return sendAppEmail({ to: user.email, subject: message.subject, html: message.html });
 }
@@ -263,6 +273,7 @@ class CallCenterAgentService {
       try {
         await sendInviteEmail({
           to: normalizedEmail,
+          userId: user._id,
           firstName: String(firstName).trim(),
           email: normalizedEmail,
           tempPassword,
@@ -658,6 +669,7 @@ class CallCenterAgentService {
 
     await sendInviteEmail({
       to: user.email,
+      userId: user._id,
       firstName,
       email: user.email,
       tempPassword,

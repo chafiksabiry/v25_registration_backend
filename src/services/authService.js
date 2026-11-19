@@ -5,15 +5,25 @@ import userRepository from '../repositories/userRepository.js';
 import { parseProduct } from '../utils/accountProduct.js';
 import User from '../models/User.js'; // Modèle utilisateur
 import Timezone from '../models/Timezone.js';
+import { buildTimezoneDoc } from '../utils/timezoneInfo.js';
 import twilio from 'twilio';
 import { getClientIp } from '../utils/ipHelper.js';
 import ipInfoService from './ipInfoService.js';
-import { verificationEmail, verificationSms } from '../utils/harxMessages.js';
+import { verificationEmail, verificationSms, reengageLinkEmail } from '../utils/harxMessages.js';
 import { sendAppEmail } from './brevoMail.js';
 import companyMemberService from './companyMemberService.js';
 import CompanyMembership from '../models/CompanyMembership.js';
 import { activeEmployments, defaultCompanyId } from '../utils/employments.js';
-import { hashReengagementToken } from '../utils/reengagementToken.js';
+import { hashReengagementToken, generateReengagementToken } from '../utils/reengagementToken.js';
+import {
+  normalizeEmail,
+  isValidEmail,
+  isEligibleForReengageLink,
+  canIssueNewLink,
+  reengageLinkBase,
+  buildReengageLink,
+  linkTtlHours,
+} from '../utils/reengagementRequest.js';
 
 
 // Client initialized lazily inside methods to ensure env vars are loaded
@@ -87,12 +97,26 @@ class AuthService {
         zoneName: locationInfo.timezone
       });
 
-      if (!timezone) {
-        console.warn(`Timezone not found for country: ${locationInfo.countryCode}, zone: ${locationInfo.timezone}`);
+      if (timezone) return timezone._id;
+
+      // zoneName is unique: the zone may exist under another country code.
+      const byZone = await Timezone.findOne({ zoneName: locationInfo.timezone });
+      if (byZone) return byZone._id;
+
+      // Not seeded yet (e.g. Africa/Tunis): add it from ICU data rather than
+      // leaving the user without a timezone.
+      const doc = buildTimezoneDoc(locationInfo.countryCode, locationInfo.timezone);
+      if (!doc) {
+        console.warn(`Timezone not found and could not be derived for country: ${locationInfo.countryCode}, zone: ${locationInfo.timezone}`);
         return null;
       }
-
-      return timezone._id;
+      const created = await Timezone.findOneAndUpdate(
+        { zoneName: doc.zoneName },
+        { $setOnInsert: { ...doc, lastUpdated: new Date() } },
+        { upsert: true, new: true }
+      );
+      console.log(`Timezone added to the reference list: ${doc.zoneName} (${doc.countryCode}, offset ${doc.gmtOffset}s)`);
+      return created._id;
     } catch (error) {
       console.error('Error in findTimezone:', error);
       return null;
@@ -313,6 +337,95 @@ class AuthService {
         employerCompanyId: user.employerCompanyId,
       }),
     };
+  }
+
+  /**
+   * Exchange the token from an invitation e-mail (secrétaire invitée) for a session JWT. Clicking the link proves control of
+   * the mailbox, like the e-mailed sign-in code. The JWT carries the real `mustChangePassword` flag of the account: a temporary
+   * password still has to be replaced in the portal; an existing account keeps its password.
+   */
+  async inviteLogin(rawToken, req) {
+    const token = String(rawToken || '').trim();
+    const fail = (message, code, statusCode) => {
+      const error = new Error(message);
+      error.code = code;
+      error.statusCode = statusCode;
+      return error;
+    };
+    if (token.length < 32 || token.length > 128) {
+      throw fail('Invalid link', 'INVALID_LINK', 400);
+    }
+
+    const user = await User.findOne({ 'inviteLogin.tokenHash': hashReengagementToken(token) });
+    if (!user) throw fail('Invalid link', 'INVALID_LINK', 400);
+    const expiresAt = user.inviteLogin?.expiresAt;
+    if (!expiresAt || expiresAt < new Date()) {
+      throw fail('This link has expired', 'LINK_EXPIRED', 410);
+    }
+
+    const clientIp = getClientIp(req);
+    const locationInfo = await this.enrichIPInfo(clientIp);
+
+    await userRepository.update(user._id, {
+      isVerified: true,
+      firstTime: false,
+      'inviteLogin.lastUsedAt': new Date(),
+      $push: {
+        ipHistory: {
+          ip: clientIp,
+          action: 'login',
+          ...(locationInfo && { locationInfo }),
+        },
+      },
+    });
+
+    return {
+      token: this.generateToken(user._id, {
+        email: user.email,
+        fullName: user.fullName,
+        typeUser: user.typeUser,
+        isVerified: true,
+        mustChangePassword: user.mustChangePassword,
+        employerCompanyId: user.employerCompanyId,
+      }),
+    };
+  }
+
+  /**
+   * The re-engagement e-mail points to a public page where the REP types their address; the
+   * personal one-click link is then e-mailed to it. The answer never says whether the address
+   * is known, so the page cannot be used to list accounts.
+   */
+  async requestReengageLink(rawEmail) {
+    const email = normalizeEmail(rawEmail);
+    if (!isValidEmail(email)) {
+      const error = new Error('A valid email is required');
+      error.statusCode = 400;
+      error.code = 'INVALID_EMAIL';
+      throw error;
+    }
+    const user = await User.findOne({ email });
+    if (!isEligibleForReengageLink(user) || !canIssueNewLink(user)) {
+      return { sent: true };
+    }
+    const hours = linkTtlHours();
+    const token = generateReengagementToken();
+    await userRepository.update(user._id, {
+      'reengagement.tokenHash': hashReengagementToken(token),
+      'reengagement.expiresAt': new Date(Date.now() + hours * 60 * 60 * 1000),
+      'reengagement.lastRequestedAt': new Date(),
+    });
+    const message = reengageLinkEmail({ link: buildReengageLink(reengageLinkBase(), token), hours });
+    try {
+      await sendAppEmail({ to: user.email, subject: message.subject, text: message.text, html: message.html });
+    } catch (error) {
+      console.error('Re-engagement link e-mail failed:', error.message);
+      const wrapped = new Error('Failed to send the email');
+      wrapped.statusCode = 502;
+      wrapped.code = 'EMAIL_SEND_FAILED';
+      throw wrapped;
+    }
+    return { sent: true };
   }
 
   async verifyEmail(email, code) {

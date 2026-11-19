@@ -54,7 +54,7 @@ export function deliveryHealth({ send = 0, delivery = 0, bounce = 0, complaint =
 
 /**
  * Funnel from the users imported in the campaign batches.
- * users: [{ id, segment, clicked }]  agents: [{ userId, flags }]  subs: [{ userId, status }]
+ * users: [{ id, segment, requested, clicked }]  agents: [{ userId, flags }]  subs: [{ userId, status }]
  * flags: { profileStarted, cv, basicProfile, photo, availability, videos, subscriptionActivated }
  */
 export function buildFunnel({ users, agents, subs }) {
@@ -67,7 +67,8 @@ export function buildFunnel({ users, agents, subs }) {
   }
   const steps = [
     { key: 'imported', label: 'Comptes importés', test: () => true },
-    { key: 'clicked', label: 'Ont cliqué sur le lien (connexion)', test: (u) => u.clicked },
+    { key: 'requested', label: 'Ont demandé leur lien personnel', test: (u) => u.requested || u.clicked },
+    { key: 'clicked', label: 'Se sont connectés par le lien', test: (u) => u.clicked },
     { key: 'agent', label: 'Profil créé', test: (u) => agentByUser.has(String(u.id)) },
     { key: 'cv', label: "CV importé (expérience ajoutée)", test: (u) => agentByUser.get(String(u.id))?.cv },
     { key: 'basic', label: 'Profil validé', test: (u) => agentByUser.get(String(u.id))?.basicProfile },

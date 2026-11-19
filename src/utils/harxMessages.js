@@ -142,7 +142,7 @@ export function agentInvitationNoticeEmail({ firstName, companyName, loginUrl })
     html: harxEmailShell({
       eyebrow: 'INVITATION',
       title: 'Vous êtes invité sur HARX',
-      intro: `Bonjour ${safeName}, ${org} vous invite à rejoindre son équipe. Vous avez déjà un compte HARX : connectez-vous avec votre e-mail et votre mot de passe habituels, puis acceptez l'invitation.`,
+      intro: `Bonjour ${safeName}, ${org} vous invite à rejoindre son équipe. Vous avez déjà un compte HARX : le bouton ci-dessous vous connecte directement, puis vous pouvez accepter l'invitation.`,
       footer: 'Si vous n\'êtes pas à l\'origine de cette invitation ou si vous ne connaissez pas ce centre, ignorez ce message ou refusez l\'invitation après connexion.',
       bodyHtml: `
         <p style="margin:0;text-align:center;">
@@ -153,12 +153,21 @@ export function agentInvitationNoticeEmail({ firstName, companyName, loginUrl })
   };
 }
 
-export function companyMemberInviteEmail({ firstName, email, tempPassword, companyName, loginUrl }) {
+export function companyMemberInviteEmail({ firstName, email, tempPassword, companyName, loginUrl, roleName, accessLines, accessLinesEn }) {
   const safeName = escapeHtml(firstName || '');
   const org = escapeHtml(companyName || 'HARX');
   const safeEmail = escapeHtml(email);
   const safePassword = tempPassword ? escapeHtml(tempPassword) : '';
   const safeUrl = escapeHtml(loginUrl);
+  const safeRole = escapeHtml(roleName || 'Membre');
+  const toList = (items, empty) => {
+    const lines = Array.isArray(items) ? items.map((line) => String(line || '').trim()).filter(Boolean) : [];
+    return lines.length
+      ? `<ul style="margin:8px 0 0;padding:0 0 0 18px;color:#1e293b;font-size:14px;line-height:1.6;">${lines.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}</ul>`
+      : `<p style="margin:8px 0 0;font-size:14px;color:#1e293b;">${empty}</p>`;
+  };
+  const accessHtml = toList(accessLines, 'Aucun accès n\'est ouvert pour le moment.');
+  const accessHtmlEn = toList(accessLinesEn, 'No access is open yet.');
   const credentials = safePassword
     ? `
         <div style="background:#fff1f2;border:1px solid #fecdd3;border-radius:16px;padding:16px 18px;margin:0 0 22px;">
@@ -168,15 +177,23 @@ export function companyMemberInviteEmail({ firstName, email, tempPassword, compa
     : `
         <p style="margin:0 0 22px;font-size:14px;color:#1e293b;">Connectez-vous avec votre e-mail <strong>${safeEmail}</strong> et votre mot de passe habituel.</p>`;
   return {
-    subject: `HARX — Invitation à rejoindre ${companyName || 'une entreprise'}`,
+    subject: `HARX — ${companyName || 'Une entreprise'} vous invite comme ${roleName || 'membre'}`,
     html: harxEmailShell({
       eyebrow: 'INVITATION',
       title: 'Vous rejoignez une entreprise HARX',
-      intro: `Bonjour ${safeName}, ${org} vous invite à accéder à son espace. Vos droits sont limités à ce que l'administrateur a choisi.`,
+      intro: `Bonjour ${safeName}, ${org} vous invite à accéder à son espace avec le rôle ${safeRole}. Voici ce que vous pouvez ouvrir.<br><br>Hello ${safeName}, ${org} invites you to its workspace with the role ${safeRole}. Here is what you can open.`,
       footer: safePassword
         ? 'Pour votre sécurité, changez ce mot de passe dès la première connexion.'
         : 'Si vous n\'êtes pas à l\'origine de cette invitation, ignorez ce message.',
       bodyHtml: `
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:16px;padding:16px 18px;margin:0 0 22px;">
+          <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:0.08em;color:#e11d48;">VOTRE RÔLE</p>
+          <p style="margin:6px 0 0;font-size:16px;font-weight:700;color:#0f172a;">${safeRole}</p>
+          ${accessHtml}
+          <p style="margin:16px 0 0;font-size:12px;font-weight:700;letter-spacing:0.08em;color:#e11d48;">YOUR ROLE</p>
+          <p style="margin:6px 0 0;font-size:16px;font-weight:700;color:#0f172a;">${safeRole}</p>
+          ${accessHtmlEn}
+        </div>
         ${credentials}
         <p style="margin:0;text-align:center;">
           <a href="${safeUrl}" style="display:inline-block;background-color:#ec4899;background-image:linear-gradient(90deg,#ff4d4d 0%,#ec4899 100%);color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:12px;font-weight:700;">Se connecter</a>
@@ -198,8 +215,17 @@ const withProduct = (url) => (String(url).includes('?') ? url : `${url}?product=
  * Invitation à rejoindre l'équipe d'un centre d'appels (manager, administrateur, consultation).
  * Compte existant : se connecter puis accepter. Nouveau compte : mot de passe temporaire à changer.
  */
-export function teamMemberInvitationEmail({ firstName, companyName, preset, inviterName, email, tempPassword, loginUrl }) {
-  const role = MEMBER_ROLES[String(preset || '').toLowerCase()] || { label: 'Membre de l’équipe', text: 'Vos droits sont ceux choisis par l’administrateur du centre.' };
+export function teamMemberInvitationEmail({ firstName, companyName, preset, inviterName, email, tempPassword, loginUrl, roleName, accessLines, accessLinesEn }) {
+  const baseRole = MEMBER_ROLES[String(preset || '').toLowerCase()] || { label: 'Membre de l’équipe', text: 'Vos droits sont ceux choisis par l’administrateur du centre.' };
+  const role = { ...baseRole, label: roleName || baseRole.label };
+  const toList = (items) => {
+    const lines = Array.isArray(items) ? items.map((line) => String(line || '').trim()).filter(Boolean) : [];
+    return lines.length
+      ? `<ul style="margin:8px 0 0;padding:0 0 0 18px;color:#1e293b;font-size:14px;line-height:1.6;">${lines.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}</ul>`
+      : '';
+  };
+  const accessHtml = toList(accessLines);
+  const accessHtmlEn = toList(accessLinesEn);
   const name = escapeHtml(firstName || '');
   const org = escapeHtml(companyName || 'Un centre d’appels');
   const inviter = inviterName ? escapeHtml(inviterName) : '';
@@ -227,7 +253,12 @@ export function teamMemberInvitationEmail({ firstName, companyName, preset, invi
         <div style="border:1px solid #fecdd3;border-radius:16px;padding:14px 18px;margin:0 0 18px;">
           <p style="margin:0 0 4px;font-size:11px;font-weight:700;letter-spacing:0.14em;color:#e11d48;">VOTRE RÔLE</p>
           <p style="margin:0 0 4px;font-size:16px;font-weight:700;color:#0f172a;">${escapeHtml(role.label)}</p>
-          <p style="margin:0;font-size:14px;line-height:1.5;color:#475569;">${escapeHtml(role.text)}</p>
+          ${accessHtml
+            ? `${accessHtml}
+          <p style="margin:14px 0 4px;font-size:11px;font-weight:700;letter-spacing:0.14em;color:#e11d48;">YOUR ROLE</p>
+          <p style="margin:0 0 4px;font-size:16px;font-weight:700;color:#0f172a;">${escapeHtml(role.label)}</p>
+          ${accessHtmlEn}`
+            : `<p style="margin:0;font-size:14px;line-height:1.5;color:#475569;">${escapeHtml(role.text)}</p>`}
         </div>
         ${credentials}
         <ol style="margin:0 0 22px;padding-left:20px;font-size:14px;line-height:1.7;color:#1e293b;">
@@ -247,6 +278,32 @@ export function verificationSms(code) {
     `Code de verification : ${code}\n` +
     `Valable 5 minutes. Ne le partagez avec personne.`
   );
+}
+
+export function reengageLinkEmail({ link, hours = 24 }) {
+  const safeLink = escapeHtml(link);
+  const button = `
+    <p style="margin:0 0 18px;text-align:center;">
+      <a href="${safeLink}" style="display:inline-block;background-color:#ec4899;background-image:linear-gradient(90deg,#ff4d4d 0%,#ec4899 100%);color:#ffffff;text-decoration:none;padding:13px 26px;border-radius:12px;font-weight:700;">Open my HARX space &middot; Ouvrir mon espace HARX</a>
+    </p>
+    <p style="margin:0 0 6px;font-size:13px;line-height:1.5;color:#64748b;">This link is personal and valid for ${hours} hours: please do not forward it. The button does not work? Copy this address into your browser:<br><span style="color:#be123c;word-break:break-all;">${safeLink}</span></p>
+    <p style="margin:0 0 6px;font-size:13px;line-height:1.5;color:#64748b;">Ce lien est personnel et valable ${hours} heures : ne le transférez pas. Le bouton ne fonctionne pas ? Copiez cette adresse dans votre navigateur.</p>`;
+  return {
+    subject: 'Your HARX one-click link · Votre lien HARX en un clic',
+    text:
+      `HARX\n\n` +
+      `Open your HARX space (one click, no password):\n${link}\n\n` +
+      `This link is personal and valid for ${hours} hours. Do not forward it. If you did not ask for it, ignore this message.\n\n` +
+      `Ouvrez votre espace HARX (un clic, sans mot de passe) :\n${link}\n\n` +
+      `Ce lien est personnel et valable ${hours} heures. Ne le transférez pas. Si vous n'êtes pas à l'origine de cette demande, ignorez ce message.`,
+    html: harxEmailShell({
+      eyebrow: 'YOUR REP SPACE · VOTRE ESPACE REP',
+      title: 'Your HARX space is one click away',
+      intro: 'You asked for your personal link. Votre lien personnel est prêt.',
+      bodyHtml: button,
+      footer: 'If you did not make this request, ignore this message. Si vous n\'êtes pas à l\'origine de cette demande, ignorez ce message.',
+    }),
+  };
 }
 
 /** Invitation d'un contact client au portail du centre (lecture seule) : le centre est nommé, pas HARX. */

@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Suivi relance REPS</title>
+<style>
+:root{--bg:#fff1f2;--card:#ffffff;--ink:#0f172a;--muted:#64748b;--line:#fecdd3;--accent:#e11d74;--accent2:#ff4d4d;--ok:#15803d;--warn:#b45309;--bad:#b91c1c;--wait:#64748b;--soft:#fff7f8}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1a0f14;--card:#251820;--ink:#f8fafc;--muted:#a8a3b5;--line:#4a2535;--accent:#f472b6;--accent2:#fb7185;--ok:#4ade80;--warn:#fbbf24;--bad:#f87171;--wait:#a8a3b5;--soft:#2c1c26}}
+:root[data-theme="dark"]{--bg:#1a0f14;--card:#251820;--ink:#f8fafc;--muted:#a8a3b5;--line:#4a2535;--accent:#f472b6;--accent2:#fb7185;--ok:#4ade80;--warn:#fbbf24;--bad:#f87171;--wait:#a8a3b5;--soft:#2c1c26}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 -apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+header{padding:20px 16px 8px;max-width:1120px;margin:0 auto}
+h1{margin:0;font-size:24px}
+.sub{color:var(--muted);font-size:13px;margin-top:2px}
+main{max-width:1120px;margin:0 auto;padding:8px 16px 48px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}
+button,.btn,select,input{font:inherit;color:var(--ink)}
+button,.btn{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 12px;cursor:pointer}
+button:hover,.btn:hover{border-color:var(--accent)}
+button.primary{background:linear-gradient(90deg,var(--accent2),var(--accent));color:#fff;border-color:transparent;font-weight:600}
+button:focus-visible,input:focus-visible,select:focus-visible,.tab:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.tabs{display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid var(--line);margin:8px 0 16px}
+.tab{background:none;border:0;border-bottom:3px solid transparent;border-radius:0;padding:10px 14px;color:var(--muted);font-weight:600}
+.tab[aria-selected="true"]{color:var(--accent);border-bottom-color:var(--accent)}
+section.panel{display:none}section.panel.on{display:block}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin:0 0 16px}
+.card h2{margin:0 0 10px;font-size:16px;color:var(--accent)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.tile{border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--soft)}
+.tile .k{font-size:12px;color:var(--muted)}.tile .v{font-size:26px;font-weight:700;line-height:1.2}.tile .s{font-size:12px;color:var(--muted)}
+.banner{border-radius:12px;padding:12px 14px;font-weight:600;border:1px solid}
+.banner.ok{color:var(--ok);border-color:var(--ok)}.banner.warn{color:var(--warn);border-color:var(--warn)}.banner.bad{color:var(--bad);border-color:var(--bad)}.banner.wait{color:var(--wait);border-color:var(--wait)}
+.banner small{display:block;font-weight:400;color:var(--muted)}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--muted);font-weight:600;cursor:pointer;user-select:none}
+.scroll{overflow-x:auto}
+td input{width:100%;min-width:70px;background:transparent;border:1px solid transparent;border-radius:6px;padding:4px;text-align:right}
+td input:focus{border-color:var(--accent);background:var(--card)}
+td:first-child input{text-align:left}
+.funnel .row{display:grid;grid-template-columns:minmax(160px,2fr) 3fr 80px minmax(150px,2fr);gap:10px;align-items:center;padding:6px 0}
+.bg{background:var(--line);height:12px;border-radius:6px;overflow:hidden}.bg span{display:block;height:100%;background:linear-gradient(90deg,var(--accent2),var(--accent))}
+.num{text-align:right;font-weight:700}.rate{font-size:12px;color:var(--muted)}
+svg text{fill:var(--muted);font-size:11px}
+.chart{width:100%;height:auto}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:4px}
+.dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:middle}
+.muted{color:var(--muted);font-size:13px}
+.filters{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:10px}
+.filters label{font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:2px}
+.filters input,.filters select{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 8px}
+.pill{display:inline-block;padding:2px 8px;border-radius:999px;border:1px solid;font-size:12px;font-weight:600}
+.pill.ok{color:var(--ok)}.pill.warn{color:var(--warn)}.pill.bad{color:var(--bad)}.pill.wait{color:var(--wait)}
+.empty{padding:28px;text-align:center;color:var(--muted)}
+@media(max-width:700px){.funnel .row{grid-template-columns:1fr 70px}.funnel .bg,.funnel .rate{grid-column:1/-1}}
+@media print{.bar,.tabs,.filters,#dataactions{display:none!important}section.panel{display:block!important}body{background:#fff}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Suivi de la relance des REPS</h1>
+  <div class="sub" id="status">Aucune donnée chargée.</div>
+  <div class="bar" role="toolbar" aria-label="Actions">
+    <label class="btn primary" for="f-json">Charger les chiffres de la base (JSON)</label>
+    <input id="f-json" type="file" accept=".json,application/json" hidden>
+    <label class="btn" for="f-csv">Importer l'export Zoho Campaigns (CSV)</label>
+    <input id="f-csv" type="file" accept=".csv,text/csv" hidden>
+    <button id="b-demo" type="button">Voir un exemple</button>
+    <button id="b-export" type="button">Exporter</button>
+    <button id="b-print" type="button">Imprimer</button>
+    <button id="b-reset" type="button">Tout effacer</button>
+  </div>
+  <p class="muted">Cette page fonctionne entièrement dans votre navigateur : rien n'est envoyé ailleurs. Les données saisies restent dans ce navigateur (stockage local) tant que vous ne les effacez pas.</p>
+</header>
+<main>
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" data-tab="overview" aria-selected="true">Vue d'ensemble</button>
+    <button class="tab" role="tab" data-tab="sends" aria-selected="false">Envois</button>
+    <button class="tab" role="tab" data-tab="funnel" aria-selected="false">Parcours des REPS</button>
+    <button class="tab" role="tab" data-tab="stages" aria-selected="false">Paliers et décisions</button>
+    <button class="tab" role="tab" data-tab="data" aria-selected="false">Données</button>
+  </div>
+
+  <section class="panel on" id="p-overview" role="tabpanel"></section>
+  <section class="panel" id="p-sends" role="tabpanel"></section>
+  <section class="panel" id="p-funnel" role="tabpanel"></section>
+  <section class="panel" id="p-stages" role="tabpanel"></section>
+  <section class="panel" id="p-data" role="tabpanel"></section>
+</main>
+
+<script>
+'use strict';
+/* ---------- état ---------- */
+const KEY = 'harx-reps-dashboard-v1';
+const DEFAULT_LIMITS = { maxBounce: 0.02, maxComplaint: 0.001, minSample: 100 };
+const DEFAULT_PLAN = [
+  { name: 'Pilote', perDay: 300 },
+  { name: 'Palier 2', perDay: 1000 },
+  { name: 'Palier 3', perDay: 2500 },
+  { name: 'Palier 4', perDay: 4000 },
+];
+let state = { rows: [], funnel: null, generatedAt: null, limits: { ...DEFAULT_LIMITS }, plan: DEFAULT_PLAN.map((p) => ({ ...p })), filter: { from: '', to: '' }, sort: { key: 'date', dir: 1 } };
+
+function save() { try { localStorage.setItem(KEY, JSON.stringify({ rows: state.rows, funnel: state.funnel, generatedAt: state.generatedAt, limits: state.limits, plan: state.plan })); } catch (e) { /* stockage indisponible : la page fonctionne quand même */ } }
+function load() { try { const s = JSON.parse(localStorage.getItem(KEY) || 'null'); if (s) { state.rows = s.rows || []; state.funnel = s.funnel || null; state.generatedAt = s.generatedAt || null; state.limits = { ...DEFAULT_LIMITS, ...(s.limits || {}) }; state.plan = s.plan && s.plan.length ? s.plan : state.plan; } } catch (e) { /* ignoré */ } }
+
+/* ---------- utilitaires ---------- */
+const $ = (sel, root = document) => root.querySelector(sel);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const n = (v) => { const x = Number(String(v ?? '').replace(/[\s ]/g, '').replace(',', '.').replace('%', '')); return Number.isFinite(x) ? x : 0; };
+const fmt = (v) => (v === null || v === undefined || Number.isNaN(v) ? '-' : Number(v).toLocaleString('fr-FR'));
+const pct = (a, b, d = 1) => (b ? `${((a / b) * 100).toFixed(d).replace('.', ',')} %` : '-');
+const ratio = (a, b) => (b ? a / b : null);
+const sum = (rows, k) => rows.reduce((t, r) => t + n(r[k]), 0);
+const isoOk = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d);
+
+function normalizeDate(v) {
+  const s = String(v ?? '').trim();
+  if (isoOk(s)) return s;
+  let m = s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})/);          // 31/10/2026
+  if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+  m = s.match(/^(\d{4})[\/.](\d{1,2})[\/.](\d{1,2})/);
+  if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+  const t = Date.parse(s);
+  return Number.isNaN(t) ? '' : new Date(t).toISOString().slice(0, 10);
+}
+
+function health(t) {
+  const L = state.limits;
+  if (!t.sent || t.sent < L.minSample) return { s: 'wait', label: 'EN ATTENTE', msg: `échantillon trop petit (${fmt(t.sent)} envoyés, ${L.minSample} nécessaires)` };
+  const b = ratio(t.bounced, t.sent), c = ratio(t.complaints, t.sent);
+  if (b > L.maxBounce) return { s: 'bad', label: 'ARRÊT', msg: `rebonds à ${pct(t.bounced, t.sent, 2)}, au-dessus de ${(L.maxBounce * 100).toFixed(1).replace('.', ',')} %` };
+  if (c > L.maxComplaint) return { s: 'bad', label: 'ARRÊT', msg: `plaintes à ${pct(t.complaints, t.sent, 3)}, au-dessus de ${(L.maxComplaint * 100).toFixed(2).replace('.', ',')} %` };
+  if (b > L.maxBounce / 2 || c > L.maxComplaint / 2) return { s: 'warn', label: 'ATTENTION', msg: 'proche des limites' };
+  return { s: 'ok', label: 'OK', msg: 'dans les limites' };
+}
+
+function totals(rows) {
+  return { sent: sum(rows, 'sent'), delivered: sum(rows, 'delivered'), opened: sum(rows, 'opened'), clicked: sum(rows, 'clicked'), bounced: sum(rows, 'bounced'), unsub: sum(rows, 'unsub'), complaints: sum(rows, 'complaints') };
+}
+function filteredRows() {
+  const { from, to } = state.filter;
+  return state.rows.filter((r) => (!from || r.date >= from) && (!to || r.date <= to));
+}
+function stepCount(key) { const s = state.funnel?.steps?.find((x) => x.key === key); return s ? s.count : null; }
+
+/* ---------- graphiques SVG ---------- */
+function lineChart({ labels, series, threshold, yMaxMin = 0.01, asPct = true, height = 220 }) {
+  const W = 640, H = height, pl = 44, pr = 12, pt = 12, pb = 28;
+  if (!labels.length) return '<div class="empty">Pas encore de données.</div>';
+  const vals = series.flatMap((s) => s.data.filter((v) => v !== null));
+  let maxV = Math.max(yMaxMin, threshold || 0, ...(vals.length ? vals : [0])) * 1.15;
+  if (asPct) maxV = Math.min(maxV, 1);
+  const x = (i) => pl + (labels.length === 1 ? (W - pl - pr) / 2 : (i * (W - pl - pr)) / (labels.length - 1));
+  const y = (v) => pt + (1 - v / maxV) * (H - pt - pb);
+  const tick = (v) => (asPct ? `${(v * 100).toFixed(maxV < 0.05 ? 1 : 0)}%` : fmt(Math.round(v)));
+  let g = '';
+  for (let i = 0; i <= 4; i++) { const v = (maxV * i) / 4; g += `<line x1="${pl}" x2="${W - pr}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${pl - 6}" y="${y(v) + 4}" text-anchor="end">${tick(v)}</text>`; }
+  const step = Math.ceil(labels.length / 8);
+  labels.forEach((l, i) => { if (i % step === 0) g += `<text x="${x(i)}" y="${H - 8}" text-anchor="middle">${esc(l.slice(5))}</text>`; });
+  if (threshold) g += `<line x1="${pl}" x2="${W - pr}" y1="${y(threshold)}" y2="${y(threshold)}" stroke="var(--bad)" stroke-dasharray="5 4"/><text x="${W - pr}" y="${y(threshold) - 4}" text-anchor="end" style="fill:var(--bad)">limite</text>`;
+  series.forEach((s) => {
+    const pts = s.data.map((v, i) => (v === null ? null : [x(i), y(v)])).filter(Boolean);
+    if (pts.length) g += `<polyline fill="none" stroke="${s.color}" stroke-width="2.5" points="${pts.map((p) => p.join(',')).join(' ')}"/>` + pts.map((p) => `<circle cx="${p[0]}" cy="${p[1]}" r="3.5" fill="${s.color}"/>`).join('');
+  });
+  const legend = series.map((s) => `<span><i class="dot" style="background:${s.color}"></i>${esc(s.name)}</span>`).join('');
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(series.map((s) => s.name).join(', '))}">${g}</svg><div class="legend">${legend}</div>`;
+}
+function barChart({ labels, data, color = 'var(--accent)', height = 200 }) {
+  const W = 640, H = height, pl = 44, pr = 12, pt = 12, pb = 28;
+  if (!labels.length) return '<div class="empty">Pas encore de données.</div>';
+  const maxV = Math.max(1, ...data) * 1.15, bw = Math.min(40, ((W - pl - pr) / labels.length) * 0.7);
+  const x = (i) => pl + ((i + 0.5) * (W - pl - pr)) / labels.length, y = (v) => pt + (1 - v / maxV) * (H - pt - pb);
+  let g = '';
+  for (let i = 0; i <= 4; i++) { const v = (maxV * i) / 4; g += `<line x1="${pl}" x2="${W - pr}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${pl - 6}" y="${y(v) + 4}" text-anchor="end">${fmt(Math.round(v))}</text>`; }
+  const step = Math.ceil(labels.length / 8);
+  data.forEach((v, i) => { g += `<rect x="${x(i) - bw / 2}" y="${y(v)}" width="${bw}" height="${Math.max(0, H - pb - y(v))}" rx="3" fill="${color}"><title>${esc(labels[i])} : ${fmt(v)}</title></rect>`; if (i % step === 0) g += `<text x="${x(i)}" y="${H - 8}" text-anchor="middle">${esc(labels[i].slice(5))}</text>`; });
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Envois par jour">${g}</svg>`;
+}
+
+/* ---------- panneaux ---------- */
+function tile(k, v, s = '') { return `<div class="tile"><div class="k">${esc(k)}</div><div class="v">${v}</div>${s ? `<div class="s">${esc(s)}</div>` : ''}</div>`; }
+
+function filtersHtml() {
+  return `<div class="filters"><label>Du<input type="date" id="f-from" value="${esc(state.filter.from)}"></label><label>Au<input type="date" id="f-to" value="${esc(state.filter.to)}"></label><button type="button" id="f-clear">Toute la période</button></div>`;
+}
+
+function renderOverview() {
+  const rows = filteredRows(), t = totals(rows), h = health(t);
+  const days = [...rows].sort((a, b) => a.date.localeCompare(b.date));
+  const labels = days.map((r) => r.date);
+  const connected = stepCount('clicked'), requested = stepCount('requested'), plan = stepCount('plan');
+  $('#p-overview').innerHTML = `
+  ${filtersHtml()}
+  <div class="card"><div class="banner ${h.s}">Santé de la campagne : ${h.label}<small>${esc(h.msg)}</small></div></div>
+  <div class="card"><h2>Envois</h2><div class="tiles">
+    ${tile('Envoyés', fmt(t.sent))}
+    ${tile('Délivrés', fmt(t.delivered), pct(t.delivered, t.sent) + ' des envoyés')}
+    ${tile('Ouverts', fmt(t.opened), pct(t.opened, t.delivered) + ' des délivrés (surestimé)')}
+    ${tile('Clics', fmt(t.clicked), pct(t.clicked, t.delivered) + ' des délivrés')}
+    ${tile('Rebonds', fmt(t.bounced), pct(t.bounced, t.sent, 2) + ' · limite ' + (state.limits.maxBounce * 100).toFixed(1).replace('.', ',') + ' %')}
+    ${tile('Plaintes', fmt(t.complaints), pct(t.complaints, t.sent, 3) + ' · limite ' + (state.limits.maxComplaint * 100).toFixed(2).replace('.', ',') + ' %')}
+    ${tile('Désabonnés', fmt(t.unsub), pct(t.unsub, t.sent, 2) + ' des envoyés')}
+  </div></div>
+  <div class="card"><h2>Résultats côté HARX</h2><div class="tiles">
+    ${tile('Ont demandé leur lien', fmt(requested), t.sent ? pct(requested || 0, t.sent) + ' des envoyés' : '')}
+    ${tile('Se sont connectés', fmt(connected), t.sent ? pct(connected || 0, t.sent) + ' des envoyés' : 'chiffres de la base')}
+    ${tile('Formule choisie', fmt(plan), connected ? pct(plan || 0, connected) + ' des connectés' : '')}
+  </div>${state.funnel ? '' : '<p class="muted">Chargez le fichier JSON produit par le script de suivi pour voir ces chiffres.</p>'}</div>
+  <div class="card"><h2>Envoyés par jour</h2>${barChart({ labels, data: days.map((r) => n(r.sent)) })}</div>
+  <div class="card"><h2>Taux par jour</h2>${lineChart({ labels, series: [
+    { name: 'Délivrés', color: 'var(--ok)', data: days.map((r) => ratio(n(r.delivered), n(r.sent))) },
+    { name: 'Ouverts (surestimé)', color: 'var(--accent)', data: days.map((r) => ratio(n(r.opened), n(r.delivered))) },
+    { name: 'Clics', color: 'var(--accent2)', data: days.map((r) => ratio(n(r.clicked), n(r.delivered))) } ], yMaxMin: 0.1 })}</div>
+  <div class="card"><h2>Rebonds et plaintes par jour</h2>${lineChart({ labels, threshold: state.limits.maxBounce, yMaxMin: 0.02, series: [
+    { name: 'Rebonds', color: 'var(--bad)', data: days.map((r) => ratio(n(r.bounced), n(r.sent))) },
+    { name: 'Plaintes', color: 'var(--warn)', data: days.map((r) => ratio(n(r.complaints), n(r.sent))) } ] })}<p class="muted">La ligne pointillée est la limite d'arrêt des rebonds. La limite des plaintes (${(state.limits.maxComplaint * 100).toFixed(2).replace('.', ',')} %) est trop basse pour être lisible sur ce graphique : voir l'onglet « Paliers et décisions ».</p></div>`;
+  bindFilters();
+}
+
+function renderSends() {
+  const rows = [...filteredRows()];
+  const { key, dir } = state.sort;
+  rows.sort((a, b) => (typeof a[key] === 'string' ? a[key].localeCompare(b[key]) : n(a[key]) - n(b[key])) * dir);
+  const cols = [['date', 'Jour'], ['label', 'Palier / campagne'], ['sent', 'Envoyés'], ['delivered', 'Délivrés'], ['opened', 'Ouverts'], ['clicked', 'Clics'], ['bounced', 'Rebonds'], ['unsub', 'Désabonnés'], ['complaints', 'Plaintes']];
+  const body = rows.map((r) => { const t = totals([r]); const h = health(t); return `<tr><td>${esc(r.date)}</td><td>${esc(r.label || '')}</td><td>${fmt(n(r.sent))}</td><td>${pct(n(r.delivered), n(r.sent))}</td><td>${pct(n(r.opened), n(r.delivered))}</td><td>${pct(n(r.clicked), n(r.delivered))}</td><td>${pct(n(r.bounced), n(r.sent), 2)}</td><td>${pct(n(r.unsub), n(r.sent), 2)}</td><td>${pct(n(r.complaints), n(r.sent), 3)}</td><td><span class="pill ${h.s}">${h.label}</span></td></tr>`; }).join('');
+  const t = totals(rows);
+  $('#p-sends').innerHTML = `${filtersHtml()}<div class="card"><h2>Détail par jour</h2>${rows.length ? `<div class="scroll"><table><thead><tr>${cols.map(([k, l]) => `<th data-sort="${k}" aria-sort="${state.sort.key === k ? (dir > 0 ? 'ascending' : 'descending') : 'none'}">${l}${state.sort.key === k ? (dir > 0 ? ' ▲' : ' ▼') : ''}</th>`).join('')}<th>État</th></tr></thead><tbody>${body}</tbody><tfoot><tr><td><strong>Total</strong></td><td></td><td><strong>${fmt(t.sent)}</strong></td><td>${pct(t.delivered, t.sent)}</td><td>${pct(t.opened, t.delivered)}</td><td>${pct(t.clicked, t.delivered)}</td><td>${pct(t.bounced, t.sent, 2)}</td><td>${pct(t.unsub, t.sent, 2)}</td><td>${pct(t.complaints, t.sent, 3)}</td><td></td></tr></tfoot></table></div><p class="muted">Les pourcentages de délivrés, rebonds, désabonnés et plaintes sont rapportés aux envoyés ; ouverts et clics aux délivrés.</p>` : '<div class="empty">Aucun envoi saisi. Importez l\'export de Zoho Campaigns ou saisissez une ligne dans l\'onglet « Données ».</div>'}</div>`;
+  bindFilters();
+  document.querySelectorAll('#p-sends th[data-sort]').forEach((th) => th.addEventListener('click', () => { const k = th.dataset.sort; state.sort = { key: k, dir: state.sort.key === k ? -state.sort.dir : 1 }; renderSends(); }));
+}
+
+function renderFunnel() {
+  const f = state.funnel;
+  if (!f) { $('#p-funnel').innerHTML = '<div class="card"><div class="empty">Chargez le fichier JSON produit par le script de suivi (bouton en haut) pour voir le parcours des REPS : lien demandé, connexion, CV, profil, photo, créneaux, formule.<br><br>Commande : <code>node dashboard.js --batch-ids … --expect-db … --json-out suivi.json</code></div></div>'; return; }
+  const max = f.steps[0]?.count || 1, conn = stepCount('clicked') || 0;
+  const rowsHtml = f.steps.map((s) => `<div class="row"><div>${esc(s.label)}</div><div class="bg"><span style="width:${Math.max(1, Math.round((s.count / max) * 100))}%"></span></div><div class="num">${fmt(s.count)}</div><div class="rate">${pct(s.count, max)}${s.key !== 'imported' && conn ? ' · ' + pct(s.count, conn) + ' des connectés' : ''}</div></div>`).join('');
+  const segs = Object.entries(f.bySegment || {}).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${fmt(v.imported)}</td><td>${fmt(v.clicked)}</td><td>${pct(v.clicked, v.imported)}</td></tr>`).join('');
+  const drop = f.steps.slice(2).map((s, i, a) => (i === 0 ? null : { from: a[i - 1].label, to: s.label, lost: a[i - 1].count - s.count, r: a[i - 1].count ? 1 - s.count / a[i - 1].count : 0 })).filter(Boolean).sort((a, b) => b.r - a.r)[0];
+  $('#p-funnel').innerHTML = `<div class="card"><h2>Parcours des REPS importés</h2><p class="muted">Base : comptes des lots de la campagne. Chiffres lus en base${state.generatedAt ? ` le ${esc(state.generatedAt.replace('T', ' ').slice(0, 16))} UTC` : ''}.</p><div class="funnel">${rowsHtml}</div></div>
+  ${drop ? `<div class="card"><h2>Où l'on perd le plus de monde</h2><p>Entre « ${esc(drop.from)} » et « ${esc(drop.to)} » : <strong>${(drop.r * 100).toFixed(0)} %</strong> de perte (${fmt(drop.lost)} REPS). C'est l'étape à améliorer en priorité.</p></div>` : ''}
+  <div class="card"><h2>Par segment v1</h2>${segs ? `<div class="scroll"><table><thead><tr><th>Segment</th><th>Importés</th><th>Connectés</th><th>Taux</th></tr></thead><tbody>${segs}</tbody></table></div>` : '<div class="empty">Pas de détail par segment.</div>'}</div>`;
+}
+
+function renderStages() {
+  const L = state.limits;
+  const byDay = [...state.rows].sort((a, b) => a.date.localeCompare(b.date));
+  const plan = state.plan;
+  const rows = plan.map((p, i) => {
+    const d = byDay[i];
+    const t = d ? totals([d]) : null;
+    const h = t ? health(t) : null;
+    return `<tr><td><input data-plan="${i}" data-k="name" value="${esc(p.name)}" aria-label="Nom du palier"></td><td><input data-plan="${i}" data-k="perDay" inputmode="numeric" value="${esc(p.perDay)}" aria-label="Objectif par jour"></td><td>${d ? esc(d.date) : '-'}</td><td>${t ? fmt(t.sent) : '-'}</td><td>${t ? pct(t.sent, n(p.perDay), 0) : '-'}</td><td>${t ? pct(t.bounced, t.sent, 2) : '-'}</td><td>${t ? pct(t.complaints, t.sent, 3) : '-'}</td><td>${h ? `<span class="pill ${h.s}">${h.label}</span>` : '-'}</td></tr>`;
+  }).join('');
+  const last = byDay.length ? byDay[byDay.length - 1] : null;
+  const recent = byDay.slice(-3);
+  const tr = totals(recent), h = health(tr);
+  let verdict, cls;
+  if (!byDay.length) { verdict = 'Aucun envoi saisi : commencez par le pilote.'; cls = 'wait'; }
+  else if (h.s === 'ok') { verdict = `Les ${recent.length} derniers jours sont dans les limites : vous pouvez passer au palier suivant.`; cls = 'ok'; }
+  else if (h.s === 'warn') { verdict = 'Proche des limites : restez sur le palier actuel un jour de plus et relisez les rebonds.'; cls = 'warn'; }
+  else if (h.s === 'bad') { verdict = 'Limites dépassées : ne montez pas, arrêtez et vérifiez la liste et le domaine d\'envoi.'; cls = 'bad'; }
+  else { verdict = 'Échantillon trop petit pour décider : attendez plus d\'envois.'; cls = 'wait'; }
+  $('#p-stages').innerHTML = `<div class="card"><h2>Décision pour le prochain palier</h2><div class="banner ${cls}">${esc(verdict)}<small>Lecture des ${recent.length} derniers jours saisis${last ? ' (jusqu\'au ' + esc(last.date) + ')' : ''} : ${fmt(tr.sent)} envoyés, rebonds ${pct(tr.bounced, tr.sent, 2)}, plaintes ${pct(tr.complaints, tr.sent, 3)}.</small></div></div>
+  <div class="card"><h2>Paliers prévus et réalisés</h2><p class="muted">Chaque ligne compare l'objectif au jour correspondant dans l'ordre des envois (1er jour = pilote, etc.). Les noms et objectifs sont modifiables.</p><div class="scroll"><table><thead><tr><th>Palier</th><th>Objectif / jour</th><th>Jour</th><th>Envoyés</th><th>% de l'objectif</th><th>Rebonds</th><th>Plaintes</th><th>État</th></tr></thead><tbody>${rows}</tbody></table></div></div>
+  <div class="card"><h2>Seuils d'arrêt</h2><div class="filters"><label>Rebonds maximum (%)<input id="l-b" inputmode="decimal" value="${(L.maxBounce * 100).toFixed(2).replace('.', ',')}"></label><label>Plaintes maximum (%)<input id="l-c" inputmode="decimal" value="${(L.maxComplaint * 100).toFixed(2).replace('.', ',')}"></label><label>Échantillon minimum<input id="l-m" inputmode="numeric" value="${L.minSample}"></label></div><p class="muted">Valeurs par défaut du script d'envoi : 2 % de rebonds, 0,1 % de plaintes, 100 envois minimum.</p></div>`;
+  document.querySelectorAll('[data-plan]').forEach((el) => el.addEventListener('change', () => { const i = Number(el.dataset.plan); state.plan[i][el.dataset.k] = el.dataset.k === 'perDay' ? n(el.value) : el.value; save(); renderStages(); }));
+  const lim = () => { state.limits = { maxBounce: Math.max(0, n($('#l-b').value) / 100), maxComplaint: Math.max(0, n($('#l-c').value) / 100), minSample: Math.max(1, Math.round(n($('#l-m').value))) }; save(); renderAll(); };
+  ['#l-b', '#l-c', '#l-m'].forEach((s) => $(s).addEventListener('change', lim));
+}
+
+const FIELDS = ['date', 'label', 'sent', 'delivered', 'opened', 'clicked', 'bounced', 'unsub', 'complaints'];
+const FIELD_LABELS = { date: 'Jour (AAAA-MM-JJ)', label: 'Palier / campagne', sent: 'Envoyés', delivered: 'Délivrés', opened: 'Ouverts', clicked: 'Clics', bounced: 'Rebonds', unsub: 'Désabonnés', complaints: 'Plaintes' };
+function renderData() {
+  const rows = [...state.rows].sort((a, b) => a.date.localeCompare(b.date));
+  const body = rows.map((r) => `<tr>${FIELDS.map((k) => `<td><input data-id="${esc(r.id)}" data-k="${k}" value="${esc(r[k] ?? '')}" aria-label="${esc(FIELD_LABELS[k])}"></td>`).join('')}<td><button type="button" data-del="${esc(r.id)}" aria-label="Supprimer la ligne">Supprimer</button></td></tr>`).join('');
+  $('#p-data').innerHTML = `<div class="card"><h2>Saisie des envois</h2><p class="muted">Une ligne par jour (et par campagne si besoin). Reportez les chiffres de Zoho Campaigns, ou importez l'export CSV du rapport de campagne : les colonnes sont reconnues par leur nom (Sent, Delivered, Opens, Clicks, Bounces, Unsubscribes, Complaints, ou leurs équivalents français).</p><div id="dataactions" class="bar"><button class="primary" type="button" id="b-add">Ajouter une ligne</button></div>${rows.length ? `<div class="scroll"><table><thead><tr>${FIELDS.map((k) => `<th>${esc(FIELD_LABELS[k])}</th>`).join('')}<th></th></tr></thead><tbody>${body}</tbody></table></div>` : '<div class="empty">Aucune ligne.</div>'}</div>`;
+  $('#b-add').addEventListener('click', () => { state.rows.push({ id: uid(), date: new Date().toISOString().slice(0, 10), label: '', sent: 0, delivered: 0, opened: 0, clicked: 0, bounced: 0, unsub: 0, complaints: 0 }); save(); renderAll(); });
+  document.querySelectorAll('#p-data input[data-id]').forEach((el) => el.addEventListener('change', () => { const r = state.rows.find((x) => x.id === el.dataset.id); if (!r) return; const k = el.dataset.k; r[k] = k === 'date' ? (normalizeDate(el.value) || r.date) : k === 'label' ? el.value : n(el.value); save(); renderAll(); }));
+  document.querySelectorAll('#p-data button[data-del]').forEach((b) => b.addEventListener('click', () => { state.rows = state.rows.filter((x) => x.id !== b.dataset.del); save(); renderAll(); }));
+}
+
+function bindFilters() {
+  document.querySelectorAll('#f-from').forEach((el) => el.addEventListener('change', () => { state.filter.from = el.value; renderAll(); }));
+  document.querySelectorAll('#f-to').forEach((el) => el.addEventListener('change', () => { state.filter.to = el.value; renderAll(); }));
+  document.querySelectorAll('#f-clear').forEach((el) => el.addEventListener('click', () => { state.filter = { from: '', to: '' }; renderAll(); }));
+}
+
+function setStatus() {
+  const parts = [];
+  parts.push(state.rows.length ? `${state.rows.length} ligne(s) d'envoi` : 'aucun envoi saisi');
+  parts.push(state.funnel ? `parcours chargé${state.generatedAt ? ' (' + state.generatedAt.slice(0, 16).replace('T', ' ') + ' UTC)' : ''}` : 'parcours non chargé');
+  $('#status').textContent = parts.join(' · ');
+}
+function renderAll() { setStatus(); renderOverview(); renderSends(); renderFunnel(); renderStages(); renderData(); }
+let seq = 0; const uid = () => `r${Date.now().toString(36)}${(seq++).toString(36)}`;
+
+/* ---------- import / export ---------- */
+function parseCsv(text) {
+  const rows = []; let row = [], cur = '', q = false;
+  const delim = (text.split('\n')[0].match(/;/g) || []).length > (text.split('\n')[0].match(/,/g) || []).length ? ';' : ',';
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) { if (c === '"' && text[i + 1] === '"') { cur += '"'; i++; } else if (c === '"') q = false; else cur += c; }
+    else if (c === '"') q = true;
+    else if (c === delim) { row.push(cur); cur = ''; }
+    else if (c === '\n') { row.push(cur.replace(/\r$/, '')); rows.push(row); row = []; cur = ''; }
+    else cur += c;
+  }
+  if (cur || row.length) { row.push(cur.replace(/\r$/, '')); rows.push(row); }
+  return rows.filter((r) => r.some((c) => c.trim()));
+}
+const ALIASES = {
+  date: ['date', 'jour', 'sent date', 'date d\'envoi', 'sent time', 'envoyé le'],
+  label: ['campaign', 'campaign name', 'campagne', 'nom de la campagne', 'label', 'palier'],
+  sent: ['sent', 'messages sent', 'emails sent', 'envoyés', 'envoyes', 'total sent', 'recipients'],
+  delivered: ['delivered', 'délivrés', 'delivres', 'successful deliveries'],
+  opened: ['opened', 'opens', 'unique opens', 'ouvertures', 'ouverts'],
+  clicked: ['clicked', 'clicks', 'unique clicks', 'clics', 'clics uniques'],
+  bounced: ['bounced', 'bounces', 'total bounces', 'rebonds'],
+  unsub: ['unsubscribed', 'unsubscribes', 'désabonnés', 'desabonnes', 'opt-outs'],
+  complaints: ['complaints', 'spam complaints', 'abuse complaints', 'plaintes', 'spam'],
+};
+function importCsv(text) {
+  const table = parseCsv(text);
+  if (table.length < 2) throw new Error('Le fichier ne contient pas de lignes.');
+  const head = table[0].map((h) => h.trim().toLowerCase().replace(/^﻿/, ''));
+  const col = {};
+  for (const [field, names] of Object.entries(ALIASES)) { const i = head.findIndex((h) => names.includes(h)); if (i >= 0) col[field] = i; }
+  if (col.sent === undefined) throw new Error('Colonne des envoyés introuvable (attendue : Sent, Messages Sent ou Envoyés). Colonnes lues : ' + head.join(', '));
+  let added = 0;
+  for (const r of table.slice(1)) {
+    const row = { id: uid(), date: normalizeDate(col.date !== undefined ? r[col.date] : '') || new Date().toISOString().slice(0, 10), label: col.label !== undefined ? r[col.label].trim() : '' };
+    for (const k of ['sent', 'delivered', 'opened', 'clicked', 'bounced', 'unsub', 'complaints']) row[k] = col[k] !== undefined ? n(r[col[k]]) : 0;
+    if (col.delivered === undefined) row.delivered = Math.max(0, row.sent - row.bounced);
+    if (row.sent > 0) { state.rows.push(row); added++; }
+  }
+  return added;
+}
+function importJson(text) {
+  const d = JSON.parse(text);
+  if (!d || d.version !== 1) throw new Error('Fichier non reconnu : produisez-le avec « node dashboard.js … --json-out ».');
+  if (d.funnel) state.funnel = d.funnel;
+  state.generatedAt = d.generatedAt || null;
+  if (d.limits) state.limits = { ...DEFAULT_LIMITS, ...d.limits };
+  let added = 0;
+  if (Array.isArray(d.sesDays) && d.sesDays.length && !state.rows.some((r) => r.source === 'ses')) {
+    for (const x of d.sesDays) { state.rows.push({ id: uid(), source: 'ses', date: x.day, label: 'SES', sent: x.send || 0, delivered: x.delivery || 0, opened: x.open || 0, clicked: x.click || 0, bounced: x.bounce || 0, unsub: 0, complaints: x.complaint || 0 }); added++; }
+  }
+  return added;
+}
+function readFile(file) { return new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result)); fr.onerror = () => rej(new Error('Lecture du fichier impossible.')); fr.readAsText(file); }); }
+function notify(msg) { $('#status').textContent = msg; setTimeout(setStatus, 6000); }
+
+function download(name, text, type) { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); }
+
+function demo() {
+  const base = new Date('2026-11-09T00:00:00Z');
+  const plan = [300, 1000, 2500, 3800];
+  state.rows = plan.map((s, i) => { const d = new Date(base.getTime() + i * 86400000).toISOString().slice(0, 10); const b = Math.round(s * [0.008, 0.011, 0.013, 0.012][i]); return { id: uid(), date: d, label: DEFAULT_PLAN[i].name, sent: s, delivered: s - b, opened: Math.round((s - b) * [0.22, 0.2, 0.19, 0.18][i]), clicked: Math.round((s - b) * [0.07, 0.06, 0.055, 0.05][i]), bounced: b, unsub: Math.round(s * 0.002), complaints: Math.round(s * 0.0004) }; });
+  state.funnel = { steps: [
+    { key: 'imported', label: 'Comptes importés', count: 17359 }, { key: 'requested', label: 'Ont demandé leur lien personnel', count: 1380 },
+    { key: 'clicked', label: 'Se sont connectés par le lien', count: 1100 }, { key: 'agent', label: 'Profil créé', count: 760 }, { key: 'cv', label: 'CV importé (expérience ajoutée)', count: 610 },
+    { key: 'basic', label: 'Profil validé', count: 430 }, { key: 'photo', label: 'Photo en direct', count: 320 }, { key: 'availability', label: 'Créneaux de travail', count: 250 }, { key: 'plan', label: 'Formule choisie (essai ou abonnement)', count: 120 } ],
+    bySegment: { A: { imported: 17359, clicked: 1100 } } };
+  state.generatedAt = new Date().toISOString();
+}
+
+/* ---------- initialisation ---------- */
+document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => {
+  document.querySelectorAll('.tab').forEach((x) => x.setAttribute('aria-selected', String(x === t)));
+  document.querySelectorAll('section.panel').forEach((p) => p.classList.toggle('on', p.id === 'p-' + t.dataset.tab));
+}));
+$('#f-json').addEventListener('change', async (e) => { const f = e.target.files[0]; if (!f) return; try { const a = importJson(await readFile(f)); save(); renderAll(); notify(`Chiffres de la base chargés${a ? ` (+${a} jours SES)` : ''}.`); } catch (err) { notify('Erreur : ' + err.message); } e.target.value = ''; });
+$('#f-csv').addEventListener('change', async (e) => { const f = e.target.files[0]; if (!f) return; try { const a = importCsv(await readFile(f)); save(); renderAll(); notify(`${a} ligne(s) importée(s).`); } catch (err) { notify('Erreur : ' + err.message); } e.target.value = ''; });
+$('#b-demo').addEventListener('click', () => { demo(); renderAll(); notify('Exemple affiché (chiffres fictifs). « Tout effacer » pour repartir de zéro.'); });
+$('#b-reset').addEventListener('click', () => { if (!confirm('Effacer toutes les données de ce navigateur ?')) return; state.rows = []; state.funnel = null; state.generatedAt = null; state.limits = { ...DEFAULT_LIMITS }; state.plan = DEFAULT_PLAN.map((p) => ({ ...p })); try { localStorage.removeItem(KEY); } catch (e) { /* ignoré */ } renderAll(); });
+$('#b-print').addEventListener('click', () => window.print());
+$('#b-export').addEventListener('click', () => {
+  const head = FIELDS.join(',');
+  const csv = [head, ...[...state.rows].sort((a, b) => a.date.localeCompare(b.date)).map((r) => FIELDS.map((k) => `"${String(r[k] ?? '').replace(/"/g, '""')}"`).join(','))].join('\n');
+  download('suivi_envois.csv', csv, 'text/csv');
+});
+load();
+renderAll();
+</script>
+</body>
+</html>

@@ -1,5 +1,7 @@
 //import { Request, Response } from 'express';
+import { sanitizeAttribution } from '../utils/attribution.js';
 import authService from '../services/authService.js';
+import { sendSignUpEvent } from '../services/metaCapi.js';
 
 function sendPasswordResetError(res, error, scope) {
   const status = Number(error?.statusCode) || 500;
@@ -10,7 +12,23 @@ function sendPasswordResetError(res, error, scope) {
 
 export const register = async (req, res) => {
   try {
-    const result = await authService.register(req.body, req);
+    // Champs de mesure publicitaire (API de conversions Meta) : retirés du corps avant la création du compte.
+    const { metaEventId, marketingConsent, fbp, fbc, sourceUrl, attribution, ...accountData } = req.body || {};
+    // Origine de l'inscription (utm_) : seuls les cinq paramètres standard, filtrés ; absent sans consentement côté front.
+    const origin = sanitizeAttribution(attribution);
+    if (origin) accountData.attribution = origin;
+    const result = await authService.register(accountData, req);
+    // Après la réussite uniquement ; ne bloque jamais l'inscription (promesse non attendue, jamais rejetée).
+    sendSignUpEvent({
+      email: accountData.email,
+      eventId: metaEventId,
+      marketingConsent,
+      ip: req.ip,
+      userAgent: req.headers['user-agent'],
+      fbp,
+      fbc,
+      sourceUrl,
+    });
     res.status(201).json({
       message: 'Registration successful',
       data: { _id: result.result._id }
@@ -108,6 +126,30 @@ export const reengageLogin = async (req, res) => {
     res.status(error.statusCode || 400).json({
       message: error.message,
       code: error.code || 'INVALID_LINK',
+    });
+  }
+};
+
+export const inviteLogin = async (req, res) => {
+  try {
+    const result = await authService.inviteLogin(req.body?.token, req);
+    res.json(result);
+  } catch (error) {
+    res.status(error.statusCode || 400).json({
+      message: error.message,
+      code: error.code || 'INVALID_LINK',
+    });
+  }
+};
+
+export const reengageRequest = async (req, res) => {
+  try {
+    await authService.requestReengageLink(req.body?.email);
+    res.json({ sent: true });
+  } catch (error) {
+    res.status(error.statusCode || 400).json({
+      message: error.message,
+      code: error.code || 'REQUEST_FAILED',
     });
   }
 };

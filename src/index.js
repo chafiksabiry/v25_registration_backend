@@ -16,6 +16,7 @@ import countryWaitlistRoutes from './routes/countryWaitlistRoutes.js';
 import callCenterRoutes from './routes/callCenterRoutes.js';
 import agentInvitationRoutes from './routes/agentInvitationRoutes.js';
 import companyMemberRoutes from './routes/companyMemberRoutes.js';
+import zohoWebhookRoutes from './routes/zohoWebhookRoutes.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { attachTeamPresence } from './realtime/teamPresence.js';
 
@@ -34,8 +35,27 @@ const PORT = process.env.PORT;
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/filemanager')
   .then(() => console.log('Connected to MongoDB'))
   .catch(err => console.error('MongoDB connection error:', err));
+// CORS allow-list (never reflect an arbitrary origin with credentials in production).
+// Extra origins: CORS_ORIGIN (comma-separated) and the origin of FRONTEND_URL.
+const originOf = (value) => {
+  try { return new URL(String(value).trim()).origin; } catch { return ''; }
+};
+const allowedOrigins = new Set([
+  'https://harx.ai',
+  'https://www.harx.ai',
+  'https://api.harx.ai',
+  'https://harxv25callcenterfront.netlify.app',
+  'https://harx26connection-recette.netlify.app',
+  'https://harx25register.netlify.app',
+  ...String(process.env.CORS_ORIGIN || '').split(',').map(originOf),
+  originOf(process.env.FRONTEND_URL || ''),
+  ...(process.env.NODE_ENV === 'production'
+    ? []
+    : ['http://localhost:5157', 'http://localhost:5173', 'http://localhost:3000']),
+].filter(Boolean));
 const corsOptions = {
-  origin: true, // Allow any origin dynamically (for debugging CORS issues)
+  // No Origin header (curl, server-to-server) is allowed; browsers must come from the allow-list.
+  origin: (origin, callback) => callback(null, !origin || allowedOrigins.has(origin)),
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-User-Id'],
   credentials: true,
@@ -113,6 +133,7 @@ app.use('/api/country-waitlist', countryWaitlistRoutes);
 app.use('/api/call-center', callCenterRoutes);
 app.use('/api/agent-invitations', agentInvitationRoutes);
 app.use('/api/company-members', companyMemberRoutes);
+app.use('/api/integrations/zoho', zohoWebhookRoutes);
 
 // Error handling
 app.use(errorHandler);

@@ -2,9 +2,10 @@ import crypto from 'crypto';
 import mongoose from 'mongoose';
 import User from '../models/User.js';
 import CompanyMembership from '../models/CompanyMembership.js';
+import CompanyRole from '../models/CompanyRole.js';
 import AgentInvitation from '../models/AgentInvitation.js';
 import { teamMemberInvitationEmail } from '../utils/harxMessages.js';
-import { appLoginUrl, sendAppEmail } from './brevoMail.js';
+import { appInvitationLoginUrl, appLoginUrl, sendAppEmail } from './brevoMail.js';
 import { roleConflict } from './teamRoleConflicts.js';
 import { assertCanAddSeat, getCompanyProductForAccess } from './companyProduct.js';
 import AgentListenGrant from '../models/AgentListenGrant.js';
@@ -12,6 +13,7 @@ import { activeEmployments, hasEmployment, resolveActiveCompanyId } from '../uti
 import {
   allPermissions,
   emptyPermissions,
+  describeGrantedAccess,
   presetPermissions,
   sanitizePermissions,
   PERMISSION_GROUPS,
@@ -114,7 +116,7 @@ function companyLabel(company) {
   return company.name || company.companyName || company.title || 'HARX';
 }
 
-async function sendInviteEmail({ to, firstName, email, tempPassword, companyName, preset, inviterName }) {
+async function sendInviteEmail({ to, firstName, email, tempPassword, companyName, preset, inviterName, roleName, permissions }) {
   const loginUrl = appLoginUrl();
   const message = teamMemberInvitationEmail({
     firstName,
@@ -124,6 +126,9 @@ async function sendInviteEmail({ to, firstName, email, tempPassword, companyName
     preset,
     inviterName,
     loginUrl,
+    roleName,
+    accessLines: describeGrantedAccess(permissions, 'fr'),
+    accessLinesEn: describeGrantedAccess(permissions, 'en'),
   });
   await sendAppEmail({
     to,
@@ -148,6 +153,8 @@ function serializeMember(doc, user, product = null) {
     phone: user?.phone || '',
     isOwner: false,
     preset: doc.preset || 'custom',
+    roleId: doc.roleId ? String(doc.roleId) : null,
+    roleName: doc.roleName || '',
     status: doc.status || 'pending',
     online: doc.status === 'active' && isOnline(doc.lastSeenAt),
     lastSeenAt: doc.lastSeenAt || null,
@@ -375,7 +382,9 @@ class CompanyMemberService {
           preset,
           inviterName: caller?.fullName || '',
           email,
-          loginUrl: appLoginUrl(),
+          loginUrl: appInvitationLoginUrl(),
+          accessLines: describeGrantedAccess(rights, 'fr'),
+          accessLinesEn: describeGrantedAccess(rights, 'en'),
         });
         await sendAppEmail({ to: email, subject: message.subject, html: message.html });
         emailSent = true;
@@ -421,6 +430,14 @@ class CompanyMemberService {
     const { caller, company } = await assertCan(callerUserId, companyId, 'members.invite');
     assertListenGrantAllowed(company, caller._id, provenUserId, listenGrant);
     await assertCanAddSeat(company._id);
+    // Main (production) rule: no invitation while the company has no saved role. Recette's preset-based
+    // invitations (explicit preset, no roleId) stay possible without a saved role.
+    if (!payload?.roleId && !payload?.preset && !permissions) {
+      const roleCount = await CompanyRole.countDocuments({ companyId: company._id });
+      if (roleCount === 0) {
+        throw httpError('Créez un rôle avant d’inviter un membre.', 400);
+      }
+    }
     const normalizedEmail = normalizeEmail(email);
     if (!normalizedEmail || !normalizedEmail.includes('@')) {
       throw httpError('Valid email is required', 400);
@@ -433,13 +450,21 @@ class CompanyMemberService {
     // (permissions['calls.listen'] === true) ou le profil admin accorde l'écoute.
     const product = await getCompanyProductForAccess(company._id);
     const resolvedPreset = presetPermissions(preset) ? String(preset).toLowerCase() : 'custom';
-    const base = presetPermissions(preset, { product: productForWrite(product) }) || emptyPermissions();
+    let role = null;
+    if (payload?.roleId) {
+      role = await CompanyRole.findOne({ _id: payload.roleId, companyId: company._id });
+      if (!role) throw httpError('Role not found', 404);
+    }
+    // Rôle enregistré (main) sinon profil demandé (recette, Accueil : « operator » sans écoute).
+    const base = role
+      ? sanitizePermissions(role.permissions)
+      : (presetPermissions(preset, { product: productForWrite(product) }) || emptyPermissions());
     const requested = permissions ? sanitizePermissions({ ...base, ...permissions }) : base;
-    // Écoute : seule l'intention explicite `listenGrant` du titulaire prouvé compte (jamais le calls.listen du jeu complet).
+    // Écoute : seule l'intention explicite `listenGrant` du titulaire prouvé compte (jamais le calls.listen du jeu complet ni d'un rôle).
     const { rights, listenGrantedAt, listenRevokedAt } = resolveMemberListen({
       product,
       rights: requested,
-      preset: resolvedPreset,
+      preset: role ? 'custom' : resolvedPreset,
       ownerProven: ownerProven(company, caller._id, provenUserId),
       listenGrant,
     });
@@ -487,7 +512,9 @@ class CompanyMemberService {
       email: normalizedEmail,
       fullName: user.fullName || `${givenName} ${familyName}`.trim(),
       permissions: rights,
-      preset: resolvedPreset,
+      preset: role ? 'custom' : resolvedPreset,
+      roleId: role?._id || null,
+      roleName: role?.name || '',
       listenGrantedAt,
       listenRevokedAt,
       status: 'pending',
@@ -506,6 +533,8 @@ class CompanyMemberService {
           companyName: companyLabel(company),
           preset: resolvedPreset,
           inviterName: caller?.fullName || '',
+          roleName: role?.name || '',
+          permissions: rights,
         });
         emailSent = true;
         membership.status = 'invited';
@@ -589,6 +618,8 @@ class CompanyMemberService {
         tempPassword,
         companyName: companyLabel(company),
         preset: membership.preset,
+        roleName: membership.roleName || '',
+        permissions: membership.permissions,
       });
       emailSent = true;
       membership.status = 'invited';
@@ -624,18 +655,30 @@ class CompanyMemberService {
 
     const product = await getCompanyProductForAccess(company._id);
     const preset = payload?.preset;
-    // Point de départ : le profil demandé (Accueil : « operator » sans écoute), sinon les droits réels du membre.
-    const base = presetPermissions(preset, { product: productForWrite(product) }) || sanitizePermissions(membership.permissions);
+    let role = null;
+    if (payload?.roleId) {
+      role = await CompanyRole.findOne({ _id: payload.roleId, companyId: company._id });
+      if (!role) throw httpError('Role not found', 404);
+    }
+    // Point de départ : le rôle enregistré (main), sinon le profil demandé (Accueil : « operator » sans écoute), sinon les droits réels.
+    const base = role
+      ? sanitizePermissions(role.permissions)
+      : (presetPermissions(preset, { product: productForWrite(product) }) || sanitizePermissions(membership.permissions));
     const requested = payload?.permissions
       ? sanitizePermissions({ ...base, ...payload.permissions })
       : base;
-    // Corps réduit à l'intention d'écoute (`{ listenGrant }`, interrupteur de l'écran Équipe) : profil et droits inchangés.
-    const listenOnly = preset === undefined && !payload?.permissions;
+    // Corps réduit à l'intention d'écoute (`{ listenGrant }`, interrupteur de l'écran Équipe) : profil, rôle et droits inchangés.
+    const listenOnly = preset === undefined && !payload?.permissions && !payload?.roleId;
     const previousPreset = membership.preset;
     if (!listenOnly) {
-      membership.preset = presetPermissions(preset)
-        ? String(preset).toLowerCase()
-        : 'custom';
+      membership.preset = role || !presetPermissions(preset) ? 'custom' : String(preset).toLowerCase();
+      if (role) {
+        membership.roleId = role._id;
+        membership.roleName = role.name;
+      } else if (presetPermissions(preset)) {
+        membership.roleId = null;
+        membership.roleName = '';
+      }
     }
     // Écoute : seule l'intention explicite `listenGrant` du titulaire prouvé la pose ou la retire ; un membre avec
     // members.edit (même admin) ne l'accorde ni à lui-même ni aux autres, et le calls.listen du jeu complet est ignoré.
@@ -663,12 +706,97 @@ class CompanyMemberService {
     if (String(company.userId) === String(memberUserId)) {
       throw httpError('The owner cannot be removed', 400);
     }
-    const deleted = await CompanyMembership.findOneAndDelete({
-      companyId: company._id,
-      userId: memberUserId,
-    });
-    if (!deleted) throw httpError('Member not found', 404);
+    const validId = mongoose.Types.ObjectId.isValid(memberUserId);
+    const deleted = validId
+      ? await CompanyMembership.findOneAndDelete({ companyId: company._id, userId: memberUserId })
+      : null;
+    // Une personne qui avait déjà un compte reçoit une invitation en attente (pas encore d'appartenance) : la liste l'affiche,
+    // « Retirer » doit donc l'annuler elle aussi.
+    const cancelled = validId
+      ? await AgentInvitation.findOneAndDelete({ companyId: company._id, kind: 'member', status: 'pending', userId: memberUserId })
+      : null;
+    if (!deleted && !cancelled) throw httpError('Member not found', 404);
     return { userId: String(memberUserId) };
+  }
+
+  async listRoles(callerUserId, companyId) {
+    const { company } = await assertCan(callerUserId, companyId, 'members.view');
+    const roles = await CompanyRole.find({ companyId: company._id }).sort({ name: 1 });
+    return roles.map((role) => ({
+      _id: String(role._id),
+      name: role.name,
+      permissions: sanitizePermissions(role.permissions),
+    }));
+  }
+
+  async createRole(callerUserId, payload) {
+    const { company, caller } = await assertCan(callerUserId, payload?.companyId, 'members.edit');
+    const name = String(payload?.name || '').trim();
+    if (name.length < 2) throw httpError('Role name is required', 400);
+    const permissions = sanitizePermissions(payload?.permissions);
+    if (!Object.values(permissions).some(Boolean)) {
+      throw httpError('Select at least one permission', 400);
+    }
+    try {
+      const role = await CompanyRole.create({
+        companyId: company._id,
+        name,
+        permissions,
+        createdByUserId: caller._id,
+      });
+      return {
+        _id: String(role._id),
+        name: role.name,
+        permissions: sanitizePermissions(role.permissions),
+      };
+    } catch (error) {
+      if (error?.code === 11000) throw httpError('A role with this name already exists', 409);
+      throw error;
+    }
+  }
+
+  async updateRole(callerUserId, companyId, roleId, payload) {
+    const { company } = await assertCan(callerUserId, companyId, 'members.edit');
+    const role = await CompanyRole.findOne({ _id: roleId, companyId: company._id });
+    if (!role) throw httpError('Role not found', 404);
+    if (payload?.name != null) {
+      const name = String(payload.name || '').trim();
+      if (name.length < 2) throw httpError('Role name is required', 400);
+      role.name = name;
+    }
+    if (payload?.permissions) {
+      const permissions = sanitizePermissions(payload.permissions);
+      if (!Object.values(permissions).some(Boolean)) {
+        throw httpError('Select at least one permission', 400);
+      }
+      role.permissions = permissions;
+    }
+    try {
+      await role.save();
+    } catch (error) {
+      if (error?.code === 11000) throw httpError('A role with this name already exists', 409);
+      throw error;
+    }
+    await CompanyMembership.updateMany(
+      { companyId: company._id, roleId: role._id },
+      { $set: { roleName: role.name, permissions: role.permissions } }
+    );
+    return {
+      _id: String(role._id),
+      name: role.name,
+      permissions: sanitizePermissions(role.permissions),
+    };
+  }
+
+  async deleteRole(callerUserId, companyId, roleId) {
+    const { company } = await assertCan(callerUserId, companyId, 'members.edit');
+    const role = await CompanyRole.findOneAndDelete({ _id: roleId, companyId: company._id });
+    if (!role) throw httpError('Role not found', 404);
+    await CompanyMembership.updateMany(
+      { companyId: company._id, roleId: role._id },
+      { $set: { roleId: null } }
+    );
+    return { _id: String(role._id) };
   }
 }
 
