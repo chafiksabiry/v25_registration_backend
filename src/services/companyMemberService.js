@@ -610,6 +610,7 @@ class CompanyMemberService {
       : base;
     // Corps réduit à l'intention d'écoute (`{ listenGrant }`, interrupteur de l'écran Équipe) : profil et droits inchangés.
     const listenOnly = preset === undefined && !payload?.permissions;
+    const previousPreset = membership.preset;
     if (!listenOnly) {
       membership.preset = presetPermissions(preset)
         ? String(preset).toLowerCase()
@@ -621,6 +622,7 @@ class CompanyMemberService {
       product,
       rights: requested,
       preset: membership.preset,
+      previousPreset,
       ownerProven: ownerProven(company, callerUserId, provenUserId),
       listenGrant: payload?.listenGrant,
       previousGrantedAt: membership.listenGrantedAt,

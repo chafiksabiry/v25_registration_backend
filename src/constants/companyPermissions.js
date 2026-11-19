@@ -147,11 +147,16 @@ export function effectiveMemberPermissions(doc, product) {
  * - Offre à écoute explicite connue (Accueil) : `calls.listen` enregistré = décision du titulaire (admin : oui sauf retrait).
  * - Palier illisible ('unknown') : rien n'est figé, les droits du profil sont enregistrés tels quels ; la règle s'applique à la lecture.
  * - Autres offres : droits génériques inchangés.
+ * - Profil « admin » attribué par un non-titulaire : l'écoute ne suit pas (listenRevokedAt posé sauf accord existant).
  * @returns {{ rights: object, listenGrantedAt: Date|null, listenRevokedAt: Date|null }}
  */
-export function resolveMemberListen({ product, rights, preset, ownerProven = false, listenGrant, previousGrantedAt = null, previousRevokedAt = null, now = new Date() }) {
+export function resolveMemberListen({ product, rights, preset, previousPreset = null, ownerProven = false, listenGrant, previousGrantedAt = null, previousRevokedAt = null, now = new Date() }) {
   let listenGrantedAt = previousGrantedAt || null;
   let listenRevokedAt = previousRevokedAt || null;
+  // Profil « admin » attribué par un non-titulaire (invitation ou changement de profil) : l'écoute ne suit pas.
+  // Le membre garde l'écoute qu'il avait (accord existant), sinon elle est marquée retirée jusqu'à décision du titulaire.
+  const becomesAdmin = String(preset || '').toLowerCase() === 'admin' && String(previousPreset || '').toLowerCase() !== 'admin';
+  if (listenIsOptIn(product) && becomesAdmin && !ownerProven && !listenGrantedAt) listenRevokedAt = listenRevokedAt || now;
   if (ownerProven && typeof listenGrant === 'boolean') {
     listenGrantedAt = listenGrant ? previousGrantedAt || now : null;
     listenRevokedAt = listenGrant ? null : previousRevokedAt || now;
