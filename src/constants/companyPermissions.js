@@ -121,32 +121,49 @@ export function presetPermissions(preset, { product = null } = {}) {
   return null;
 }
 
-/** Vrai si un corps de requête demande explicitement l'écoute (case « Écouter » cochée par le titulaire). */
-export function explicitListenRequested(permissions) {
-  return Boolean(permissions && typeof permissions === 'object' && (permissions[LISTEN_KEY] === true || permissions[LISTEN_KEY] === 'true'));
+/** Écoute d'un membre sur une offre à écoute explicite : admin sauf retrait par le titulaire ; sinon accord du titulaire. */
+function optInListen(preset, grantedAt, revokedAt) {
+  return String(preset || '').toLowerCase() === 'admin' ? !revokedAt : Boolean(grantedAt);
 }
 
 /**
  * Droits réels d'un membre de l'équipe (rattachement ou invitation). Sur une offre à écoute explicite, `calls.listen`
- * n'est retenu que si le titulaire l'a accordé (`listenGrantedAt`) ou si le profil est « admin » (tous les droits) ;
- * un ancien rattachement sans cet accord perd l'écoute (nouveau défaut, sans script de migration).
+ * vient seulement de la décision du titulaire : accord (`listenGrantedAt`), ou profil « admin » tant que le titulaire ne
+ * l'a pas retirée (`listenRevokedAt`). Un ancien rattachement sans accord perd l'écoute (nouveau défaut, sans script).
  */
 export function effectiveMemberPermissions(doc, product) {
   const out = sanitizePermissions(doc?.permissions);
-  if (out[LISTEN_KEY] && listenIsOptIn(product) && doc?.preset !== 'admin' && !doc?.listenGrantedAt) {
-    out[LISTEN_KEY] = false;
+  if (listenIsOptIn(product)) {
+    out[LISTEN_KEY] = doc?.preset === 'admin' ? !doc?.listenRevokedAt : Boolean(out[LISTEN_KEY] && doc?.listenGrantedAt);
   }
   return out;
 }
 
 /**
- * Date d'accord de l'écoute à enregistrer après une invitation ou un changement de droits : conservée ou posée si
- * l'écoute est accordée explicitement (case cochée, ou profil admin), effacée si l'écoute est retirée, inchangée sinon.
+ * Écoute d'un membre après une invitation ou un changement de droits.
+ * - Seule une intention explicite (`listenGrant: true|false`, champ dédié du corps) du titulaire PROUVÉ (JWT = companies.userId)
+ *   pose ou retire l'accord. Un `calls.listen` reçu dans le jeu complet de permissions d'un écran générique ne vaut jamais
+ *   accord, et un membre (même avec members.edit / members.invite, même admin) n'accorde rien, ni à lui-même ni aux autres.
+ * - Offre à écoute explicite connue (Accueil) : `calls.listen` enregistré = décision du titulaire (admin : oui sauf retrait).
+ * - Palier illisible ('unknown') : rien n'est figé, les droits du profil sont enregistrés tels quels ; la règle s'applique à la lecture.
+ * - Autres offres : droits génériques inchangés.
+ * @returns {{ rights: object, listenGrantedAt: Date|null, listenRevokedAt: Date|null }}
  */
-export function nextListenGrantedAt({ rights, preset, requested, previous = null, now = new Date() }) {
-  if (!rights?.[LISTEN_KEY]) return null;
-  if (explicitListenRequested(requested) || String(preset || '').toLowerCase() === 'admin') return previous || now;
-  return previous || null;
+export function resolveMemberListen({ product, rights, preset, ownerProven = false, listenGrant, previousGrantedAt = null, previousRevokedAt = null, now = new Date() }) {
+  let listenGrantedAt = previousGrantedAt || null;
+  let listenRevokedAt = previousRevokedAt || null;
+  if (ownerProven && typeof listenGrant === 'boolean') {
+    listenGrantedAt = listenGrant ? previousGrantedAt || now : null;
+    listenRevokedAt = listenGrant ? null : previousRevokedAt || now;
+  }
+  const out = { ...rights };
+  if (listenIsOptIn(product) && product !== UNKNOWN_PRODUCT) out[LISTEN_KEY] = optInListen(preset, listenGrantedAt, listenRevokedAt);
+  return { rights: out, listenGrantedAt, listenRevokedAt };
+}
+
+/** Profil pour l'écriture : en cas de palier illisible, aucune soustraction n'est figée en base. */
+export function productForWrite(product) {
+  return product === UNKNOWN_PRODUCT ? null : product;
 }
 
 export function sanitizePermissions(input) {

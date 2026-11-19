@@ -45,6 +45,11 @@ const companyMembershipSchema = new mongoose.Schema({
     type: Date,
     default: null,
   },
+  /** Date à laquelle le titulaire a retiré l'écoute (sert pour un admin, qui écoute par défaut). */
+  listenRevokedAt: {
+    type: Date,
+    default: null,
+  },
   invitedByUserId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',

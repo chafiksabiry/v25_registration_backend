@@ -17,7 +17,8 @@ import {
   PERMISSION_GROUPS,
   agentPermissions,
   effectiveMemberPermissions,
-  nextListenGrantedAt,
+  resolveMemberListen,
+  productForWrite,
   isCallCenterAgent,
   isClientPortalUser,
 } from '../constants/companyPermissions.js';
@@ -65,6 +66,11 @@ async function loadCaller(callerUserId) {
   const caller = await User.findById(callerUserId);
   if (!caller) throw httpError('Caller not found', 401);
   return caller;
+}
+
+/** Titulaire PROUVÉ : l'appelant est le propriétaire de la société ET son identité vient d'un JWT valide. */
+function ownerProven(company, callerUserId, provenUserId) {
+  return Boolean(provenUserId) && String(provenUserId) === String(callerUserId) && isOwner(company, callerUserId);
 }
 
 async function assertCan(callerUserId, companyId, permission) {
@@ -311,7 +317,7 @@ class CompanyMemberService {
     ];
   }
 
-  async inviteExistingAccount({ caller, company, existingUser, preset, rights, listenGrantedAt = null, sendEmail }) {
+  async inviteExistingAccount({ caller, company, existingUser, preset, rights, listenGrantedAt = null, listenRevokedAt = null, sendEmail }) {
     const email = normalizeEmail(existingUser.email);
     let invitation = await AgentInvitation.findOne({ companyId: company._id, email });
     if (invitation && invitation.status === 'accepted' && invitation.kind === 'member') {
@@ -325,6 +331,7 @@ class CompanyMemberService {
       preset,
       permissions: rights,
       listenGrantedAt,
+      listenRevokedAt,
       fullName: existingUser.fullName || '',
       status: 'pending',
       invitedAt: new Date(),
@@ -368,7 +375,7 @@ class CompanyMemberService {
         preset,
         status: 'invited',
         online: false,
-        permissions: effectiveMemberPermissions({ permissions: rights, preset, listenGrantedAt }, null),
+        permissions: sanitizePermissions(rights),
         invitedAt: invitation.invitedAt,
         existingAccount: true,
       },
@@ -379,7 +386,7 @@ class CompanyMemberService {
     };
   }
 
-  async invite(callerUserId, payload) {
+  async invite(callerUserId, payload, { provenUserId = null } = {}) {
     const {
       companyId,
       firstName,
@@ -388,6 +395,7 @@ class CompanyMemberService {
       phone,
       preset = 'operator',
       permissions,
+      listenGrant,
       sendEmail = true,
     } = payload || {};
 
@@ -405,12 +413,19 @@ class CompanyMemberService {
     // (permissions['calls.listen'] === true) ou le profil admin accorde l'écoute.
     const product = await getCompanyProductForAccess(company._id);
     const resolvedPreset = presetPermissions(preset) ? String(preset).toLowerCase() : 'custom';
-    const base = presetPermissions(preset, { product }) || emptyPermissions();
-    const rights = permissions ? sanitizePermissions({ ...base, ...permissions }) : base;
+    const base = presetPermissions(preset, { product: productForWrite(product) }) || emptyPermissions();
+    const requested = permissions ? sanitizePermissions({ ...base, ...permissions }) : base;
+    // Écoute : seule l'intention explicite `listenGrant` du titulaire prouvé compte (jamais le calls.listen du jeu complet).
+    const { rights, listenGrantedAt, listenRevokedAt } = resolveMemberListen({
+      product,
+      rights: requested,
+      preset: resolvedPreset,
+      ownerProven: ownerProven(company, caller._id, provenUserId),
+      listenGrant,
+    });
     if (!Object.values(rights).some(Boolean)) {
       throw httpError('Select at least one permission', 400);
     }
-    const listenGrantedAt = nextListenGrantedAt({ rights, preset: resolvedPreset, requested: permissions });
 
     // Une adresse peut être invitée un nombre illimité de fois mais n'a qu'un compte HARX : si elle en a déjà
     // un, on enregistre une invitation que la personne accepte après connexion (jamais de mot de passe créé).
@@ -423,7 +438,7 @@ class CompanyMemberService {
       if (already || String(company.userId) === String(existingUser._id)) {
         throw httpError('Cette personne fait déjà partie de votre équipe.', 409);
       }
-      return this.inviteExistingAccount({ caller, company, existingUser, preset: resolvedPreset, rights, listenGrantedAt, sendEmail });
+      return this.inviteExistingAccount({ caller, company, existingUser, preset: resolvedPreset, rights, listenGrantedAt, listenRevokedAt, sendEmail });
     }
     const existingMembership = await CompanyMembership.findOne({ email: normalizedEmail }).select('_id');
     if (existingMembership) {
@@ -454,6 +469,7 @@ class CompanyMemberService {
       permissions: rights,
       preset: resolvedPreset,
       listenGrantedAt,
+      listenRevokedAt,
       status: 'pending',
       invitedByUserId: caller._id,
     });
@@ -573,7 +589,7 @@ class CompanyMemberService {
     };
   }
 
-  async update(callerUserId, companyId, memberUserId, payload) {
+  async update(callerUserId, companyId, memberUserId, payload, { provenUserId = null } = {}) {
     await assertCan(callerUserId, companyId, 'members.edit');
     const company = await findCompany(companyId);
     if (String(company.userId) === String(memberUserId)) {
@@ -588,19 +604,31 @@ class CompanyMemberService {
     const product = await getCompanyProductForAccess(company._id);
     const preset = payload?.preset;
     // Point de départ : le profil demandé (Accueil : « operator » sans écoute), sinon les droits réels du membre.
-    const base = presetPermissions(preset, { product }) || effectiveMemberPermissions(membership, product);
-    membership.permissions = payload?.permissions
+    const base = presetPermissions(preset, { product: productForWrite(product) }) || sanitizePermissions(membership.permissions);
+    const requested = payload?.permissions
       ? sanitizePermissions({ ...base, ...payload.permissions })
       : base;
-    membership.preset = presetPermissions(preset)
-      ? String(preset).toLowerCase()
-      : 'custom';
-    membership.listenGrantedAt = nextListenGrantedAt({
-      rights: membership.permissions,
+    // Corps réduit à l'intention d'écoute (`{ listenGrant }`, interrupteur de l'écran Équipe) : profil et droits inchangés.
+    const listenOnly = preset === undefined && !payload?.permissions;
+    if (!listenOnly) {
+      membership.preset = presetPermissions(preset)
+        ? String(preset).toLowerCase()
+        : 'custom';
+    }
+    // Écoute : seule l'intention explicite `listenGrant` du titulaire prouvé la pose ou la retire ; un membre avec
+    // members.edit (même admin) ne l'accorde ni à lui-même ni aux autres, et le calls.listen du jeu complet est ignoré.
+    const decided = resolveMemberListen({
+      product,
+      rights: requested,
       preset: membership.preset,
-      requested: payload?.permissions,
-      previous: membership.listenGrantedAt,
+      ownerProven: ownerProven(company, callerUserId, provenUserId),
+      listenGrant: payload?.listenGrant,
+      previousGrantedAt: membership.listenGrantedAt,
+      previousRevokedAt: membership.listenRevokedAt,
     });
+    membership.permissions = decided.rights;
+    membership.listenGrantedAt = decided.listenGrantedAt;
+    membership.listenRevokedAt = decided.listenRevokedAt;
     await membership.save();
     const user = await User.findById(memberUserId).select('fullName email phone');
     return serializeMember(membership, user, product);

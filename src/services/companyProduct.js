@@ -109,13 +109,53 @@ export async function assertCanAddSeat(companyId, db) {
 }
 
 /**
- * Palier du centre pour décider des droits d'accès (écoute des enregistrements) : en cas d'échec de lecture, renvoie
- * 'unknown' pour que l'écoute reste sur accord explicite (on ne donne pas l'écoute faute de savoir).
+ * Dernier palier Call Centre connu du centre, QUEL QUE SOIT le statut de l'abonnement (actif, essai, impayé, annulé…) :
+ * une décision d'accès ne doit pas s'ouvrir parce que le paiement a échoué. null seulement si le centre n'a jamais eu
+ * d'abonnement Call Centre à palier connu.
  */
-export async function getCompanyProductForAccess(companyId, db) {
+export async function getLastKnownCompanyProduct(companyId, db = mongoose.connection.db) {
   if (!companyId) return null;
+  const ids = [String(companyId)];
+  if (mongoose.isValidObjectId(String(companyId))) ids.push(new mongoose.Types.ObjectId(String(companyId)));
+  const subscriptions = await db
+    .collection('subscriptions')
+    .find({ companyId: { $in: ids } })
+    .sort({ createdAt: -1 })
+    .limit(20)
+    .toArray();
+  for (const subscription of subscriptions) {
+    if (!subscription?.planId) continue;
+    const planId = mongoose.isValidObjectId(String(subscription.planId))
+      ? new mongoose.Types.ObjectId(String(subscription.planId))
+      : subscription.planId;
+    const plan = await db.collection('subscriptionplans').findOne({ _id: planId });
+    const product = productFromPlanMetadata(plan?.metadata);
+    if (product) return product;
+  }
+  return null;
+}
+
+/** Cache court (60 s) du palier par centre pour les décisions d'accès (lu à chaque /me). Les échecs ne sont pas mis en cache. */
+export const PRODUCT_ACCESS_TTL_MS = 60 * 1000;
+const productAccessCache = new Map();
+
+export function clearProductAccessCache() {
+  productAccessCache.clear();
+}
+
+/**
+ * Palier du centre pour décider des droits d'accès (écoute des enregistrements) : dernier palier connu, tous statuts
+ * confondus. En cas d'échec de lecture, renvoie 'unknown' pour que l'écoute reste sur accord explicite.
+ */
+export async function getCompanyProductForAccess(companyId, db, now = Date.now()) {
+  if (!companyId) return null;
+  const key = String(companyId);
+  const hit = productAccessCache.get(key);
+  if (hit && hit.expiresAt > now) return hit.product;
   try {
-    return await getCompanyProduct(companyId, db);
+    const product = await getLastKnownCompanyProduct(companyId, db);
+    productAccessCache.set(key, { product, expiresAt: now + PRODUCT_ACCESS_TTL_MS });
+    return product;
   } catch (error) {
     console.error('Lecture du produit du centre impossible, écoute sur accord explicite :', error?.message || error);
     return 'unknown';

@@ -506,6 +506,7 @@ class CallCenterAgentService {
             fullName: invitation.fullName || '',
             permissions: invitation.permissions || {},
             listenGrantedAt: invitation.listenGrantedAt || null,
+            listenRevokedAt: invitation.listenRevokedAt || null,
             preset: ['admin', 'operator', 'readonly'].includes(invitation.preset) ? invitation.preset : 'custom',
             status: 'active',
             invitedByUserId: invitation.invitedByUserId || null,
@@ -540,6 +541,7 @@ class CallCenterAgentService {
         throw err;
       }
       await AgentInvitation.deleteOne({ _id: invitation._id });
+      await this.forgetListenGrant(companyId, invitation.userId);
       return { removed: true, kind: 'invitation' };
     }
 
@@ -561,6 +563,7 @@ class CallCenterAgentService {
     }
     await mongoose.connection.db.collection('agents').deleteMany({ userId: user._id });
     await User.deleteOne({ _id: user._id });
+    await this.forgetListenGrant(companyId, user._id);
     return { removed: true, kind: 'account' };
   }
 
@@ -569,6 +572,13 @@ class CallCenterAgentService {
     user.employments = next.employments;
     user.employerCompanyId = next.employerCompanyId;
     await user.save();
+    await this.forgetListenGrant(companyId, user._id);
+  }
+
+  /** Fin de l'emploi ou de l'invitation : la décision d'écoute du titulaire pour ce centre disparaît (rien de réutilisé au retour). */
+  async forgetListenGrant(companyId, userId) {
+    if (!mongoose.Types.ObjectId.isValid(String(companyId)) || !userId) return;
+    await AgentListenGrant.deleteMany({ companyId: new mongoose.Types.ObjectId(String(companyId)), userId });
   }
 
   /**
