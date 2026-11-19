@@ -112,6 +112,18 @@ export const reengageLogin = async (req, res) => {
   }
 };
 
+export const reengageRequest = async (req, res) => {
+  try {
+    await authService.requestReengageLink(req.body?.email);
+    res.json({ sent: true });
+  } catch (error) {
+    res.status(error.statusCode || 400).json({
+      message: error.message,
+      code: error.code || 'REQUEST_FAILED',
+    });
+  }
+};
+
 export const linkedInAuth = async (req, res) => {
   console.log("code", req.body.code);
   try {

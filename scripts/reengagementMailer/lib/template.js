@@ -185,28 +185,50 @@ function dividerRow(label) {
  * lang: 'fr' | 'en' | 'bi' (French first, then English, in the same message).
  * `bannerUrl` may also be a data: URI (local preview).
  */
-export function renderEmail({ link, bannerUrl, lang = 'fr' }) {
+/**
+ * Wording when every recipient gets the same public link (/auth/reactivate, no personal token):
+ * the REP types their address there and the personal one-click link is e-mailed to it.
+ */
+const PUBLIC_LINK_COPY = {
+  fr: {
+    preheader: 'Retrouvez votre compte et activez votre formule avant le 31 décembre 2026.',
+    lead: 'Reprenez là où vous en étiez :',
+    ctaNote: 'Saisissez votre e-mail : nous vous envoyons votre lien personnel, sans mot de passe.',
+    personal: 'Le bouton ne fonctionne pas ? Copiez cette adresse dans votre navigateur :',
+  },
+  en: {
+    preheader: 'Get your account back and activate your plan before 31 December 2026.',
+    lead: 'Pick up where you left off:',
+    ctaNote: 'Enter your email: we send you your personal link, no password.',
+    personal: 'The button does not work? Copy this address into your browser:',
+  },
+};
+
+export function renderEmail({ link, bannerUrl, lang = 'fr', linkKind = 'personal' }) {
   if (!link) throw new Error('link is required');
   if (!bannerUrl) throw new Error('bannerUrl is required');
   if (!['fr', 'en', 'bi'].includes(lang)) throw new Error(`unknown lang: ${lang}`);
 
+  if (!['personal', 'public'].includes(linkKind)) throw new Error(`unknown linkKind: ${linkKind}`);
+  const copy = (l) => (linkKind === 'public' ? { ...COPY[l], ...PUBLIC_LINK_COPY[l] } : COPY[l]);
+
   const langs = lang === 'bi' ? ['en', 'fr'] : [lang];
   const subject = SUBJECTS[lang];
-  const preheader = lang === 'bi' ? PREHEADER_BI : COPY[lang].preheader;
+  const preheader = lang === 'bi' ? PREHEADER_BI : copy(lang).preheader;
   const safeLink = escapeHtml(link);
 
   const text =
     [
       'HARX - We inspire growth',
       '',
-      langs.map((l) => textSection(COPY[l], link)).join('\n\n----------------------------------------\n\n'),
+      langs.map((l) => textSection(copy(l), link)).join('\n\n----------------------------------------\n\n'),
       '',
-      langs.map((l) => COPY[l].stop).join('\n'),
+      langs.map((l) => copy(l).stop).join('\n'),
       POSTAL_ADDRESS,
     ].join('\n') + '\n';
 
   const body = langs
-    .map((l, i) => (i === 0 ? '' : dividerRow(l === 'fr' ? 'VERSION FRANÇAISE' : 'ENGLISH VERSION') + '\n') + htmlSection(COPY[l], safeLink))
+    .map((l, i) => (i === 0 ? '' : dividerRow(l === 'fr' ? 'VERSION FRANÇAISE' : 'ENGLISH VERSION') + '\n') + htmlSection(copy(l), safeLink))
     .join('\n');
 
   const html = `<!doctype html>
@@ -224,7 +246,7 @@ ${body}
 
 <tr><td bgcolor="${MAGENTA_DARK}" style="background-color:${MAGENTA_DARK};padding:22px 36px;font-family:${FONT};">
 <p style="margin:0 0 8px 0;font-size:13px;font-weight:700;color:#ffffff;">HARX<span style="font-weight:400;"> - We inspire growth</span></p>
-<p style="margin:0;font-size:12px;line-height:1.6;color:#fbcfe8;">${langs.map((l) => escapeHtml(COPY[l].stop)).join('<br>')}<br>${escapeHtml(POSTAL_ADDRESS)}</p>
+<p style="margin:0;font-size:12px;line-height:1.6;color:#fbcfe8;">${langs.map((l) => escapeHtml(copy(l).stop)).join('<br>')}<br>${escapeHtml(POSTAL_ADDRESS)}</p>
 </td></tr>
 
 </table>

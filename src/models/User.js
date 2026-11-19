@@ -23,7 +23,8 @@ const userSchema = new mongoose.Schema({
   phone: {
     type: String,
     // Facultatif : l'inscription par e-mail ne le demande plus (il est redemandé à l'appel test de l'onboarding),
-    // les agents invités par e-mail l'ajoutent plus tard. Pas d'index unique : plusieurs comptes sans numéro coexistent.
+    // les agents invités par e-mail l'ajoutent plus tard, et les reps migrés de HARX v1 n'en ont souvent pas.
+    // Pas d'index unique : plusieurs comptes sans numéro coexistent.
     required: false,
   },
   linkedInId: {
@@ -162,6 +163,7 @@ const userSchema = new mongoose.Schema({
     tokenHash: { type: String, default: null, index: true },
     expiresAt: { type: Date, default: null },
     lastUsedAt: { type: Date, default: null },
+    lastRequestedAt: { type: Date, default: null },
   },
   /** Profile data carried over from HARX v1 (segment, languages, activities...). */
   legacyV1: {
