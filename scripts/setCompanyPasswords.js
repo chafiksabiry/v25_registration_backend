@@ -14,9 +14,12 @@ import User from '../src/models/User.js';
 dotenv.config();
 
 const APPLY = process.argv.includes('--apply');
-const PASSWORD = process.env.COMPANY_PASSWORD || 'P@str@mi@2026&';
+const PASSWORD = process.env.COMPANY_PASSWORD || '';
 
 async function main() {
+  if (!process.env.COMPANY_PASSWORD) {
+    throw new Error('COMPANY_PASSWORD required (no built-in default password).');
+  }
   const uri = process.env.MONGODB_URI;
   if (!uri) {
     console.error('MONGODB_URI is required');

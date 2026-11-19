@@ -6,7 +6,8 @@ import AgentInvitation from '../models/AgentInvitation.js';
 import { teamMemberInvitationEmail } from '../utils/harxMessages.js';
 import { appLoginUrl, sendAppEmail } from './brevoMail.js';
 import { roleConflict } from './teamRoleConflicts.js';
-import { assertCanAddSeat } from './companyProduct.js';
+import { assertCanAddSeat, getCompanyProductForAccess } from './companyProduct.js';
+import AgentListenGrant from '../models/AgentListenGrant.js';
 import { activeEmployments, hasEmployment, resolveActiveCompanyId } from '../utils/employments.js';
 import {
   allPermissions,
@@ -15,6 +16,10 @@ import {
   sanitizePermissions,
   PERMISSION_GROUPS,
   agentPermissions,
+  effectiveMemberPermissions,
+  resolveMemberListen,
+  listenIsOptIn,
+  productForWrite,
   isCallCenterAgent,
   isClientPortalUser,
 } from '../constants/companyPermissions.js';
@@ -62,6 +67,26 @@ async function loadCaller(callerUserId) {
   const caller = await User.findById(callerUserId);
   if (!caller) throw httpError('Caller not found', 401);
   return caller;
+}
+
+/** Titulaire PROUVÉ : l'appelant est le propriétaire de la société ET son identité vient d'un JWT valide. */
+function ownerProven(company, callerUserId, provenUserId) {
+  return Boolean(provenUserId) && String(provenUserId) === String(callerUserId) && isOwner(company, callerUserId);
+}
+
+/**
+ * `listenGrant` présent : il faut le titulaire PROUVÉ. Sans JWT valide → 401 (se reconnecter) ; un autre que le titulaire → 403.
+ * Rien n'est ignoré en silence : l'écran affiche l'erreur.
+ */
+export function assertListenGrantAllowed(company, callerUserId, provenUserId, listenGrant) {
+  if (listenGrant === undefined || listenGrant === null) return;
+  if (typeof listenGrant !== 'boolean') throw Object.assign(httpError('listenGrant must be a boolean', 400), { code: 'LISTEN_GRANT_INVALID' });
+  if (!isOwner(company, callerUserId)) {
+    throw Object.assign(httpError("Seul le titulaire du compte peut accorder ou retirer l'écoute des enregistrements.", 403), { code: 'LISTEN_OWNER_ONLY' });
+  }
+  if (!provenUserId || String(provenUserId) !== String(callerUserId)) {
+    throw Object.assign(httpError("Reconnectez-vous pour modifier l'écoute des enregistrements.", 401), { code: 'LISTEN_REAUTH_REQUIRED' });
+  }
 }
 
 async function assertCan(callerUserId, companyId, permission) {
@@ -115,7 +140,7 @@ function isOnline(date) {
   return Number.isFinite(time) && Date.now() - time < ONLINE_WINDOW_MS;
 }
 
-function serializeMember(doc, user) {
+function serializeMember(doc, user, product = null) {
   return {
     userId: String(doc.userId),
     email: doc.email || user?.email || '',
@@ -127,7 +152,8 @@ function serializeMember(doc, user) {
     online: doc.status === 'active' && isOnline(doc.lastSeenAt),
     lastSeenAt: doc.lastSeenAt || null,
     connectedAt: doc.connectedAt || null,
-    permissions: sanitizePermissions(doc.permissions),
+    // Droits réels (écoute des enregistrements comprise, selon l'offre) : ce que l'écran Équipe affiche et modifie.
+    permissions: effectiveMemberPermissions(doc, product),
     invitedAt: doc.invitedAt || null,
     createdAt: doc.createdAt || null,
   };
@@ -170,6 +196,7 @@ class CompanyMemberService {
         companyIds: [String(owned._id)],
         permissions: allPermissions(),
         preset: 'owner',
+        listenOptIn: listenIsOptIn(await getCompanyProductForAccess(owned._id)),
       };
     }
     // Contact d'un client (portail en lecture seule) : traité avant le repli « titulaire » ci-dessous, qui donnerait tout.
@@ -178,14 +205,16 @@ class CompanyMemberService {
     // Un agent employé par un centre : sa société est celle du centre actif (l'un de ses emplois), avec les seuls droits d'un agent.
     if ((!membership || hasEmployment(caller, requestedCompanyId)) && isCallCenterAgent(caller)) {
       const employments = await this.agentEmployments(caller);
+      const activeCompanyId = resolveActiveCompanyId(caller, requestedCompanyId);
       return {
         isOwner: false,
         isAgent: true,
-        companyId: resolveActiveCompanyId(caller, requestedCompanyId),
+        companyId: activeCompanyId,
         companyIds: employments.map((e) => e.companyId),
         employments,
-        permissions: agentPermissions(),
+        permissions: await this.agentPermissionsFor(caller._id, activeCompanyId),
         preset: 'agent',
+        listenOptIn: activeCompanyId ? listenIsOptIn(await getCompanyProductForAccess(activeCompanyId)) : false,
       };
     }
     // No membership document means the account is not a restricted teammate
@@ -195,14 +224,26 @@ class CompanyMemberService {
     }
     await this.markPresent(caller._id);
     const fresh = await CompanyMembership.findById(membership._id);
+    const product = await getCompanyProductForAccess(membership.companyId);
     return {
       isOwner: false,
       isAgent: false,
       companyId: String(membership.companyId),
       companyIds: [String(membership.companyId)],
-      permissions: sanitizePermissions(membership.permissions),
+      permissions: effectiveMemberPermissions(fresh || membership, product),
       preset: (fresh || membership).preset || 'custom',
+      listenOptIn: listenIsOptIn(product),
     };
+  }
+
+  /** Droits d'un agent dans ce centre : défaut de l'offre, puis décision enregistrée du titulaire sur l'écoute. */
+  async agentPermissionsFor(userId, companyId) {
+    if (!companyId || !mongoose.Types.ObjectId.isValid(String(companyId))) return agentPermissions({ product: 'unknown' });
+    const [product, grant] = await Promise.all([
+      getCompanyProductForAccess(companyId),
+      AgentListenGrant.findOne({ companyId: new mongoose.Types.ObjectId(String(companyId)), userId }).lean(),
+    ]);
+    return agentPermissions({ product, listen: typeof grant?.listen === 'boolean' ? grant.listen : null });
   }
 
   async markPresent(userId) {
@@ -250,6 +291,7 @@ class CompanyMemberService {
 
   async list(callerUserId, companyId) {
     const { company } = await assertCan(callerUserId, companyId, 'members.view');
+    const product = await getCompanyProductForAccess(company._id);
     const owner = await User.findById(company.userId).select('fullName email phone');
     const docs = await CompanyMembership.find({ companyId: company._id }).sort({ createdAt: -1 });
     const userIds = docs.map((d) => d.userId);
@@ -279,7 +321,7 @@ class CompanyMemberService {
       preset: i.preset || 'custom',
       status: 'invited',
       online: false,
-      permissions: sanitizePermissions(i.permissions),
+      permissions: effectiveMemberPermissions(i, product),
       invitedAt: i.invitedAt || null,
       createdAt: i.createdAt || null,
       existingAccount: true,
@@ -289,12 +331,12 @@ class CompanyMemberService {
       ownerRow,
       ...docs
         .filter((d) => String(d.userId) !== String(company.userId))
-        .map((d) => serializeMember(d, byId.get(String(d.userId)))),
+        .map((d) => serializeMember(d, byId.get(String(d.userId)), product)),
       ...pendingRows,
     ];
   }
 
-  async inviteExistingAccount({ caller, company, existingUser, preset, rights, sendEmail }) {
+  async inviteExistingAccount({ caller, company, existingUser, preset, rights, listenGrantedAt = null, listenRevokedAt = null, sendEmail }) {
     const email = normalizeEmail(existingUser.email);
     let invitation = await AgentInvitation.findOne({ companyId: company._id, email });
     if (invitation && invitation.status === 'accepted' && invitation.kind === 'member') {
@@ -307,6 +349,8 @@ class CompanyMemberService {
       kind: 'member',
       preset,
       permissions: rights,
+      listenGrantedAt,
+      listenRevokedAt,
       fullName: existingUser.fullName || '',
       status: 'pending',
       invitedAt: new Date(),
@@ -361,7 +405,7 @@ class CompanyMemberService {
     };
   }
 
-  async invite(callerUserId, payload) {
+  async invite(callerUserId, payload, { provenUserId = null } = {}) {
     const {
       companyId,
       firstName,
@@ -370,10 +414,12 @@ class CompanyMemberService {
       phone,
       preset = 'operator',
       permissions,
+      listenGrant,
       sendEmail = true,
     } = payload || {};
 
     const { caller, company } = await assertCan(callerUserId, companyId, 'members.invite');
+    assertListenGrantAllowed(company, caller._id, provenUserId, listenGrant);
     await assertCanAddSeat(company._id);
     const normalizedEmail = normalizeEmail(email);
     if (!normalizedEmail || !normalizedEmail.includes('@')) {
@@ -383,9 +429,20 @@ class CompanyMemberService {
     const familyName = String(lastName || '').trim();
     if (!givenName) throw httpError('First name is required', 400);
 
+    // Offre Accueil : le profil par défaut « operator » n'écoute pas les enregistrements ; seule une case cochée
+    // (permissions['calls.listen'] === true) ou le profil admin accorde l'écoute.
+    const product = await getCompanyProductForAccess(company._id);
     const resolvedPreset = presetPermissions(preset) ? String(preset).toLowerCase() : 'custom';
-    const base = presetPermissions(preset) || emptyPermissions();
-    const rights = permissions ? sanitizePermissions({ ...base, ...permissions }) : base;
+    const base = presetPermissions(preset, { product: productForWrite(product) }) || emptyPermissions();
+    const requested = permissions ? sanitizePermissions({ ...base, ...permissions }) : base;
+    // Écoute : seule l'intention explicite `listenGrant` du titulaire prouvé compte (jamais le calls.listen du jeu complet).
+    const { rights, listenGrantedAt, listenRevokedAt } = resolveMemberListen({
+      product,
+      rights: requested,
+      preset: resolvedPreset,
+      ownerProven: ownerProven(company, caller._id, provenUserId),
+      listenGrant,
+    });
     if (!Object.values(rights).some(Boolean)) {
       throw httpError('Select at least one permission', 400);
     }
@@ -401,7 +458,7 @@ class CompanyMemberService {
       if (already || String(company.userId) === String(existingUser._id)) {
         throw httpError('Cette personne fait déjà partie de votre équipe.', 409);
       }
-      return this.inviteExistingAccount({ caller, company, existingUser, preset: resolvedPreset, rights, sendEmail });
+      return this.inviteExistingAccount({ caller, company, existingUser, preset: resolvedPreset, rights, listenGrantedAt, listenRevokedAt, sendEmail });
     }
     const existingMembership = await CompanyMembership.findOne({ email: normalizedEmail }).select('_id');
     if (existingMembership) {
@@ -431,6 +488,8 @@ class CompanyMemberService {
       fullName: user.fullName || `${givenName} ${familyName}`.trim(),
       permissions: rights,
       preset: resolvedPreset,
+      listenGrantedAt,
+      listenRevokedAt,
       status: 'pending',
       invitedByUserId: caller._id,
     });
@@ -461,7 +520,7 @@ class CompanyMemberService {
     }
 
     return {
-      member: serializeMember(membership, user),
+      member: serializeMember(membership, user, product),
       emailSent,
       emailError,
       temporaryPassword: emailSent ? undefined : tempPassword,
@@ -519,6 +578,7 @@ class CompanyMemberService {
     await user.save();
     await membership.save();
 
+    const product = await getCompanyProductForAccess(company._id);
     let emailSent = false;
     let emailError = null;
     try {
@@ -542,16 +602,17 @@ class CompanyMemberService {
     }
 
     return {
-      member: serializeMember(membership, user),
+      member: serializeMember(membership, user, product),
       emailSent,
       emailError,
       temporaryPassword: emailSent ? undefined : tempPassword,
     };
   }
 
-  async update(callerUserId, companyId, memberUserId, payload) {
+  async update(callerUserId, companyId, memberUserId, payload, { provenUserId = null } = {}) {
     await assertCan(callerUserId, companyId, 'members.edit');
     const company = await findCompany(companyId);
+    assertListenGrantAllowed(company, callerUserId, provenUserId, payload?.listenGrant);
     if (String(company.userId) === String(memberUserId)) {
       throw httpError('Owner permissions cannot be changed', 400);
     }
@@ -561,17 +622,39 @@ class CompanyMemberService {
     });
     if (!membership) throw httpError('Member not found', 404);
 
+    const product = await getCompanyProductForAccess(company._id);
     const preset = payload?.preset;
-    const base = presetPermissions(preset) || sanitizePermissions(membership.permissions);
-    membership.permissions = payload?.permissions
+    // Point de départ : le profil demandé (Accueil : « operator » sans écoute), sinon les droits réels du membre.
+    const base = presetPermissions(preset, { product: productForWrite(product) }) || sanitizePermissions(membership.permissions);
+    const requested = payload?.permissions
       ? sanitizePermissions({ ...base, ...payload.permissions })
       : base;
-    membership.preset = presetPermissions(preset)
-      ? String(preset).toLowerCase()
-      : 'custom';
+    // Corps réduit à l'intention d'écoute (`{ listenGrant }`, interrupteur de l'écran Équipe) : profil et droits inchangés.
+    const listenOnly = preset === undefined && !payload?.permissions;
+    const previousPreset = membership.preset;
+    if (!listenOnly) {
+      membership.preset = presetPermissions(preset)
+        ? String(preset).toLowerCase()
+        : 'custom';
+    }
+    // Écoute : seule l'intention explicite `listenGrant` du titulaire prouvé la pose ou la retire ; un membre avec
+    // members.edit (même admin) ne l'accorde ni à lui-même ni aux autres, et le calls.listen du jeu complet est ignoré.
+    const decided = resolveMemberListen({
+      product,
+      rights: requested,
+      preset: membership.preset,
+      previousPreset,
+      ownerProven: ownerProven(company, callerUserId, provenUserId),
+      listenGrant: payload?.listenGrant,
+      previousGrantedAt: membership.listenGrantedAt,
+      previousRevokedAt: membership.listenRevokedAt,
+    });
+    membership.permissions = decided.rights;
+    membership.listenGrantedAt = decided.listenGrantedAt;
+    membership.listenRevokedAt = decided.listenRevokedAt;
     await membership.save();
     const user = await User.findById(memberUserId).select('fullName email phone');
-    return serializeMember(membership, user);
+    return serializeMember(membership, user, product);
   }
 
   async remove(callerUserId, companyId, memberUserId) {

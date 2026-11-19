@@ -9,7 +9,8 @@ test('a rep migrated from HARX v1 can be saved without a phone', () => {
   assert.equal(err?.errors?.phone, undefined);
 });
 
-test('a regular account still needs a phone', () => {
+// recette (f9e90c9, « téléphone facultatif côté serveur ») : le numéro n'est plus exigé pour aucun compte.
+test('a regular account can also be saved without a phone (phone optional on recette)', () => {
   const err = new User({ ...base }).validateSync();
-  assert.ok(err?.errors?.phone);
+  assert.equal(err?.errors?.phone, undefined);
 });

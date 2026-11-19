@@ -69,6 +69,8 @@ function normalizeProfile(p) {
     kybStatus: p.kybStatus === 'submitted' ? 'submitted' : 'draft',
     documents: (Array.isArray(p.documents) ? p.documents : []).slice(0, 20).map((d) => ({ name: str(d?.name, 160), size: Math.max(0, num(d?.size) ?? 0), ...(d?.kind ? { kind: str(d.kind, 40) } : {}) })).filter((d) => d.name),
   };
+  const phone = String(p.phone ?? '').replace(/[\s().-]/g, '');
+  if (/^\+[1-9]\d{7,14}$/.test(phone)) out.phone = phone;
   if (typeof p.country === 'string') out.country = str(p.country, 4).toUpperCase();
   if (isObj(p.address)) out.address = { street: str(p.address.street, 200), postalCode: str(p.address.postalCode, 20), city: str(p.address.city, 100) };
   return { value: out };
@@ -180,9 +182,18 @@ function normalizeClientScreen(c) {
   return { value: { domains, byOperation } };
 }
 
-/** Un agent n'enregistre que ses propres préférences : l'état partagé du centre n'est pas de son ressort. */
+/**
+ * Un agent n'enregistre que ses propres préférences : l'état partagé du centre n'est pas de son ressort. Un membre de
+ * l'équipe écrit l'état du centre sauf l'identité (`profile` : société, coordonnées, justificatifs), réservée au titulaire.
+ */
 export function writableParts(access, value) {
-  if (access !== 'agent') return value;
-  const { company: _ignored, ...own } = value;
-  return own;
+  if (access === 'agent') {
+    const { company: _ignored, ...own } = value;
+    return own;
+  }
+  if (access === 'member' && value.company && 'profile' in value.company) {
+    const { profile: _profile, ...company } = value.company;
+    return { ...value, company };
+  }
+  return value;
 }

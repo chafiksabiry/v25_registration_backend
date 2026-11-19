@@ -6,6 +6,7 @@ import {
   resendCallCenterAgentInvite,
   removeCallCenterAgentInvitation,
   removeCallCenterAgentEmployment,
+  setCallCenterAgentListen,
 } from '../controllers/callCenterAgentController.js';
 
 import {
@@ -22,6 +23,7 @@ import {
   updateClient,
   getWorkspaceState,
   saveWorkspaceState,
+  updateCompanyContact,
 } from '../controllers/callCenterClientController.js';
 
 import {
@@ -54,6 +56,8 @@ router.post('/agents/:userId/resend-invite', resendCallCenterAgentInvite);
 router.delete('/agents/:userId', removeCallCenterAgentInvitation);
 // Retire l'agent de CE centre seulement (ses autres centres ne sont pas touchés).
 router.delete('/agents/:userId/employment', removeCallCenterAgentEmployment);
+// Écoute des enregistrements d'un agent (secrétaire) : accordée ou retirée par le titulaire du centre.
+router.patch('/agents/:userId/recordings', authenticateUserJwt, setCallCenterAgentListen);
 
 // Clients du centre et rattachement client / opération
 router.get('/clients', listClients);
@@ -85,6 +89,8 @@ router.put('/operation-profiles/:gigId', setOperationProfile);
 // État du portail conservé côté serveur (files, mise en route, lignes testées ; académie et préférences de la personne)
 router.get('/workspace-state', getWorkspaceState);
 router.put('/workspace-state', saveWorkspaceState);
+// Coordonnées de l'entreprise (e-mail, téléphone, adresse) : titulaire seulement, jeton de connexion exigé ; nom, pays, EIN et KYB jamais modifiables ici
+router.put('/company-profile', authenticateUserJwt, updateCompanyContact);
 
 // Planning des agents : l'agent lit son planning et fait ses demandes ; le centre planifie et répond
 router.get('/schedule/my-shifts', listMyShifts);

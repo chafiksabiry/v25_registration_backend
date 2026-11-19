@@ -22,11 +22,10 @@ const userSchema = new mongoose.Schema({
   },
   phone: {
     type: String,
-    // Staff invited by email (employerCompanyId) add their phone number later, and
-    // reps migrated from HARX v1 often have none: they add it when completing their profile.
-    required: function() {
-      return !this.linkedInId && !this.employerCompanyId && this.source !== 'harx_v1_import';
-    }
+    // Facultatif : l'inscription par e-mail ne le demande plus (il est redemandé à l'appel test de l'onboarding),
+    // les agents invités par e-mail l'ajoutent plus tard, et les reps migrés de HARX v1 n'en ont souvent pas.
+    // Pas d'index unique : plusieurs comptes sans numéro coexistent.
+    required: false,
   },
   linkedInId: {
     type: String,
@@ -72,7 +71,8 @@ const userSchema = new mongoose.Schema({
     emailChange: {
       newEmail: String,
       code: String,
-      expiresAt: Date
+      expiresAt: Date,
+      attempts: { type: Number, default: 0 }
     },
     passwordChange: {
       code: String,
