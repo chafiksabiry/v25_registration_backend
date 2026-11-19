@@ -22,10 +22,9 @@ const userSchema = new mongoose.Schema({
   },
   phone: {
     type: String,
-    // Staff invited by email (employerCompanyId) add their phone number later.
-    required: function() {
-      return !this.linkedInId && !this.employerCompanyId;
-    }
+    // Facultatif : l'inscription par e-mail ne le demande plus (il est redemandé à l'appel test de l'onboarding),
+    // les agents invités par e-mail l'ajoutent plus tard. Pas d'index unique : plusieurs comptes sans numéro coexistent.
+    required: false,
   },
   linkedInId: {
     type: String,
