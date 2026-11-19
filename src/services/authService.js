@@ -25,6 +25,7 @@ import {
   linkTtlHours,
 } from '../utils/reengagementRequest.js';
 import { normalizeOptionalPhone } from '../utils/phone.js';
+import { pickSignupFields } from '../utils/signupFields.js';
 
 
 // Client initialized lazily inside methods to ensure env vars are loaded
@@ -162,7 +163,10 @@ class AuthService {
     }
   }
 
-  async register(userData, req) {
+  async register(rawUserData, req) {
+    // Liste blanche : seuls les champs des formulaires d'inscription sont lus ; isVerified, typeUser,
+    // employerCompanyId, linkedInId, verificationCode... envoyés par le client sont ignorés (voir utils/signupFields.js).
+    const userData = pickSignupFields(rawUserData);
     console.log('Register attempt for email:', userData.email);
     const password = String(userData.password || '');
     if (!(password.length >= 8 && /[A-Za-z]/.test(password) && /[0-9]/.test(password))) {
@@ -186,11 +190,14 @@ class AuthService {
     const clientIp = getClientIp(req);
     const locationInfo = await this.enrichIPInfo(clientIp);
 
-    const { phone: _rawPhone, ...rest } = userData;
     const result = await userRepository.create({
-      ...rest,
+      fullName: userData.fullName,
       email,
+      password,
       ...(phone ? { phone } : {}),
+      ...(userData.attribution ? { attribution: userData.attribution } : {}),
+      // Champs fixés par le serveur uniquement.
+      isVerified: false,
       verificationCode: {
         code: verificationCode,
         expiresAt: verificationExpiry
