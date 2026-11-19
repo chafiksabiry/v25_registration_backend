@@ -20,12 +20,12 @@ dotenv.config();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_URI =
   process.env.MONGODB_URI ||
-  'mongodb://mongo:DiGaBWUZXCkIxlZMuntztBaFJcOlUJIg@maglev.proxy.rlwy.net:40270/harx?authSource=admin';
+  '' /* MONGODB_URI required: no committed URI */;
 const APPLY = process.argv.includes('--apply');
 const DRY_RUN = !APPLY;
 
-const DEFAULT_REP_PASSWORD = process.env.RESTORE_REP_PASSWORD || 'HarxRestore2026!';
-const DEFAULT_ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'P@str@mi@2026&';
+const DEFAULT_REP_PASSWORD = process.env.RESTORE_REP_PASSWORD || '';
+const DEFAULT_ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 
 const RESTORE_USERS = [
   {
@@ -281,6 +281,9 @@ async function ensureAgent(db, spec, userId) {
 }
 
 async function main() {
+  if (!process.env.RESTORE_REP_PASSWORD || !process.env.ADMIN_PASSWORD) {
+    throw new Error('RESTORE_REP_PASSWORD, ADMIN_PASSWORD required (no built-in default password).');
+  }
   const jsonPath = path.join(__dirname, 'restore-users.json');
   const users = fs.existsSync(jsonPath)
     ? JSON.parse(fs.readFileSync(jsonPath, 'utf8'))

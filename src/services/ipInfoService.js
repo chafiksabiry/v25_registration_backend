@@ -2,11 +2,15 @@ import axios from 'axios';
 
 class IPInfoService {
   constructor() {
-    this.apiToken = process.env.IP_INFO_TOKEN || '9150a0245fbc83';
+    this.apiToken = process.env.IP_INFO_TOKEN || '';
     this.baseURL = 'https://ipinfo.io';
   }
 
   async getIPInfo(ip4Address) {
+    // No token committed in the code any more: without IP_INFO_TOKEN, the location is simply skipped.
+    if (!this.apiToken) {
+      return { success: false, error: 'IP_INFO_TOKEN is not set', data: null };
+    }
     try {
       const url = `${this.baseURL}/${ip4Address}?token=${this.apiToken}`;
       
