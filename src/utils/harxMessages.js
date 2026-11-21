@@ -133,6 +133,53 @@ export function countryWaitlistEmail({ countryName, locale }) {
   };
 }
 
+const NUMBERS_WAITLIST_TEXT = {
+  fr: {
+    subject: (c) => `HARX Nomad — nous vous prévenons dès qu'un numéro est disponible en ${c}`,
+    eyebrow: 'LISTE D\'ATTENTE · NUMÉRO',
+    title: 'Merci, votre demande est enregistrée',
+    intro: (c) => `Aucun numéro n'est encore disponible en ${c}. Nous vous prévenons dès qu'il y en a un. Votre compte HARX est bien créé.`,
+    footer: 'Si vous n\'êtes pas à l\'origine de cette demande, ignorez simplement ce message.',
+  },
+  en: {
+    subject: (c) => `HARX Nomad — we will notify you as soon as a number is available in ${c}`,
+    eyebrow: 'WAITING LIST · NUMBER',
+    title: 'Thank you, your request is registered',
+    intro: (c) => `No number is available yet in ${c}; we will notify you as soon as one is. Your HARX account is already created.`,
+    footer: 'If you did not make this request, simply ignore this message.',
+  },
+  es: {
+    subject: (c) => `HARX Nomad — le avisaremos en cuanto haya un número disponible en ${c}`,
+    eyebrow: 'LISTA DE ESPERA · NÚMERO',
+    title: 'Gracias, su solicitud está registrada',
+    intro: (c) => `Todavía no hay ningún número disponible en ${c}; le avisaremos en cuanto haya uno. Su cuenta HARX ya está creada.`,
+    footer: 'Si no ha realizado esta solicitud, ignore este mensaje.',
+  },
+  ar: {
+    subject: (c) => `HARX Nomad — سنُعلمك فور توفر رقم في ${c}`,
+    eyebrow: 'قائمة الانتظار · رقم',
+    title: 'شكرًا، تم تسجيل طلبك',
+    intro: (c) => `لا يتوفر أي رقم بعد في ${c}؛ سنُعلمك فور توفر رقم. حسابك في HARX منشأ بالفعل.`,
+    footer: 'إذا لم تقدّم هذا الطلب، فتجاهل هذه الرسالة.',
+  },
+};
+
+/** Abonné Nomad Solo (compte déjà créé) en attente d'un numéro dans son pays : ni « pays pas encore ouvert », ni « aucun compte créé ». */
+export function numbersWaitlistEmail({ countryName, locale }) {
+  const lang = String(locale || '').toLowerCase().slice(0, 2);
+  const t = NUMBERS_WAITLIST_TEXT[lang] || NUMBERS_WAITLIST_TEXT.fr;
+  return {
+    subject: t.subject(countryName),
+    html: harxEmailShell({
+      eyebrow: t.eyebrow,
+      title: t.title,
+      intro: t.intro(escapeHtml(countryName)),
+      footer: t.footer,
+      bodyHtml: '',
+    }),
+  };
+}
+
 export function agentInvitationNoticeEmail({ firstName, companyName, loginUrl }) {
   const safeName = escapeHtml(firstName || '');
   const org = escapeHtml(companyName || 'un centre d\'appels');
