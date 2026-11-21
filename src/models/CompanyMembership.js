@@ -46,6 +46,19 @@ const companyMembershipSchema = new mongoose.Schema({
     enum: ['pending', 'invited', 'active'],
     default: 'pending',
   },
+  /**
+   * Date à laquelle le titulaire (ou un admin de l'équipe) a accordé l'écoute des enregistrements à ce membre. Sur
+   * l'offre Accueil, `permissions['calls.listen']` ne compte que si cette date est posée (ou profil admin).
+   */
+  listenGrantedAt: {
+    type: Date,
+    default: null,
+  },
+  /** Date à laquelle le titulaire a retiré l'écoute (sert pour un admin, qui écoute par défaut). */
+  listenRevokedAt: {
+    type: Date,
+    default: null,
+  },
   invitedByUserId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',

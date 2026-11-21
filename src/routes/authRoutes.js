@@ -1,7 +1,8 @@
 import express from 'express';
 import { register, login, verifyEmail, linkedInAuth, sendOTP, sendVerificationEmail, checkUserType, setProduct, verifyOTP, verifyAccount, generateVerificationCode, changePassword, linkedinSignIn, checkFirstLogin, changeUserType, resendVerification, checkEmail, checkPhone, reengageLogin, reengageRequest, inviteLogin } from '../controllers/authController.js';
 import rateLimit from 'express-rate-limit';
-import { authenticate } from '../middleware/auth.js';
+import { authenticate, optionalAuthenticate, requireBodySelfOrAdmin } from '../middleware/auth.js';
+import { requireAdmin } from '../middleware/requireAdmin.js';
 
 const router = express.Router();
 
@@ -30,13 +31,17 @@ router.post('/send-otp', sendOTP);
 
 // Route pour vérifier l'OTP
 router.post('/verify-otp', verifyOTP);
-router.post('/verify-account', verifyAccount);
+// Marks the account verified: only the account itself (token received after the e-mail / SMS code) or an admin.
+router.post('/verify-account', authenticate, requireBodySelfOrAdmin, verifyAccount);
 router.post('/generate-verification-code', generateVerificationCode);
 router.post('/change-password', authenticate, changePassword);
-router.post('/send-verification-email', sendVerificationEmail);
-router.post('/check-first-login', checkFirstLogin);
-router.post('/change-user-type', changeUserType);
-router.post('/check-user-type', checkUserType);
+// Sends a caller-chosen code to any address: no front uses it any more; administrators only.
+router.post('/send-verification-email', authenticate, requireAdmin, sendVerificationEmail);
+router.post('/check-first-login', authenticate, requireBodySelfOrAdmin, checkFirstLogin);
+// The account itself (JWT), an admin, or — right after sign-up, before any token — the FIRST choice of a type only.
+router.post('/change-user-type', optionalAuthenticate, changeUserType);
+// Anonymous callers (sign-in screen, before the code) only learn the type; the rest needs the account's token.
+router.post('/check-user-type', optionalAuthenticate, checkUserType);
 router.post('/product', authenticate, setProduct);
 router.post('/resend-verification', resendVerification);
 export default router;

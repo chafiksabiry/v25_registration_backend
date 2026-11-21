@@ -14,6 +14,9 @@ const agentInvitationSchema = new mongoose.Schema(
     kind: { type: String, enum: ['agent', 'member'], default: 'agent' },
     preset: { type: String, default: null },
     permissions: { type: mongoose.Schema.Types.Mixed, default: null },
+    /** Écoute des enregistrements accordée explicitement à l'invitation (recopiée sur le rattachement à l'acceptation). */
+    listenGrantedAt: { type: Date, default: null },
+    listenRevokedAt: { type: Date, default: null },
     fullName: { type: String, trim: true, default: '' },
     /** Téléphone saisi par le centre qui invite (jamais celui du compte de la personne invitée). */
     phone: { type: String, trim: true, default: '' },

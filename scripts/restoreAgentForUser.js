@@ -8,11 +8,8 @@
  */
 import mongoose from 'mongoose';
 
-const DEFAULT_URI = process.env.MONGODB_URI;
-if (!DEFAULT_URI) {
-  console.error('MONGODB_URI environment variable is required (set it in your shell, never in the code).');
-  process.exit(1);
-}
+const DEFAULT_URI =
+  '' /* MONGODB_URI required: no committed URI */;
 
 const args = Object.fromEntries(
   process.argv.slice(2).map((part) => {
