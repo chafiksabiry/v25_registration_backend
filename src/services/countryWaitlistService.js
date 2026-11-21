@@ -22,8 +22,8 @@ const regionNames = (locale) => {
 };
 
 /** E-mail de confirmation selon la liste : « numéros » (abonné Solo avec compte) ou « pays » (CLOUD, aucun compte). */
-export function waitlistMessage({ kind = 'country', countryName, locale }) {
-  return kind === 'numbers' ? numbersWaitlistEmail({ countryName, locale }) : countryWaitlistEmail({ countryName, locale });
+export function waitlistMessage({ kind = 'country', countryName, countryCode, locale }) {
+  return kind === 'numbers' ? numbersWaitlistEmail({ countryName, countryCode, locale }) : countryWaitlistEmail({ countryName, countryCode, locale });
 }
 
 function fail(message, statusCode = 400) {
@@ -66,7 +66,7 @@ export async function joinWaitlist({ email, country, product = 'callcentre', com
 
   try {
     const countryName = regionNames(locale)?.of(cc) || cc;
-    const message = waitlistMessage({ kind: k, countryName, locale });
+    const message = waitlistMessage({ kind: k, countryName, countryCode: cc, locale });
     await sendAppEmail({ to: cleanEmail, subject: message.subject, html: message.html });
     entry.confirmationSentAt = new Date();
     await entry.save();

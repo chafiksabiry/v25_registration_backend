@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { normalizeWorkspaceInput, writableParts } from '../services/callCenterWorkspaceStateValidation.js';
+import { normalizeWorkspaceInput, writableParts, isoCountry } from '../services/callCenterWorkspaceStateValidation.js';
 
 const ok = normalizeWorkspaceInput({
   company: {
@@ -32,6 +32,32 @@ assert.deepEqual(prof.value.company.profile.documents, [{ name: 'kbis.pdf', size
 assert.equal(prof.value.company.testCallOk, true);
 assert.equal(prof.value.company.testCall.to, '+33623984708');
 assert.equal(normalizeWorkspaceInput({ company: { profile: 'x' } }).errors.length, 1);
+
+// pays de la pièce d'identité (Nomad Solo) : conservé au niveau du profil et de chaque justificatif, code ISO alpha-2 en majuscules
+const idp = normalizeWorkspaceInput({ company: { profile: { name: 'Ada', country: 'ma', identityCountry: ' fr ', documents: [
+  { name: 'passeport.pdf', size: 10, kind: 'identity', issuingCountry: 'us' },
+  { name: 'cni.pdf', size: 10, kind: 'identity', issuingCountry: 'XX' },
+  { name: 'kbis.pdf', size: 10, issuingCountry: 42 },
+] } } });
+assert.deepEqual(idp.errors, []);
+assert.equal(idp.value.company.profile.identityCountry, 'FR');
+assert.equal(idp.value.company.profile.country, 'MA');
+assert.deepEqual(idp.value.company.profile.documents, [
+  { name: 'passeport.pdf', size: 10, kind: 'identity', issuingCountry: 'US' },
+  { name: 'cni.pdf', size: 10, kind: 'identity' },
+  { name: 'kbis.pdf', size: 10 },
+]);
+for (const bad of ['', 'F', 'FRA', 'ZZ', 'UK', 'QQ', '1A', null, 12, { cc: 'FR' }]) {
+  const r = normalizeWorkspaceInput({ company: { profile: { name: 'Ada', identityCountry: bad } } });
+  assert.deepEqual(r.errors, [], `pas d'erreur pour ${JSON.stringify(bad)}`);
+  assert.equal('identityCountry' in r.value.company.profile, false, `ignoré : ${JSON.stringify(bad)}`);
+}
+assert.equal(isoCountry('gb'), 'GB');
+assert.equal(isoCountry('XK'), 'XK');
+assert.equal(isoCountry('ZZ'), undefined);
+// forme exacte enregistrée (relue telle quelle par l'orchestrateur, voir numberAvailability) : profile.country + profile.identityCountry
+assert.deepEqual(Object.keys(normalizeWorkspaceInput({ company: { profile: { name: 'Ada', country: 'MA', identityCountry: 'US' } } }).value.company.profile).sort(),
+  ['country', 'documents', 'identityCountry', 'kybStatus', 'name', 'representativeEmail', 'siren']);
 
 // mauvais formats : refusés sans rien écrire
 for (const body of [{ company: 'x' }, { company: { queues: 'x' } }, { company: { testedLines: [] } }, { company: { onboarding: 3 } }, { user: [] }]) {
