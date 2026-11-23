@@ -5,6 +5,8 @@ const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const MAX_QUEUES = 50;
 const MAX_LINES = 100;
 const STEP_IDS = ['company', 'team', 'plan', 'telephony', 'test'];
+/** Profils de compte connus du portail : « solo » (Nomad, indépendant) ou « company » (entreprise). */
+const ACCOUNT_PROFILES = ['solo', 'company'];
 const num = (v) => (Number.isFinite(Number(v)) && v !== null && v !== '' ? Number(v) : undefined);
 
 function normalizeQueues(list) {
@@ -148,6 +150,8 @@ export function normalizeWorkspaceInput(body) {
       take('testCall', normalizeTestCall);
       take('clientScreen', normalizeClientScreen);
       if (has(body.company, 'testCallOk')) c.testCallOk = Boolean(body.company.testCallOk);
+      // Profil du compte (Nomad = « solo ») : le portail le relit dans tout navigateur, même sans mémoire locale. Valeur inconnue ignorée.
+      if (has(body.company, 'accountProfile') && ACCOUNT_PROFILES.includes(body.company.accountProfile)) c.accountProfile = body.company.accountProfile;
       value.company = c;
     }
   }
