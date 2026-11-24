@@ -16,8 +16,20 @@ function publicApiBase() {
   ).replace(/\/$/, '');
 }
 
+/**
+ * Bandeau HARX des e-mails : intégré au message (pièce jointe inline, Content-ID HARX_LOGO_CID),
+ * pour qu'il s'affiche sans « Afficher les images ». sendAppEmail joint le fichier sur le relais SMTP
+ * et, sur l'API Brevo (pas de Content-ID), remplace la référence par l'URL publique harxLogoUrl().
+ */
+export const HARX_LOGO_CID = 'harx-logo';
+export const HARX_LOGO_SRC = `cid:${HARX_LOGO_CID}`;
+
+export function harxLogoUrl() {
+  return `${publicApiBase()}/email/harx-logo.jpg`;
+}
+
 function harxEmailShell({ eyebrow, title, intro, bodyHtml, footer }) {
-  const logoUrl = escapeHtml(`${publicApiBase()}/email/logo-pink.png`);
+  const logoUrl = HARX_LOGO_SRC;
   return `<!DOCTYPE html>
 <html lang="fr">
   <body style="margin:0;padding:0;background-color:#fff1f2;">
