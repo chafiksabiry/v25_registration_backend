@@ -1,3 +1,5 @@
+import { accountClosureService, sendClosureError } from '../services/accountClosureService.js';
+import { tokenUserId } from '../middleware/auth.js';
 import authService from '../services/authService.js';
 import { getAdminStats, listUsers } from '../services/adminService.js';
 import { getUserDetail, updateUserFinancials } from '../services/adminUserDetailService.js';
@@ -53,6 +55,7 @@ export const adminUsers = async (req, res) => {
       verified: req.query.verified,
       onboardingStatus: req.query.onboardingStatus,
       planName: req.query.planName,
+      status: req.query.status,
     });
     res.status(200).json({ success: true, data });
   } catch (error) {
@@ -208,5 +211,34 @@ export const adminOnboardingSatisfaction = async (req, res) => {
     res.status(500).json({
       message: error.message || 'Failed to load onboarding satisfaction',
     });
+  }
+};
+
+/** PATCH /api/admin/users/:userId/status — `{ disabled: boolean, reason?: string }` : désactive ou réactive le compte (maquettes A2, A2b). */
+export const adminUserStatus = async (req, res) => {
+  try {
+    const data = await accountClosureService.setDisabled({
+      userId: req.params.userId,
+      disabled: req.body?.disabled,
+      reason: req.body?.reason,
+      admin: { userId: tokenUserId(req.user), name: req.user?.fullName || req.user?.email || null },
+    });
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    sendClosureError(res, error);
+  }
+};
+
+/** DELETE /api/admin/users/:userId — `{ confirmEmail }` (l'email du compte, retapé) : suppression définitive (maquette A3). */
+export const adminDeleteUser = async (req, res) => {
+  try {
+    const data = await accountClosureService.deleteAccount({
+      userId: req.params.userId,
+      actor: { type: 'admin', userId: tokenUserId(req.user) },
+      confirmEmail: req.body?.confirmEmail,
+    });
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    sendClosureError(res, error);
   }
 };

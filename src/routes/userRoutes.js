@@ -9,7 +9,8 @@ import {
   requestPasswordChange,
   confirmPasswordChange,
   requestPhoneChange,
-  confirmPhoneChange
+  confirmPhoneChange,
+  deleteOwnAccount
 } from '../controllers/userController.js';
 import { authenticate, authenticateUserOrService, requireSelf, requireSelfOrAdmin } from '../middleware/auth.js';
 
@@ -38,6 +39,9 @@ router.post('/:userId/phone/confirm-change', authenticate, requireSelf, confirmP
 
 // Legacy endpoint kept for compatibility — now requires a code from the email flow
 router.post('/:userId/change-password', authenticate, requireSelf, changeUserPassword);
+
+// POST /api/users/:userId/delete-account — l'abonné supprime son compte (email + mot de passe ; maquette B4).
+router.post('/:userId/delete-account', authenticate, requireSelf, deleteOwnAccount);
 
 // GET /api/users/:userId/ip-history - Récupérer l'historique IP d'un utilisateur
 router.get('/:userId/ip-history', authenticate, requireSelfOrAdmin, getUserIPHistory);

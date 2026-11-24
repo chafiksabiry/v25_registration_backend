@@ -197,6 +197,7 @@ export async function listUsers({
   verified = '',
   onboardingStatus = '',
   planName = '',
+  status = '',
 } = {}) {
   const safeLimit = Math.min(Math.max(Number(limit) || 25, 1), 100);
   const safePage = Math.max(Number(page) || 1, 1);
@@ -208,6 +209,13 @@ export async function listUsers({
 
   if (typeUser && allowedTypes.includes(typeUser)) {
     filter.typeUser = typeUser;
+  }
+
+  // Statut du compte (maquette A1) : actif / désactivé.
+  if (status === 'disabled') {
+    filter.disabled = true;
+  } else if (status === 'active') {
+    filter.disabled = { $ne: true };
   }
 
   if (verified === 'true') {
@@ -264,7 +272,7 @@ export async function listUsers({
   if (postFilters) {
     const rawUsers = await User.find(filter)
       .sort({ createdAt: -1 })
-      .select('fullName email phone typeUser isVerified createdAt')
+      .select('fullName email phone typeUser isVerified createdAt disabled disabledAt')
       .lean();
     let users = await enrichUsersWithOnboarding(rawUsers);
 
@@ -295,7 +303,7 @@ export async function listUsers({
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(safeLimit)
-      .select('fullName email phone typeUser isVerified createdAt')
+      .select('fullName email phone typeUser isVerified createdAt disabled disabledAt')
       .lean(),
     User.countDocuments(filter),
   ]);

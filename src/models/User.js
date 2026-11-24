@@ -170,6 +170,27 @@ const userSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.Mixed,
     default: null,
   },
+  /**
+   * Compte désactivé par un administrateur (réversible) : connexion refusée, jetons déjà émis refusés (services/accountGate.js).
+   * L'abonnement et le numéro ne sont pas modifiés. `disabledBy` : l'administrateur (id et nom affiché), pour la fiche admin.
+   */
+  disabled: {
+    type: Boolean,
+    default: false,
+    index: true,
+  },
+  disabledAt: {
+    type: Date,
+    default: null,
+  },
+  disabledReason: {
+    type: String,
+    default: null,
+  },
+  disabledBy: {
+    userId: { type: mongoose.Schema.Types.ObjectId, default: null },
+    name: { type: String, default: null },
+  },
 });
 
 userSchema.pre('save', async function(next) {

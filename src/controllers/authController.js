@@ -78,6 +78,9 @@ export const login = async (req, res) => {
     if (code === 'ACCOUNT_NOT_VERIFIED') {
       return res.status(403).json({ message: 'Account not verified', code });
     }
+    if (code === 'ACCOUNT_DISABLED') {
+      return res.status(403).json({ message: 'Account disabled', code });
+    }
     const message =
       code === 'INVALID_EMAIL' ? 'Invalid email' :
       code === 'INVALID_PASSWORD' ? 'Invalid password' :
@@ -96,6 +99,7 @@ export const verifyEmail = async (req, res) => {
     const result = await authService.verifyEmail(req.body.email, req.body.code);
     res.json({ token: result.token, result });
   } catch (error) {
+    if (error.code === 'ACCOUNT_DISABLED') return res.status(403).json({ message: 'Account disabled', code: error.code });
     res.status(400).json({ message: error.message });
   }
 };
@@ -167,6 +171,7 @@ export const verifyOTP = async (req, res) => {
     const result = await authService.verifyOTPTwilio(userId, otp);
     return res.status(200).json(result);
   } catch (error) {
+    if (error.code === 'ACCOUNT_DISABLED') return res.status(403).json({ error: 'Account disabled', message: 'Account disabled', code: error.code });
     return res.status(500).json({ error: error.message });
   }
 };
