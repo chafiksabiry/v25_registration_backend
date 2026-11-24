@@ -4,9 +4,14 @@ function callerId(req) {
   return req.user?.userId || req.user?.id || req.user?._id;
 }
 
+/** Identifiant de l'appelant prouvé par un JWT valide, sinon null (repli X-User-Id). */
+function provenId(req) {
+  return req.authJwt ? String(callerId(req) || '') || null : null;
+}
+
 function fail(res, error, fallback) {
   const status = error.statusCode || 500;
-  return res.status(status).json({ success: false, message: error.message || fallback });
+  return res.status(status).json({ success: false, message: error.message || fallback, ...(error.code ? { code: error.code } : {}) });
 }
 
 export const getCompanyMemberCatalog = (_req, res) => {
@@ -34,7 +39,7 @@ export const listCompanyMembers = async (req, res) => {
 
 export const inviteCompanyMember = async (req, res) => {
   try {
-    const data = await companyMemberService.invite(callerId(req), req.body);
+    const data = await companyMemberService.invite(callerId(req), req.body, { provenUserId: provenId(req) });
     return res.status(201).json({ success: true, data });
   } catch (error) {
     return fail(res, error, 'Failed to invite member');
@@ -72,7 +77,8 @@ export const updateCompanyMember = async (req, res) => {
       callerId(req),
       companyId,
       req.params.userId,
-      req.body
+      req.body,
+      { provenUserId: provenId(req) }
     );
     return res.json({ success: true, data });
   } catch (error) {

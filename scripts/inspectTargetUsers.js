@@ -10,11 +10,9 @@ const EMAILS = [
   'zdz89175@gmail.com',
 ];
 
-const URI = process.env.MONGODB_URI;
-if (!URI) {
-  console.error('MONGODB_URI environment variable is required (set it in your shell, never in the code).');
-  process.exit(1);
-}
+const URI =
+  process.env.MONGODB_URI ||
+  '' /* MONGODB_URI required: no committed URI */;
 
 async function main() {
   await mongoose.connect(URI);

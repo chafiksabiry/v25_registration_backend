@@ -1,10 +1,7 @@
 import mongoose from 'mongoose';
 
-const URI = process.env.MONGODB_URI;
-if (!URI) {
-  console.error('MONGODB_URI environment variable is required (set it in your shell, never in the code).');
-  process.exit(1);
-}
+const URI =
+  '' /* MONGODB_URI required: no committed URI */;
 
 async function sampleCollection(db, name, fields) {
   const col = db.collection(name);

@@ -8,7 +8,7 @@
  *
  * Env:
  *   MONGODB_URI
- *   RESTORE_TEMP_PASSWORD (default HarxRestore2026!)
+ *   RESTORE_TEMP_PASSWORD (required, no default)
  */
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
@@ -17,12 +17,9 @@ import User from '../src/models/User.js';
 
 dotenv.config();
 
-const DEFAULT_URI = process.env.MONGODB_URI;
-if (!DEFAULT_URI) {
-  console.error('MONGODB_URI environment variable is required (set it in your shell, never in the code).');
-  process.exit(1);
-}
-const TEMP_PASSWORD = process.env.RESTORE_TEMP_PASSWORD || 'HarxRestore2026!';
+const DEFAULT_URI =
+  '' /* MONGODB_URI required: no committed URI */;
+const TEMP_PASSWORD = process.env.RESTORE_TEMP_PASSWORD || '';
 const APPLY = process.argv.includes('--apply');
 const DRY_RUN = process.argv.includes('--dry-run') || !APPLY;
 
@@ -140,6 +137,9 @@ async function collectCandidates(db, existingIds, existingEmails) {
 }
 
 async function main() {
+  if (!process.env.RESTORE_TEMP_PASSWORD) {
+    throw new Error('RESTORE_TEMP_PASSWORD required (no built-in default password).');
+  }
   const uri = process.env.MONGODB_URI || DEFAULT_URI;
   await mongoose.connect(uri);
   const db = mongoose.connection.db;
@@ -187,7 +187,7 @@ async function main() {
   }
 
   console.log(`\nRestored ${inserted} users (${skipped} skipped).`);
-  console.log(`Temporary password for restored accounts: ${TEMP_PASSWORD}`);
+  console.log("Temporary password for restored accounts: the value of RESTORE_TEMP_PASSWORD (not printed).");
   console.log('Ask affected users to change their password after login.');
 
   await mongoose.disconnect();

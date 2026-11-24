@@ -1,11 +1,8 @@
 import mongoose from 'mongoose';
 
-// URI as first argument or MONGODB_URI (never hard-code credentials here).
-const URI = process.argv[2] || process.env.MONGODB_URI;
-if (!URI) {
-  console.error('Pass the MongoDB URI as the first argument or set MONGODB_URI.');
-  process.exit(1);
-}
+const URI =
+  process.argv[2] ||
+  '' /* MONGODB_URI required: no committed URI */;
 
 async function main() {
   await mongoose.connect(URI);
