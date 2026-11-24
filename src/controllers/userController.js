@@ -224,7 +224,7 @@ export const getUserIPHistory = async (req, res) => {
 };
 
  
-/** POST /api/users/:userId/delete-account — `{ email, password }` : suppression définitive par l'abonné lui-même (maquette B4). */
+/** POST /api/users/:userId/delete-account — `{ email, password, product? }` (offre du compte : « nomad » | « cloud », pour l'e-mail) : suppression définitive par l'abonné lui-même (maquette B4). */
 export const deleteOwnAccount = async (req, res) => {
   try {
     const data = await accountClosureService.deleteAccount({
@@ -232,6 +232,7 @@ export const deleteOwnAccount = async (req, res) => {
       actor: { type: 'self' },
       email: req.body?.email,
       password: req.body?.password,
+      product: req.body?.product,
     });
     res.status(200).json({ success: true, data });
   } catch (error) {

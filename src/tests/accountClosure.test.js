@@ -123,14 +123,15 @@ function makeUser(over = {}) {
   };
 }
 
-function makeEnv({ user = makeUser(), companies = [COMPANY], others = 0, purge, mail, now = new Date('2026-11-24T10:42:00Z') } = {}) {
-  const log = { audits: [], deletions: [], purged: [], deleted: [], mails: [], errors: [] };
+function makeEnv({ user = makeUser(), companies = [COMPANY], others = 0, purge, mail, product = async () => 'nomad', now = new Date('2026-11-24T10:42:00Z') } = {}) {
+  const log = { audits: [], deletions: [], purged: [], deleted: [], mails: [], errors: [], steps: [] };
   const store = new Map(user ? [[String(user.email).toLowerCase(), user]] : []);
   const svc = createAccountClosureService({
     findUser: async (id) => [...store.values()].find((u) => String(u._id) === String(id)) || null,
     ownedCompanyIds: async () => companies,
     otherMembersCount: async () => others,
-    purgeOrchestrator: purge || (async (args) => { log.purged.push(args); return { subscriptionsCanceled: ['sub_1'], numbersReturned: ['+33142000007'] }; }),
+    accountProduct: async (args) => { log.steps.push('product'); return product(args); },
+    purgeOrchestrator: purge || (async (args) => { log.steps.push('purge'); log.purged.push(args); return { subscriptionsCanceled: ['sub_1'], numbersReturned: ['+33142000007'] }; }),
     recordDeletion: async (e) => { log.deletions.push(e); },
     recordAudit: async (e) => { log.audits.push(e); },
     deleteRegistrationData: async (args) => { log.deleted.push(args); store.delete(String(args.email).toLowerCase()); return { userDeleted: true }; },
@@ -331,7 +332,7 @@ test('e-mail de confirmation : suppression par l’admin => envoyé aussi, formu
   const out = await svc.deleteAccount({ userId: ME, actor: { type: 'admin', userId: ADMIN }, confirmEmail: 'marie.dupont@exemple.fr' });
   assert.equal(out.confirmationEmailSent, true);
   assert.equal(log.mails[0].byAdmin, true);
-  const m = accountDeletedEmail({ email: 'marie.dupont@exemple.fr', numbers: ['+33142000007'], byAdmin: true });
+  const m = accountDeletedEmail({ email: 'marie.dupont@exemple.fr', numbers: ['+33142000007'], byAdmin: true, product: 'nomad' });
   assert.equal(m.subject, 'Votre compte HARX NOMAD a été supprimé');
   assert.match(m.text, /Votre compte a été supprimé par l'équipe HARX/);
   assert.match(m.html, /Votre compte a été supprimé par l&#39;équipe HARX|Votre compte a été supprimé par l'équipe HARX/);
@@ -358,7 +359,7 @@ test('e-mail de confirmation : jamais envoyé si la suppression échoue (mauvais
 });
 
 test('e-mail de confirmation : récapitulatif (abonnement, numéro, données, e-mail libéré), aucun lien, contenu échappé', () => {
-  const m = accountDeletedEmail({ email: 'marie.dupont@exemple.fr', numbers: ['+33142000007'] });
+  const m = accountDeletedEmail({ email: 'marie.dupont@exemple.fr', numbers: ['+33142000007'], product: 'nomad' });
   assert.equal(m.subject, 'Votre compte HARX NOMAD a été supprimé');
   assert.match(m.text, /Votre compte a été supprimé\n/);
   assert.match(m.text, /Votre abonnement est arrêté — plus aucun prélèvement/);
@@ -383,4 +384,89 @@ test('réponse HTTP : POST /delete-account renvoie data.confirmationEmailSent', 
   assert.equal(res.body.success, true);
   assert.equal(res.body.data.confirmationEmailSent, false);
   assert.equal(res.body.data.emailFreed, true);
+});
+
+// ---------- Offre du compte dans l'e-mail (NOMAD / CLOUD / neutre), jamais de mélange ----------
+
+test('e-mail par offre : NOMAD, CLOUD, ou neutre « HARX » si l’offre est inconnue', () => {
+  const nomad = accountDeletedEmail({ email: 'a@b.fr', numbers: [], product: 'nomad' });
+  assert.equal(nomad.subject, 'Votre compte HARX NOMAD a été supprimé');
+  assert.match(nomad.html, /NOMAD · COMPTE SUPPRIMÉ/);
+  assert.ok(!/CLOUD/.test(nomad.html + nomad.text));
+
+  const cloud = accountDeletedEmail({ email: 'a@b.fr', numbers: [], product: 'cloud', byAdmin: true });
+  assert.equal(cloud.subject, 'Votre compte HARX CLOUD a été supprimé');
+  assert.match(cloud.text, /^HARX CLOUD\n/);
+  assert.match(cloud.text, /L'équipe HARX a supprimé votre compte HARX CLOUD\./);
+  assert.match(cloud.html, /CLOUD · COMPTE SUPPRIMÉ/);
+  assert.ok(!/NOMAD/.test(cloud.html + cloud.text + cloud.subject), 'aucune mention NOMAD dans un e-mail CLOUD');
+
+  for (const product of [null, undefined, 'taas', 'NOMAD ', '']) {
+    const neutral = accountDeletedEmail({ email: 'a@b.fr', numbers: [], product });
+    assert.equal(neutral.subject, 'Votre compte HARX a été supprimé', String(product));
+    assert.ok(!/NOMAD|CLOUD/.test(neutral.html + neutral.text), String(product));
+  }
+});
+
+test('abonné : l’offre envoyée par le portail (nomad | cloud) est reprise, sans relecture', async () => {
+  const { svc, log } = makeEnv({ product: async () => 'nomad' });
+  await svc.deleteAccount({ userId: ME, actor: { type: 'self' }, email: 'marie.dupont@exemple.fr', password: 'secret123', product: 'cloud' });
+  assert.equal(log.mails[0].product, 'cloud');
+  assert.ok(!log.steps.includes('product'));
+});
+
+test('abonné sans offre (ou offre inconnue) : offre lue côté serveur, avant la purge', async () => {
+  for (const sent of [undefined, 'taas']) {
+    const { svc, log } = makeEnv({ product: async () => 'nomad' });
+    await svc.deleteAccount({ userId: ME, actor: { type: 'self' }, email: 'marie.dupont@exemple.fr', password: 'secret123', product: sent });
+    assert.equal(log.mails[0].product, 'nomad', String(sent));
+    assert.deepEqual(log.steps, ['product', 'purge'], 'lue avant la purge (l’abonnement est effacé ensuite)');
+  }
+});
+
+test('admin : offre lue depuis la société avant la purge (l’offre envoyée est ignorée) ; CLOUD => e-mail CLOUD', async () => {
+  const { svc, log } = makeEnv({ product: async ({ companyIds }) => (companyIds[0] === COMPANY ? 'cloud' : null) });
+  await svc.deleteAccount({ userId: ME, actor: { type: 'admin', userId: ADMIN }, confirmEmail: 'marie.dupont@exemple.fr', product: 'nomad' });
+  assert.equal(log.mails[0].product, 'cloud');
+  assert.equal(log.mails[0].byAdmin, true);
+  assert.deepEqual(log.steps, ['product', 'purge']);
+});
+
+test('admin : offre introuvable ou lecture en échec => e-mail neutre, la suppression réussit', async () => {
+  const none = makeEnv({ product: async () => null });
+  await none.svc.deleteAccount({ userId: ME, actor: { type: 'admin', userId: ADMIN }, confirmEmail: 'marie.dupont@exemple.fr' });
+  assert.equal(none.log.mails[0].product, null);
+
+  const broken = makeEnv({ product: async () => { throw new Error('db down'); } });
+  const out = await broken.svc.deleteAccount({ userId: ME, actor: { type: 'admin', userId: ADMIN }, confirmEmail: 'marie.dupont@exemple.fr' });
+  assert.equal(out.emailFreed, true);
+  assert.equal(out.confirmationEmailSent, true);
+  assert.equal(broken.log.mails[0].product, null);
+  assert.match(broken.log.errors[0], /offre du compte non lue/);
+  assert.ok(!broken.log.errors[0].includes('marie'));
+});
+
+test('route abonné : le champ `product` du corps est transmis au service', async () => {
+  const original = (await import('../services/accountClosureService.js')).accountClosureService;
+  const saved = original.deleteAccount;
+  let got = null;
+  original.deleteAccount = async (args) => { got = args; return { emailFreed: true, confirmationEmailSent: true }; };
+  const res = fakeRes();
+  await deleteOwnAccount({ params: { userId: ME }, body: { email: 'a@b.fr', password: 'x', product: 'cloud' } }, res);
+  original.deleteAccount = saved;
+  assert.equal(got.product, 'cloud');
+  assert.deepEqual(got.actor, { type: 'self' });
+});
+
+test('offre lue côté serveur : palier de l’abonnement d’abord (Nomad Solo = NOMAD, autres = CLOUD), sinon profil du portail, sinon null', async () => {
+  const { resolveAccountOffer } = await import('../services/accountClosureService.js');
+  const states = (rows) => async () => rows;
+  assert.equal(await resolveAccountOffer({ companyIds: ['c1'], lastKnownTier: async () => 'nomad_solo', workspaceStates: states([]) }), 'nomad');
+  for (const tier of ['accueil', 'full_scope', 'multi_clients']) {
+    assert.equal(await resolveAccountOffer({ companyIds: ['c1'], lastKnownTier: async () => tier, workspaceStates: states([{ data: { accountProfile: 'solo' } }]) }), 'cloud', tier);
+  }
+  assert.equal(await resolveAccountOffer({ companyIds: ['c1'], lastKnownTier: async () => null, workspaceStates: states([{ data: { accountProfile: 'solo' } }]) }), 'nomad');
+  assert.equal(await resolveAccountOffer({ companyIds: ['c1'], lastKnownTier: async () => null, workspaceStates: states([{ data: { accountProfile: 'company' } }]) }), 'cloud');
+  assert.equal(await resolveAccountOffer({ companyIds: ['c1'], lastKnownTier: async () => null, workspaceStates: states([{ data: {} }]) }), null);
+  assert.equal(await resolveAccountOffer({ companyIds: [], lastKnownTier: async () => 'nomad_solo', workspaceStates: states([]) }), null);
 });

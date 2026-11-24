@@ -368,12 +368,17 @@ function readableNumber(e164) {
   return fr ? `+33 ${fr.slice(1).join(' ')}` : n;
 }
 
+/** Offres dont le nom figure dans l'e-mail de suppression (jamais traduit, jamais mélangé) ; toute autre valeur : HARX seul. */
+export const DELETION_EMAIL_PRODUCTS = ['nomad', 'cloud'];
+
 /**
  * Confirmation de suppression du compte (après la suppression réussie), envoyée à l'adresse supprimée.
  * `byAdmin` : suppression par l'équipe HARX (maquette A3) ; sinon par l'abonné lui-même (B4).
+ * `product` : offre du compte (« nomad » ou « cloud ») : « HARX NOMAD » / « HARX CLOUD » ; inconnue : « HARX » seul, neutre.
  * Même récapitulatif que l'écran « Votre compte a été supprimé » ; aucun lien qui demande une connexion (le compte n'existe plus).
  */
-export function accountDeletedEmail({ email, numbers = [], byAdmin = false }) {
+export function accountDeletedEmail({ email, numbers = [], byAdmin = false, product = null }) {
+  const brand = DELETION_EMAIL_PRODUCTS.includes(product) ? `HARX ${String(product).toUpperCase()}` : 'HARX';
   const list = (Array.isArray(numbers) ? numbers : []).filter(Boolean).map(readableNumber);
   const number = list.join(', ');
   const title = byAdmin ? 'Votre compte a été supprimé par l\'équipe HARX' : 'Votre compte a été supprimé';
@@ -384,17 +389,17 @@ export function accountDeletedEmail({ email, numbers = [], byAdmin = false }) {
     `Votre e-mail ${email} est libéré : vous pouvez créer un nouveau compte avec cette adresse.`,
   ];
   const intro = byAdmin
-    ? 'L\'équipe HARX a supprimé votre compte HARX NOMAD. Voici ce que cela signifie :'
-    : 'Vous avez supprimé votre compte HARX NOMAD. Voici ce que cela signifie :';
+    ? `L'équipe HARX a supprimé votre compte ${brand}. Voici ce que cela signifie :`
+    : `Vous avez supprimé votre compte ${brand}. Voici ce que cela signifie :`;
   const footer = 'Les factures déjà émises restent disponibles chez notre prestataire de paiement, comme la loi l\'exige. Une question ? Écrivez à support@harx.ai.';
   return {
-    subject: 'Votre compte HARX NOMAD a été supprimé',
+    subject: `Votre compte ${brand} a été supprimé`,
     text:
-      `HARX NOMAD\n\n${title}\n\n${intro}\n` +
+      `${brand}\n\n${title}\n\n${intro}\n` +
       items.map((t) => `- ${t}`).join('\n') +
       `\n\n${footer}`,
     html: harxEmailShell({
-      eyebrow: 'NOMAD · COMPTE SUPPRIMÉ',
+      eyebrow: brand === 'HARX' ? 'COMPTE SUPPRIMÉ' : `${brand.slice(5)} · COMPTE SUPPRIMÉ`,
       title: escapeHtml(title),
       intro: escapeHtml(intro),
       bodyHtml: `
