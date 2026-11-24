@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import { gateAccount } from '../services/accountGate.js';
 
 /**
  * Call-centre and team routes: a valid Bearer JWT is required.
@@ -24,10 +25,13 @@ export function authenticateCallCenter(req, res, next) {
       try {
         const payload = jwt.verify(token, secret);
         if (payload?.userId) {
-          req.user = payload;
-          // Identité prouvée par un JWT valide (et non par l'en-tête X-User-Id) : exigée pour les gestes réservés au titulaire.
-          req.authJwt = true;
-          return next();
+          // Compte désactivé ou supprimé : refusé même avec un jeton déjà émis (services/accountGate.js).
+          return gateAccount(payload.userId, res, next, () => {
+            req.user = payload;
+            // Identité prouvée par un JWT valide (et non par l'en-tête X-User-Id) : exigée pour les gestes réservés au titulaire.
+            req.authJwt = true;
+            return next();
+          });
         }
       } catch {
         // handled below
@@ -62,8 +66,10 @@ export function authenticateUserJwt(req, res, next) {
       if (!process.env.JWT_SECRET) throw new Error('JWT_SECRET missing');
       const payload = jwt.verify(token, process.env.JWT_SECRET);
       if (payload?.userId) {
-        req.user = payload;
-        return next();
+        return gateAccount(payload.userId, res, next, () => {
+          req.user = payload;
+          return next();
+        });
       }
     } catch {
       // handled below

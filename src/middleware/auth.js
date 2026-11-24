@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import { gateAccount } from '../services/accountGate.js';
 
 /**
  * Every token of this service is signed with JWT_SECRET: there is no fallback secret. Without it, every
@@ -40,18 +41,23 @@ export const authenticate = (req, res, next) => {
       return res.status(401).json({ message: 'Invalid token' });
     }
 
-    // AUTH-11: a member still on their invite temp password must not reach
-    // any other authenticated endpoint on this service — only changing the
-    // password is allowed until the flag clears.
-    if (decoded.mustChangePassword && req.path !== '/change-password') {
-      return res.status(403).json({
-        message: 'Password change required before continuing',
-        code: 'PASSWORD_CHANGE_REQUIRED',
-      });
-    }
+    const proceed = () => {
+      // AUTH-11: a member still on their invite temp password must not reach
+      // any other authenticated endpoint on this service — only changing the
+      // password is allowed until the flag clears.
+      if (decoded.mustChangePassword && req.path !== '/change-password') {
+        return res.status(403).json({
+          message: 'Password change required before continuing',
+          code: 'PASSWORD_CHANGE_REQUIRED',
+        });
+      }
 
-    req.user = decoded;
-    next();
+      req.user = decoded;
+      return next();
+    };
+
+    // Compte désactivé ou supprimé : refusé tout de suite, même avec un jeton déjà émis (services/accountGate.js).
+    return gateAccount(tokenUserId(decoded), res, next, proceed);
   } catch (error) {
     res.status(401).json({ message: 'Invalid token' });
   }

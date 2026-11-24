@@ -27,6 +27,16 @@ import {
 } from '../utils/reengagementRequest.js';
 
 
+/** Compte désactivé par un administrateur : aucune connexion, aucun jeton (code ACCOUNT_DISABLED, 403). */
+export function assertAccountEnabled(user) {
+  if (user?.disabled === true) {
+    const err = new Error('Account disabled');
+    err.code = 'ACCOUNT_DISABLED';
+    err.statusCode = 403;
+    throw err;
+  }
+}
+
 // Client initialized lazily inside methods to ensure env vars are loaded
 class AuthService {
   generateVerificationCode() {
@@ -238,6 +248,8 @@ class AuthService {
       throw err;
     }
 
+    assertAccountEnabled(user);
+
     if (!user.isVerified) {
       const err = new Error('Account not verified');
       err.code = 'ACCOUNT_NOT_VERIFIED';
@@ -301,6 +313,7 @@ class AuthService {
     if (!user || user.typeUser !== 'rep') {
       throw fail('Invalid link', 'INVALID_LINK', 400);
     }
+    assertAccountEnabled(user);
     const expiresAt = user.reengagement?.expiresAt;
     if (!expiresAt || expiresAt < new Date()) {
       throw fail('This link has expired', 'LINK_EXPIRED', 410);
@@ -379,6 +392,7 @@ class AuthService {
       if (!user) {
         throw new Error('User not found');
       }
+      assertAccountEnabled(user);
 
       // Vérifier le code de vérification et sa validité
       if (
@@ -411,6 +425,7 @@ class AuthService {
         })
       };
     } catch (error) {
+      if (error.code === 'ACCOUNT_DISABLED') throw error;
       console.error('Error in verifyEmail:', error.message);
       // Propager une erreur pour qu'elle puisse être gérée par l'appelant
       throw new Error(error.message || 'Failed to verify email');
@@ -518,6 +533,7 @@ class AuthService {
       if (!user || !user.verificationCode) {
         throw new Error('User not found or OTP not generated');
       }
+      assertAccountEnabled(user);
 
       const { otp, otpExpiresAt } = user.verificationCode;
 
@@ -548,6 +564,7 @@ class AuthService {
         // throw new Error('Invalid OTP. Please try again.');
       }
     } catch (error) {
+      if (error.code === 'ACCOUNT_DISABLED') throw error;
       console.error('Error in verifyOTPTwilio:', error);
       throw new Error(error.message || 'Failed to verify OTP');
     }
@@ -669,6 +686,7 @@ class AuthService {
       });
       await user.save();
     }
+    assertAccountEnabled(user);
 
     // Generate JWT Token with user info
     const token = jwt.sign({
@@ -810,6 +828,7 @@ class AuthService {
     if (!isMatch) {
       throw new Error('Invalid admin credentials');
     }
+    assertAccountEnabled(user);
 
     const clientIp = getClientIp(req);
     const locationInfo = await this.enrichIPInfo(clientIp);
