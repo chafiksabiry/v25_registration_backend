@@ -15,6 +15,8 @@ import CallCenterWorkspaceState from '../models/CallCenterWorkspaceState.js';
 import ScheduleRequest from '../models/ScheduleRequest.js';
 import CountryWaitlist from '../models/CountryWaitlist.js';
 import { ACCOUNT_DELETIONS_COLLECTION, forgetAccountState, isProtectedAccount } from './accountGate.js';
+import { sendAppEmail } from './brevoMail.js';
+import { accountDeletedEmail } from '../utils/harxMessages.js';
 
 /**
  * Désactivation (réversible) et suppression (définitive) d'un compte — maquettes A2, A2b, A3 (admin) et B4 (l'abonné lui-même).
@@ -25,7 +27,9 @@ import { ACCOUNT_DELETIONS_COLLECTION, forgetAccountState, isProtectedAccount } 
  *     suite l'abonnement Stripe (résiliation volontaire, sans remboursement), remet le(s) numéro(s) en stock et efface les données du
  *     compte qu'il détient (contacts, journal d'appels, répondeur, pièces d'identité, minutes et jetons) ;
  *  2. une ligne SANS donnée personnelle est écrite au journal `account_deletions` (qui, quand) : elle ferme aussi les jetons déjà émis ;
- *  3. les données de ce service sont effacées (société, accès, équipe), puis le compte : l'email est libre pour une nouvelle inscription.
+ *  3. les données de ce service sont effacées (société, accès, équipe), puis le compte : l'email est libre pour une nouvelle inscription ;
+ *  4. un e-mail de confirmation est envoyé à l'adresse supprimée (même canal que les e-mails d'inscription) : son échec est journalisé
+ *     et ne fait jamais échouer la suppression (`confirmationEmailSent: false`).
  */
 export const ADMIN_AUDIT_COLLECTION = 'admin_audit_log';
 export const ACCOUNT_PURGE_SCOPE = 'account-purge';
@@ -121,6 +125,12 @@ const defaultDeps = () => ({
     const r = await User.deleteOne({ _id: u });
     return { userDeleted: r.deletedCount === 1 };
   },
+  /** E-mail de confirmation (Brevo, sinon SMTP : sendAppEmail, comme les e-mails d'inscription). */
+  sendDeletionEmail: async ({ email, numbers, byAdmin }) => {
+    const message = accountDeletedEmail({ email, numbers, byAdmin });
+    await sendAppEmail({ to: email, subject: message.subject, text: message.text, html: message.html });
+  },
+  log: (...args) => console.error(...args),
   now: () => new Date(),
 });
 
@@ -216,9 +226,23 @@ export function createAccountClosureService(overrides = {}) {
         actor: actor.type === 'admin' ? { type: 'admin', adminId: actor.userId ? String(actor.userId) : null } : { type: 'self' },
         ...summary,
       });
-      await d.deleteRegistrationData({ userId: String(user._id), email: user.email, companyIds });
+      const deletedEmail = user.email;
+      await d.deleteRegistrationData({ userId: String(user._id), email: deletedEmail, companyIds });
       forgetAccountState(user._id);
-      return { userId: String(user._id), deletedAt: at, ...summary, emailFreed: true };
+      // Après la suppression réussie seulement : confirmation à l'adresse supprimée. Un échec d'envoi ne change rien à la suppression.
+      let confirmationEmailSent = false;
+      try {
+        await d.sendDeletionEmail({
+          email: deletedEmail,
+          numbers: Array.isArray(purge.numbersReturned) ? purge.numbersReturned.map(String) : [],
+          byAdmin: actor.type === 'admin',
+        });
+        confirmationEmailSent = true;
+      } catch (err) {
+        // Sans donnée personnelle dans le journal : l'identifiant du compte seulement.
+        d.log(`[account-closure] e-mail de confirmation non envoyé (compte ${String(user._id)}) : ${err?.message || err}`);
+      }
+      return { userId: String(user._id), deletedAt: at, ...summary, emailFreed: true, confirmationEmailSent };
     },
   };
 }
