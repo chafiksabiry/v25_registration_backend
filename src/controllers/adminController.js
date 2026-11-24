@@ -56,6 +56,7 @@ export const adminUsers = async (req, res) => {
       onboardingStatus: req.query.onboardingStatus,
       planName: req.query.planName,
       status: req.query.status,
+      offer: req.query.offer,
     });
     res.status(200).json({ success: true, data });
   } catch (error) {

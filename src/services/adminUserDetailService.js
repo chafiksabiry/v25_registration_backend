@@ -6,6 +6,8 @@ import {
 } from './adminOnboardingUtils.js';
 import { populateAgentForAdmin, populateCompanyForAdmin } from './adminPopulateUtils.js';
 import { enrichAgentMedia } from './adminAgentMediaUtils.js';
+import { loadAccountOffer } from './accountOffer.js';
+import { publicAccountOffer } from './adminService.js';
 
 const LIST_LIMIT = 50;
 
@@ -286,6 +288,31 @@ async function loadCompanyFinancials(db, company) {
   });
 }
 
+/**
+ * Profil NOMAD d'un compte (société titulaire + profil enregistré par le portail, `accountProfile: 'solo'`).
+ * Seules des informations d'affichage : pas de pièce d'identité ni de document.
+ */
+export async function loadNomadProfile(db, companyId) {
+  const id = mongoose.isValidObjectId(String(companyId)) ? oid(companyId) : companyId;
+  const [company, state] = await Promise.all([
+    db.collection('companies').findOne({ _id: id }, { projection: { name: 1, createdAt: 1 } }),
+    db.collection('callcenter_workspace_state').findOne(
+      { companyId: id, scope: 'company' },
+      { projection: { 'data.accountProfile': 1, 'data.profile.name': 1, 'data.profile.phone': 1, 'data.profile.country': 1, 'data.profile.identityCountry': 1 } },
+    ),
+  ]);
+  const profile = state?.data?.profile || {};
+  return serialize({
+    companyId: String(companyId),
+    accountProfile: state?.data?.accountProfile || null,
+    name: profile.name || company?.name || null,
+    phone: profile.phone || null,
+    country: profile.country || null,
+    identityCountry: profile.identityCountry || null,
+    createdAt: company?.createdAt || null,
+  });
+}
+
 export async function getUserDetail(userId) {
   const user = await User.findById(userId)
     .select('-password -verificationCode')
@@ -305,7 +332,16 @@ export async function getUserDetail(userId) {
     profile: null,
     financials: null,
     platform: null,
+    accountOffer: null,
+    nomadProfile: null,
   };
+
+  // Offre réelle du compte (NOMAD / CLOUD + produit), et non le type historique (`call-center`) commun à toute inscription téléphonie.
+  const offer = await loadAccountOffer(db, userId);
+  detail.accountOffer = publicAccountOffer(offer);
+  if (offer?.offer === 'nomad' && offer.companyId) {
+    detail.nomadProfile = await loadNomadProfile(db, offer.companyId);
+  }
 
   const harxWallet = await db.collection('harxwallets').findOne({});
   detail.platform = serialize({
