@@ -18,6 +18,7 @@ import { ACCOUNT_DELETIONS_COLLECTION, forgetAccountState, isProtectedAccount } 
 import { sendAppEmail } from './brevoMail.js';
 import { DELETION_EMAIL_PRODUCTS, accountDeletedEmail } from '../utils/harxMessages.js';
 import { getLastKnownCompanyProduct } from './companyProduct.js';
+import { resolveAccountOfferDetail } from './accountOffer.js';
 
 /**
  * Désactivation (réversible) et suppression (définitive) d'un compte — maquettes A2, A2b, A3 (admin) et B4 (l'abonné lui-même).
@@ -58,19 +59,10 @@ export function orchestratorOrigin(env = process.env) {
 /**
  * Offre d'un compte (« nomad » / « cloud ») d'après ses sociétés : dernier palier connu de l'abonnement (Nomad Solo = NOMAD, autres
  * paliers = CLOUD), sinon le profil enregistré par le portail (`accountProfile` : « solo » = NOMAD, « company » = CLOUD) ; null sinon.
+ * Le détail (produit CLOUD, source) est donné par resolveAccountOfferDetail (accountOffer.js).
  */
-export async function resolveAccountOffer({ companyIds, lastKnownTier, workspaceStates }) {
-  for (const id of companyIds) {
-    const tier = await lastKnownTier(id);
-    if (tier) return tier === 'nomad_solo' ? 'nomad' : 'cloud';
-  }
-  if (!companyIds.length) return null;
-  for (const st of (await workspaceStates(companyIds)) || []) {
-    const profile = st?.data?.accountProfile;
-    if (profile === 'solo') return 'nomad';
-    if (profile === 'company') return 'cloud';
-  }
-  return null;
+export async function resolveAccountOffer(deps) {
+  return (await resolveAccountOfferDetail(deps)).offer;
 }
 
 const defaultDeps = () => ({
