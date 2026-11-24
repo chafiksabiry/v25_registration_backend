@@ -123,8 +123,8 @@ function makeUser(over = {}) {
   };
 }
 
-function makeEnv({ user = makeUser(), companies = [COMPANY], others = 0, purge, now = new Date('2026-11-24T10:42:00Z') } = {}) {
-  const log = { audits: [], deletions: [], purged: [], deleted: [] };
+function makeEnv({ user = makeUser(), companies = [COMPANY], others = 0, purge, mail, now = new Date('2026-11-24T10:42:00Z') } = {}) {
+  const log = { audits: [], deletions: [], purged: [], deleted: [], mails: [], errors: [] };
   const store = new Map(user ? [[String(user.email).toLowerCase(), user]] : []);
   const svc = createAccountClosureService({
     findUser: async (id) => [...store.values()].find((u) => String(u._id) === String(id)) || null,
@@ -134,6 +134,9 @@ function makeEnv({ user = makeUser(), companies = [COMPANY], others = 0, purge, 
     recordDeletion: async (e) => { log.deletions.push(e); },
     recordAudit: async (e) => { log.audits.push(e); },
     deleteRegistrationData: async (args) => { log.deleted.push(args); store.delete(String(args.email).toLowerCase()); return { userDeleted: true }; },
+    // L'e-mail part après l'effacement : on note si le compte existait encore au moment de l'envoi.
+    sendDeletionEmail: mail || (async (args) => { log.mails.push({ ...args, userStillThere: store.has(String(args.email).toLowerCase()) }); }),
+    log: (...a) => { log.errors.push(a.join(' ')); },
     now: () => now,
   });
   return { svc, log, store, user };
@@ -305,4 +308,79 @@ test('routes : admin seulement (authenticate + requireAdmin) ; suppression par l
   assert.equal((await call('POST', `/api/users/${ADMIN}/delete-account`, company, { email: 'x', password: 'y' })).status, 403);
   server.close();
   gate.setAccountGateLookup(null);
+});
+
+// ---------- E-mail de confirmation de la suppression ----------
+
+const { accountDeletedEmail } = await import('../utils/harxMessages.js');
+
+test('e-mail de confirmation : envoyé à l’adresse supprimée APRÈS la suppression réussie, avec le numéro ; drapeau confirmationEmailSent', async () => {
+  const { svc, log } = makeEnv();
+  const out = await svc.deleteAccount({ userId: ME, actor: { type: 'self' }, email: 'marie.dupont@exemple.fr', password: 'secret123' });
+  assert.equal(out.confirmationEmailSent, true);
+  assert.equal(log.mails.length, 1);
+  assert.equal(log.mails[0].email, 'marie.dupont@exemple.fr');
+  assert.deepEqual(log.mails[0].numbers, ['+33142000007']);
+  assert.equal(log.mails[0].byAdmin, false);
+  assert.equal(log.mails[0].userStillThere, false, 'le compte est déjà effacé quand l’e-mail part');
+  assert.equal(log.deleted.length, 1);
+});
+
+test('e-mail de confirmation : suppression par l’admin => envoyé aussi, formulation « par l’équipe HARX »', async () => {
+  const { svc, log } = makeEnv();
+  const out = await svc.deleteAccount({ userId: ME, actor: { type: 'admin', userId: ADMIN }, confirmEmail: 'marie.dupont@exemple.fr' });
+  assert.equal(out.confirmationEmailSent, true);
+  assert.equal(log.mails[0].byAdmin, true);
+  const m = accountDeletedEmail({ email: 'marie.dupont@exemple.fr', numbers: ['+33142000007'], byAdmin: true });
+  assert.equal(m.subject, 'Votre compte HARX NOMAD a été supprimé');
+  assert.match(m.text, /Votre compte a été supprimé par l'équipe HARX/);
+  assert.match(m.html, /Votre compte a été supprimé par l&#39;équipe HARX|Votre compte a été supprimé par l'équipe HARX/);
+});
+
+test('e-mail de confirmation : échec d’envoi => la suppression réussit quand même, erreur journalisée sans donnée personnelle, drapeau false', async () => {
+  const { svc, log, store } = makeEnv({ mail: async () => { throw new Error('Brevo: down'); } });
+  const out = await svc.deleteAccount({ userId: ME, actor: { type: 'self' }, email: 'marie.dupont@exemple.fr', password: 'secret123' });
+  assert.equal(out.confirmationEmailSent, false);
+  assert.equal(out.emailFreed, true);
+  assert.equal(store.has('marie.dupont@exemple.fr'), false, 'compte bien supprimé');
+  assert.equal(log.errors.length, 1);
+  assert.match(log.errors[0], /Brevo: down/);
+  assert.ok(!log.errors[0].includes('marie'), 'aucun email dans le journal');
+});
+
+test('e-mail de confirmation : jamais envoyé si la suppression échoue (mauvais mot de passe, orchestrateur en panne)', async () => {
+  const bad = makeEnv();
+  await assert.rejects(() => bad.svc.deleteAccount({ userId: ME, actor: { type: 'self' }, email: 'marie.dupont@exemple.fr', password: 'faux' }));
+  assert.equal(bad.log.mails.length, 0);
+  const down = makeEnv({ purge: async () => { throw new AccountClosureError(502, 'ACCOUNT_PURGE_FAILED', 'stripe down'); } });
+  await assert.rejects(() => down.svc.deleteAccount({ userId: ME, actor: { type: 'admin', userId: ADMIN }, confirmEmail: 'marie.dupont@exemple.fr' }));
+  assert.equal(down.log.mails.length, 0);
+});
+
+test('e-mail de confirmation : récapitulatif (abonnement, numéro, données, e-mail libéré), aucun lien, contenu échappé', () => {
+  const m = accountDeletedEmail({ email: 'marie.dupont@exemple.fr', numbers: ['+33142000007'] });
+  assert.equal(m.subject, 'Votre compte HARX NOMAD a été supprimé');
+  assert.match(m.text, /Votre compte a été supprimé\n/);
+  assert.match(m.text, /Votre abonnement est arrêté — plus aucun prélèvement/);
+  assert.match(m.text, /Votre numéro \+33 1 42 00 00 07 est libéré/);
+  assert.match(m.text, /Vos données sont effacées \(contacts, journal d'appels, messages, pièces d'identité, minutes et jetons\)/);
+  assert.match(m.text, /Votre e-mail marie\.dupont@exemple\.fr est libéré : vous pouvez créer un nouveau compte avec cette adresse/);
+  assert.ok(!/<a\s/i.test(m.html), 'aucun lien (le compte n’existe plus)');
+  const x = accountDeletedEmail({ email: '<b>x</b>@e.fr', numbers: [] });
+  assert.ok(!x.html.includes('<b>x</b>'));
+  assert.match(x.text, /Votre numéro est libéré/);
+});
+
+test('réponse HTTP : POST /delete-account renvoie data.confirmationEmailSent', async () => {
+  const { svc } = makeEnv({ mail: async () => { throw new Error('smtp down'); } });
+  const original = (await import('../services/accountClosureService.js')).accountClosureService;
+  const saved = original.deleteAccount;
+  original.deleteAccount = (args) => svc.deleteAccount(args);
+  const res = fakeRes();
+  await deleteOwnAccount({ params: { userId: ME }, body: { email: 'marie.dupont@exemple.fr', password: 'secret123' } }, res);
+  original.deleteAccount = saved;
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.success, true);
+  assert.equal(res.body.data.confirmationEmailSent, false);
+  assert.equal(res.body.data.emailFreed, true);
 });
