@@ -21,6 +21,7 @@ import {
   adminUpdateCountryRetractionDays,
   adminUserStatus,
   adminDeleteUser,
+  adminBulkDeleteUsers,
 } from '../controllers/adminController.js';
 import { authenticate } from '../middleware/auth.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
@@ -30,6 +31,8 @@ const router = express.Router();
 router.post('/login', adminLogin);
 router.get('/stats', authenticate, requireAdmin, adminStats);
 router.get('/users', authenticate, requireAdmin, adminUsers);
+// Suppression en masse (même service que la suppression unitaire) : déclarée avant /users/:userId.
+router.post('/users/bulk-delete', authenticate, requireAdmin, adminBulkDeleteUsers);
 router.get('/users/:userId', authenticate, requireAdmin, adminUserDetail);
 router.patch('/users/:userId/financials', authenticate, requireAdmin, adminUserFinancials);
 // Désactivation (réversible) et suppression définitive d'un compte : maquettes A2, A2b, A3.

@@ -231,6 +231,20 @@ export const adminUserStatus = async (req, res) => {
 };
 
 /** DELETE /api/admin/users/:userId — `{ confirmEmail }` (l'email du compte, retapé) : suppression définitive (maquette A3). */
+/** Suppression en masse : POST /api/admin/users/bulk-delete { userIds (≤ 50), confirmText « SUPPRIMER n » } ; résultat par compte. */
+export const adminBulkDeleteUsers = async (req, res) => {
+  try {
+    const data = await accountClosureService.bulkDeleteAccounts({
+      userIds: req.body?.userIds,
+      confirmText: req.body?.confirmText,
+      admin: { userId: tokenUserId(req.user) },
+    });
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    sendClosureError(res, error);
+  }
+};
+
 export const adminDeleteUser = async (req, res) => {
   try {
     const data = await accountClosureService.deleteAccount({

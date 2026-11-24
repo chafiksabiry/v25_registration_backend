@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import User from '../models/User.js';
 import { formatCompanyOnboarding, formatRepOnboarding } from './adminOnboardingUtils.js';
 import { loadAccountOffers } from './accountOffer.js';
+import { isProtectedAccount } from './accountGate.js';
 
 async function loadCompanyProfilesForList(db, users) {
   const companyUserIds = users
@@ -210,6 +211,9 @@ export async function getAdminStats() {
   };
 }
 
+/** Comptes protégés (démonstration Apple…) signalés à la liste : la console les rend non sélectionnables pour la suppression en masse. */
+export const markProtected = (users) => users.map((user) => ({ ...user, protectedAccount: isProtectedAccount(user.email) }));
+
 export async function listUsers({
   page = 1,
   limit = 25,
@@ -314,7 +318,7 @@ export async function listUsers({
     const paginated = users.slice(skip, skip + safeLimit);
 
     return {
-      users: paginated,
+      users: markProtected(paginated),
       pagination: {
         page: safePage,
         limit: safeLimit,
@@ -337,7 +341,7 @@ export async function listUsers({
   const users = await enrichUsersWithOnboarding(rawUsers);
 
   return {
-    users,
+    users: markProtected(users),
     pagination: {
       page: safePage,
       limit: safeLimit,
