@@ -16,7 +16,8 @@ import ScheduleRequest from '../models/ScheduleRequest.js';
 import CountryWaitlist from '../models/CountryWaitlist.js';
 import { ACCOUNT_DELETIONS_COLLECTION, forgetAccountState, isProtectedAccount } from './accountGate.js';
 import { sendAppEmail } from './brevoMail.js';
-import { accountDeletedEmail } from '../utils/harxMessages.js';
+import { DELETION_EMAIL_PRODUCTS, accountDeletedEmail } from '../utils/harxMessages.js';
+import { getLastKnownCompanyProduct } from './companyProduct.js';
 
 /**
  * Désactivation (réversible) et suppression (définitive) d'un compte — maquettes A2, A2b, A3 (admin) et B4 (l'abonné lui-même).
@@ -52,6 +53,24 @@ export function orchestratorOrigin(env = process.env) {
   const railway = env.RAILWAY_SERVICE_V25_COMPORCHESTRATOR_BACK_URL;
   const raw = explicit || (railway ? (/^https?:\/\//i.test(railway) ? railway : `https://${railway}`) : '');
   return String(raw).trim().replace(/\/+$/, '').replace(/\/api$/, '');
+}
+
+/**
+ * Offre d'un compte (« nomad » / « cloud ») d'après ses sociétés : dernier palier connu de l'abonnement (Nomad Solo = NOMAD, autres
+ * paliers = CLOUD), sinon le profil enregistré par le portail (`accountProfile` : « solo » = NOMAD, « company » = CLOUD) ; null sinon.
+ */
+export async function resolveAccountOffer({ companyIds, lastKnownTier, workspaceStates }) {
+  for (const id of companyIds) {
+    const tier = await lastKnownTier(id);
+    if (tier) return tier === 'nomad_solo' ? 'nomad' : 'cloud';
+  }
+  if (!companyIds.length) return null;
+  for (const st of (await workspaceStates(companyIds)) || []) {
+    const profile = st?.data?.accountProfile;
+    if (profile === 'solo') return 'nomad';
+    if (profile === 'company') return 'cloud';
+  }
+  return null;
 }
 
 const defaultDeps = () => ({
@@ -125,9 +144,19 @@ const defaultDeps = () => ({
     const r = await User.deleteOne({ _id: u });
     return { userDeleted: r.deletedCount === 1 };
   },
+  /**
+   * Offre du compte (« nomad » / « cloud ») d'après ses sociétés, lue AVANT la purge (l'abonnement est effacé ensuite) :
+   * dernier palier connu de l'abonnement (Nomad Solo = NOMAD, autres paliers = CLOUD), sinon le profil enregistré par le portail
+   * (`accountProfile` : « solo » = NOMAD, « company » = CLOUD). null si rien ne permet de le dire.
+   */
+  accountProduct: ({ companyIds }) => resolveAccountOffer({
+    companyIds,
+    lastKnownTier: (id) => getLastKnownCompanyProduct(id, mongoose.connection.db),
+    workspaceStates: (ids) => CallCenterWorkspaceState.find({ companyId: { $in: ids.map(oid) }, scope: 'company' }).lean(),
+  }),
   /** E-mail de confirmation (Brevo, sinon SMTP : sendAppEmail, comme les e-mails d'inscription). */
-  sendDeletionEmail: async ({ email, numbers, byAdmin }) => {
-    const message = accountDeletedEmail({ email, numbers, byAdmin });
+  sendDeletionEmail: async ({ email, numbers, byAdmin, product }) => {
+    const message = accountDeletedEmail({ email, numbers, byAdmin, product });
     await sendAppEmail({ to: email, subject: message.subject, text: message.text, html: message.html });
   },
   log: (...args) => console.error(...args),
@@ -193,7 +222,7 @@ export function createAccountClosureService(overrides = {}) {
      * Supprime définitivement un compte. `actor` : `{ type: 'admin', userId }` (l'admin a retapé l'email : `confirmEmail`) ou
      * `{ type: 'self' }` (l'abonné a saisi son email et son mot de passe : `email`, `password`).
      */
-    async deleteAccount({ userId, actor, confirmEmail, email, password }) {
+    async deleteAccount({ userId, actor, confirmEmail, email, password, product }) {
       const user = await d.findUser(userId);
       if (!user) throw new AccountClosureError(404, 'USER_NOT_FOUND', 'User not found');
       if (actor?.type === 'self') {
@@ -210,6 +239,18 @@ export function createAccountClosureService(overrides = {}) {
       if ((await d.otherMembersCount(companyIds, user._id)) > 0) {
         throw new AccountClosureError(409, 'COMPANY_HAS_MEMBERS', 'This account owns a company with other members');
       }
+
+      // Offre du compte pour l'e-mail de confirmation : celle envoyée par le portail (suppression par l'abonné), sinon lue avant la purge.
+      // Une lecture en échec ne bloque jamais la suppression : e-mail neutre (« HARX »).
+      let offer = actor.type === 'self' && DELETION_EMAIL_PRODUCTS.includes(product) ? product : null;
+      if (!offer) {
+        try {
+          offer = await d.accountProduct({ companyIds });
+        } catch (err) {
+          d.log(`[account-closure] offre du compte non lue (compte ${String(user._id)}) : ${err?.message || err}`);
+        }
+      }
+      offer = DELETION_EMAIL_PRODUCTS.includes(offer) ? offer : null;
 
       const purge = await d.purgeOrchestrator({ userId: String(user._id), companyIds });
 
@@ -236,6 +277,7 @@ export function createAccountClosureService(overrides = {}) {
           email: deletedEmail,
           numbers: Array.isArray(purge.numbersReturned) ? purge.numbersReturned.map(String) : [],
           byAdmin: actor.type === 'admin',
+          product: offer,
         });
         confirmationEmailSent = true;
       } catch (err) {
