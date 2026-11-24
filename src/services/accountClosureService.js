@@ -37,6 +37,15 @@ export const ADMIN_AUDIT_COLLECTION = 'admin_audit_log';
 export const ACCOUNT_PURGE_SCOPE = 'account-purge';
 const PURGE_TIMEOUT_MS = 90 * 1000;
 const REASON_MAX = 500;
+/** Suppression en masse (console d'administration) : au plus 50 comptes par lot, 3 suppressions à la fois. */
+export const BULK_DELETE_MAX = 50;
+const BULK_DELETE_CONCURRENCY = 3;
+/** Refus attendus (le compte reste tel quel) ; toute autre erreur est un échec (« failed »), qu'on peut relancer. */
+const BULK_REFUSED_CODES = new Set(['ACCOUNT_NOT_FOUND', 'PROTECTED_ACCOUNT', 'ADMIN_ACCOUNT', 'COMPANY_HAS_MEMBERS']);
+
+/** Texte à taper pour confirmer un lot de `n` comptes : « SUPPRIMER n ». */
+export const bulkConfirmText = (n) => `SUPPRIMER ${n}`;
+const normalizeConfirm = (t) => String(t ?? '').trim().replace(/\s+/g, ' ');
 
 export class AccountClosureError extends Error {
   constructor(status, code, message = code) {
@@ -171,7 +180,7 @@ const sameEmail = (a, b) => String(a || '').trim().toLowerCase() === String(b ||
 export function createAccountClosureService(overrides = {}) {
   const d = { ...defaultDeps(), ...overrides };
 
-  return {
+  const service = {
     /**
      * Désactive (`disabled: true`) ou réactive un compte. `admin` : `{ userId, name }` de l'administrateur (jeton).
      * Effet immédiat : le cache d'état du compte est vidé sur ce serveur (l'orchestrateur le relit en quelques secondes).
@@ -256,7 +265,9 @@ export function createAccountClosureService(overrides = {}) {
       await d.recordDeletion({
         userId: String(user._id),
         at,
-        actor: actor.type === 'admin' ? { type: 'admin', adminId: actor.userId ? String(actor.userId) : null } : { type: 'self' },
+        actor: actor.type === 'admin'
+          ? { type: 'admin', adminId: actor.userId ? String(actor.userId) : null, ...(actor.batchId ? { batchId: String(actor.batchId) } : {}) }
+          : { type: 'self' },
         ...summary,
       });
       const deletedEmail = user.email;
@@ -278,7 +289,73 @@ export function createAccountClosureService(overrides = {}) {
       }
       return { userId: String(user._id), deletedAt: at, ...summary, emailFreed: true, confirmationEmailSent };
     },
+
+    /**
+     * Suppression en masse (console d'administration) : chaque compte passe par deleteAccount, exactement comme une suppression
+     * unitaire (orchestrateur, journal, effacement, e-mail selon l'offre, mêmes refus). La saisie « SUPPRIMER n » remplace l'email
+     * retapé. Un échec n'arrête jamais le lot. Une ligne de journal par compte (account_deletions, par deleteAccount) + une pour le lot.
+     */
+    async bulkDeleteAccounts({ userIds, confirmText, admin }) {
+      if (!Array.isArray(userIds) || userIds.length === 0
+        || userIds.some((id) => typeof id !== 'string' || id.trim() === '')) {
+        throw new AccountClosureError(400, 'INVALID_USER_IDS', '`userIds` must be a non-empty array of ids');
+      }
+      const ids = userIds.map((id) => id.trim());
+      if (new Set(ids).size !== ids.length) throw new AccountClosureError(400, 'INVALID_USER_IDS', '`userIds` contains duplicates');
+      if (ids.length > BULK_DELETE_MAX) {
+        throw new AccountClosureError(400, 'TOO_MANY_USERS', `At most ${BULK_DELETE_MAX} accounts per batch`);
+      }
+      if (normalizeConfirm(confirmText) !== bulkConfirmText(ids.length)) {
+        throw new AccountClosureError(400, 'CONFIRMATION_MISMATCH', `Type "${bulkConfirmText(ids.length)}" to confirm`);
+      }
+
+      const adminId = admin?.userId ? String(admin.userId) : null;
+      const batchId = new mongoose.Types.ObjectId().toString();
+      const startedAt = d.now();
+
+      const deleteOne = async (userId) => {
+        let email = null;
+        try {
+          const user = await d.findUser(userId);
+          if (!user) return { userId, email, status: 'refused', code: 'ACCOUNT_NOT_FOUND' };
+          email = user.email || null;
+          // Même chemin que la suppression unitaire : l'email du compte tient lieu de saisie (le lot est confirmé par « SUPPRIMER n »).
+          const out = await service.deleteAccount({ userId, actor: { type: 'admin', userId: adminId, batchId }, confirmEmail: user.email });
+          return { userId, email, status: 'deleted', confirmationEmailSent: out.confirmationEmailSent === true };
+        } catch (err) {
+          const code = err?.code === 'USER_NOT_FOUND' ? 'ACCOUNT_NOT_FOUND' : (err instanceof AccountClosureError ? err.code : 'ACCOUNT_CLOSURE_FAILED');
+          if (!(err instanceof AccountClosureError)) d.log(`[account-closure] suppression en masse : échec pour le compte ${userId} : ${err?.message || err}`);
+          return { userId, email, status: BULK_REFUSED_CODES.has(code) ? 'refused' : 'failed', code };
+        }
+      };
+
+      const results = new Array(ids.length);
+      let next = 0;
+      const worker = async () => {
+        while (next < ids.length) {
+          const i = next;
+          next += 1;
+          results[i] = await deleteOne(ids[i]);
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(BULK_DELETE_CONCURRENCY, ids.length) }, worker));
+
+      const totals = {
+        requested: ids.length,
+        deleted: results.filter((r) => r.status === 'deleted').length,
+        refused: results.filter((r) => r.status === 'refused').length,
+        failed: results.filter((r) => r.status === 'failed').length,
+      };
+      // Ligne du lot, sans donnée personnelle : qui, quand, combien.
+      try {
+        await d.recordAudit({ action: 'accounts_bulk_deleted', batchId, adminId, at: startedAt, finishedAt: d.now(), ...totals });
+      } catch (err) {
+        d.log(`[account-closure] journal du lot ${batchId} non écrit : ${err?.message || err}`);
+      }
+      return { batchId, results, totals };
+    },
   };
+  return service;
 }
 
 export const accountClosureService = createAccountClosureService();
