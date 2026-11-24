@@ -94,3 +94,16 @@ assert.deepEqual(Object.keys(cs.value.company.clientScreen.byOperation), [GIG], 
 assert.equal(normalizeWorkspaceInput({ company: { clientScreen: 'x' } }).errors.length, 1);
 // un agent ne modifie pas l'écran client (état partagé du centre)
 assert.equal(writableParts('agent', cs.value).company, undefined);
+
+// profil du compte (Nomad) : « solo » ou « company » conservés tels quels ; toute autre valeur ignorée, sans erreur
+assert.equal(normalizeWorkspaceInput({ company: { accountProfile: 'solo' } }).value.company.accountProfile, 'solo');
+assert.equal(normalizeWorkspaceInput({ company: { accountProfile: 'company' } }).value.company.accountProfile, 'company');
+for (const bad of ['SOLO', 'nomad', '', null, 1, { p: 'solo' }]) {
+  const r = normalizeWorkspaceInput({ company: { accountProfile: bad } });
+  assert.deepEqual(r.errors, [], `pas d'erreur pour ${JSON.stringify(bad)}`);
+  assert.equal('accountProfile' in r.value.company, false, `ignoré : ${JSON.stringify(bad)}`);
+}
+assert.equal('accountProfile' in normalizeWorkspaceInput({ company: { queues: [] } }).value.company, false, 'absent : rien n’est écrit (la valeur enregistrée est gardée)');
+// un membre de l'équipe l'écrit avec l'état du centre ; un agent jamais
+assert.equal(writableParts('member', { company: { accountProfile: 'solo' } }).company.accountProfile, 'solo');
+assert.equal(writableParts('agent', { company: { accountProfile: 'solo' } }).company, undefined);
