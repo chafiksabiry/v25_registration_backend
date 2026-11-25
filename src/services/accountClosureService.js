@@ -4,7 +4,6 @@ import User from '../models/User.js';
 import CompanyMembership from '../models/CompanyMembership.js';
 import AgentInvitation from '../models/AgentInvitation.js';
 import AgentShift from '../models/AgentShift.js';
-import AgentListenGrant from '../models/AgentListenGrant.js';
 import CallCenterBranding from '../models/CallCenterBranding.js';
 import CallCenterClient from '../models/CallCenterClient.js';
 import CallCenterClientAccess from '../models/CallCenterClientAccess.js';
@@ -123,7 +122,6 @@ const defaultDeps = () => ({
       CompanyMembership.deleteMany({ $or: [{ userId: u }, ...(ids.length ? [byCompany] : [])] }),
       AgentInvitation.deleteMany({ $or: [{ userId: u }, ...(ids.length ? [byCompany] : [])] }),
       AgentShift.deleteMany({ $or: [{ userId: u }, ...(ids.length ? [byCompany] : [])] }),
-      AgentListenGrant.deleteMany({ $or: [{ userId: u }, ...(ids.length ? [byCompany] : [])] }),
       CallCenterClientAccess.deleteMany({ $or: [{ userId: u }, ...(ids.length ? [byCompany] : [])] }),
       CallCenterOnboardingFeedback.deleteMany({ $or: [{ userId: u }, ...(ids.length ? [byCompany] : [])] }),
       CallCenterWorkspaceState.deleteMany({ $or: [{ userId: u }, ...(ids.length ? [byCompany] : [])] }),
