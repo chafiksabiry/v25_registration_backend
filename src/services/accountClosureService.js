@@ -150,8 +150,10 @@ const defaultDeps = () => ({
    * dernier palier connu de l'abonnement (Nomad Solo = NOMAD, autres paliers = CLOUD), sinon le profil enregistré par le portail
    * (`accountProfile` : « solo » = NOMAD, « company » = CLOUD). null si rien ne permet de le dire.
    */
-  accountProduct: ({ companyIds }) => resolveAccountOffer({
+  accountProduct: ({ companyIds, signup = null }) => resolveAccountOffer({
     companyIds,
+    // Parcours d'entrée du compte : fait foi s'il est connu (accountOffer.js).
+    signup,
     lastKnownTier: (id) => getLastKnownCompanyProduct(id, mongoose.connection.db),
     workspaceStates: (ids) => CallCenterWorkspaceState.find({ companyId: { $in: ids.map(oid) }, scope: 'company' }).lean(),
   }),
@@ -246,7 +248,7 @@ export function createAccountClosureService(overrides = {}) {
       let offer = actor.type === 'self' && DELETION_EMAIL_PRODUCTS.includes(product) ? product : null;
       if (!offer) {
         try {
-          offer = await d.accountProduct({ companyIds });
+          offer = await d.accountProduct({ companyIds, signup: user.signup || null });
         } catch (err) {
           d.log(`[account-closure] offre du compte non lue (compte ${String(user._id)}) : ${err?.message || err}`);
         }

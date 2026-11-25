@@ -28,8 +28,15 @@ import { ENTITLED_STATUSES, productFromPlanMetadata } from './companyProduct.js'
  * suppression : agents rattachés par `employerCompanyId` / `employments.companyId`, et accès `CompanyMembership`, le titulaire
  * exclu) n'est jamais NOMAD. Un palier CLOUD de l'une de ses sociétés donne CLOUD + produit ; sinon (palier nomad_solo, ancien
  * « essentiel », ou seul profil « solo » : données incohérentes) CLOUD, produit inconnu (`membersOverride: true`).
+ *
+ * Parcours d'entrée (fondateur, 25/11/2026 : « l'offre et le produit choisis à l'inscription font foi ») : quand le compte porte
+ * `signup.offer` (posé à la création, utils/signupJourney.js), il prime sur la déduction ci-dessus (`source: 'signup'`). La règle
+ * des membres reste : un `signup.offer` NOMAD avec d'autres membres donne la déduction (jamais NOMAD). Produit CLOUD : celui du
+ * parcours, sinon celui déduit de l'abonnement. Sans `signup.offer` (comptes antérieurs) : déduction inchangée.
  */
 export const OFFERS = ['nomad', 'cloud'];
+/** Offres du parcours d'entrée (utils/signupJourney.js SIGNUP_OFFERS). */
+export const SIGNUP_OFFER_VALUES = ['nomad', 'cloud', 'taas'];
 export const CLOUD_PRODUCTS = ['receptionist', 'entreprise', 'contact_centre'];
 
 const TIER_OFFER = {
@@ -58,7 +65,29 @@ export function offerFromAccountProfile(profile) {
  * `hasOtherMembers` (facultatif, booléen) : une société du compte compte d'autres membres -> jamais NOMAD (règle ci-dessus).
  * @returns {Promise<{offer: 'nomad'|'cloud'|null, product: string|null, source: 'subscription'|'accountProfile'|null, tier: string|null, accountProfile: string|null, membersOverride?: true}>}
  */
-export async function resolveAccountOfferDetail({ companyIds, lastKnownTier, workspaceStates, hasOtherMembers = false }) {
+export async function resolveAccountOfferDetail({ companyIds, lastKnownTier, workspaceStates, hasOtherMembers = false, signup = null }) {
+  return applySignupOffer(await inferAccountOfferDetail({ companyIds, lastKnownTier, workspaceStates, hasOtherMembers }), signup, { hasOtherMembers });
+}
+
+/**
+ * Le parcours d'entrée prime sur l'offre déduite (voir l'en-tête) ; règle des membres gardée. Pure.
+ * @param {object} inferred résultat de la déduction (abonnement, profil du portail)
+ * @param {{offer?: string, product?: string}|null} signup `user.signup`
+ */
+export function applySignupOffer(inferred, signup, { hasOtherMembers = false } = {}) {
+  const offer = SIGNUP_OFFER_VALUES.includes(signup?.offer) ? signup.offer : null;
+  if (!offer) return inferred;
+  if (offer === 'nomad' && hasOtherMembers) {
+    // « Si avec d'autres membres ça ne peut pas être NOMAD » : la déduction (qui ne donne jamais NOMAD dans ce cas) décide.
+    return inferred.offer ? inferred : { ...UNKNOWN, offer: 'cloud', source: 'signup', membersOverride: true };
+  }
+  const product = offer === 'cloud'
+    ? (CLOUD_PRODUCTS.includes(signup.product) ? signup.product : inferred.offer === 'cloud' ? inferred.product : null)
+    : null;
+  return { offer, product, source: 'signup', tier: inferred.tier || null, accountProfile: inferred.accountProfile || null };
+}
+
+async function inferAccountOfferDetail({ companyIds, lastKnownTier, workspaceStates, hasOtherMembers = false }) {
   if (!companyIds.length) return { ...UNKNOWN };
   // Avec d'autres membres, un palier NOMAD ne décide pas : on cherche un palier CLOUD dans les autres sociétés.
   let nomadTier = null;
@@ -151,10 +180,12 @@ const createdAtDesc = (a, b) => new Date(b?.createdAt || 0) - new Date(a?.create
  * comptent, comme pour l'e-mail de suppression.
  * @returns {Promise<Map<string, {offer, product, source, tier, accountProfile, companyId}>>} clé = id du compte
  */
-export async function loadAccountOffers(db, userIds) {
+export async function loadAccountOffers(db, userIds, { signups = null } = {}) {
   const result = new Map();
   const ids = [...new Set((userIds || []).map(String))];
-  ids.forEach((id) => result.set(id, { ...UNKNOWN, companyId: null }));
+  // Parcours d'entrée déjà lus par l'appelant (liste, fiche) : aucune lecture en plus. Comptes sans société : le parcours suffit.
+  const signupOf = (id) => (signups && typeof signups.get === 'function' ? signups.get(String(id)) || null : null);
+  ids.forEach((id) => result.set(id, { ...applySignupOffer({ ...UNKNOWN }, signupOf(id)), companyId: null }));
   if (!ids.length) return result;
 
   // Sociétés du compte ET leurs autres membres dans la même lecture (pas de requête en plus) : mêmes comptes que
@@ -212,6 +243,7 @@ export async function loadAccountOffers(db, userIds) {
     const resolved = await resolveAccountOfferDetail({
       companyIds,
       hasOtherMembers: usersWithMembers.has(userId),
+      signup: signupOf(userId),
       lastKnownTier: async (id) => {
         const tier = lastKnownTierFromSubscriptions(subsByCompany.get(id) || [], planById);
         tierByCompany.set(id, tier);
@@ -226,12 +258,19 @@ export async function loadAccountOffers(db, userIds) {
     let companyId = null;
     if (resolved.source === 'subscription') companyId = companyIds.find((id) => tierByCompany.get(id) === resolved.tier) || null;
     if (resolved.source === 'accountProfile') companyId = stateRows.find((st) => st?.data?.accountProfile === resolved.accountProfile)?.companyId || null;
+    // Offre du parcours d'entrée : la société du palier ou du profil si l'un a été lu, sinon la première société du compte.
+    if (resolved.source === 'signup') {
+      companyId = (resolved.tier && companyIds.find((id) => tierByCompany.get(id) === resolved.tier))
+        || (resolved.accountProfile && stateRows.find((st) => st?.data?.accountProfile === resolved.accountProfile)?.companyId)
+        || companyIds[0] || null;
+    }
     result.set(userId, { ...resolved, companyId: resolved.offer ? companyId : null });
   }
   return result;
 }
 
 /** Offre d'un seul compte (fiche admin) : mêmes lectures groupées que la liste. */
-export async function loadAccountOffer(db, userId) {
-  return (await loadAccountOffers(db, [userId])).get(String(userId));
+export async function loadAccountOffer(db, userId, { signup = null } = {}) {
+  const signups = signup ? new Map([[String(userId), signup]]) : null;
+  return (await loadAccountOffers(db, [userId], { signups })).get(String(userId));
 }

@@ -210,6 +210,48 @@ const userSchema = new mongoose.Schema({
     userId: { type: mongoose.Schema.Types.ObjectId, default: null },
     name: { type: String, default: null },
   },
+  /**
+   * Parcours d'entrée (utils/signupJourney.js) : offre et produit de l'adresse d'inscription, posés une fois à la création ;
+   * valeurs de listes fermées seulement. Absent pour les comptes créés avant le suivi.
+   */
+  signup: {
+    type: new mongoose.Schema(
+      {
+        offer: { type: String, enum: ['nomad', 'cloud', 'taas', null], default: null },
+        product: { type: String, enum: ['receptionist', 'entreprise', 'contact_centre', null], default: null },
+        entry: { type: String, default: null },
+        lang: { type: String, default: null },
+        country: { type: String, default: null },
+        at: { type: Date, default: null },
+      },
+      { _id: false }
+    ),
+    default: undefined,
+  },
+  /**
+   * Étapes datées du parcours d'inscription, chacune posée la première fois seulement (services/signupJourney.js ; identité,
+   * appel d'essai, numéro et paiement posés par v25_comporchestrator_back dans la même collection). Absent pour les comptes antérieurs.
+   */
+  journey: {
+    type: new mongoose.Schema(
+      {
+        account_created: Date,
+        email_verified: Date,
+        phone_verified: Date,
+        identity_submitted: Date,
+        identity_verified: Date,
+        offer_chosen: Date,
+        trial_call: Date,
+        trial_call_outcome: { type: String, enum: ['done', 'skipped', 'used'] },
+        number_chosen: Date,
+        payment_succeeded: Date,
+        onboarding_finished: Date,
+        first_login_app: Date,
+      },
+      { _id: false }
+    ),
+    default: undefined,
+  },
 });
 
 userSchema.pre('save', async function(next) {
