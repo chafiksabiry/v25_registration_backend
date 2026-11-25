@@ -103,7 +103,8 @@ function assertNoForgedField(data, doc) {
   const { data, doc } = created.at(-1);
   assert.deepEqual(
     Object.keys(data).sort(),
-    ['email', 'fullName', 'ipHistory', 'isVerified', 'password', 'phone', 'verificationCode']
+    // `journey` : date de création du parcours d'inscription, fixée par le serveur (utils/signupJourney.js).
+    ['email', 'fullName', 'ipHistory', 'isVerified', 'journey', 'password', 'phone', 'verificationCode']
   );
   assert.equal(doc.fullName, 'Marie Durand');
   assert.equal(doc.email, 'marie@ex.com');

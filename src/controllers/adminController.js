@@ -57,6 +57,7 @@ export const adminUsers = async (req, res) => {
       planName: req.query.planName,
       status: req.query.status,
       offer: req.query.offer,
+      journey: typeof req.query.journey === 'string' ? req.query.journey : '',
     });
     res.status(200).json({ success: true, data });
   } catch (error) {

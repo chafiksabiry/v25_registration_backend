@@ -16,6 +16,8 @@ import { activeEmployments, defaultCompanyId } from '../utils/employments.js';
 import { hashReengagementToken, generateReengagementToken } from '../utils/reengagementToken.js';
 import { normalizeOptionalPhone } from '../utils/phone.js';
 import { pickSignupFields } from '../utils/signupFields.js';
+import { pickSignup } from '../utils/signupJourney.js';
+import { stampJourney } from './signupJourney.js';
 import {
   normalizeEmail,
   isValidEmail,
@@ -144,7 +146,7 @@ class AuthService {
         return null;
       }
 
-      return {
+      const enriched = {
         region: locationInfo.region || null,
         city: locationInfo.city || null,
         isp: locationInfo.isp || null,
@@ -152,6 +154,10 @@ class AuthService {
         coordinates: locationInfo.coordinates || null,
         location: timezoneId
       };
+      // Pays de connexion, lu par register() pour le parcours d'entrée (signup.country) : propriété non énumérable, donc jamais
+      // recopiée dans l'historique IP (même contenu écrit qu'avant).
+      Object.defineProperty(enriched, 'countryCode', { value: locationInfo.countryCode || null, enumerable: false });
+      return enriched;
     } catch (error) {
       console.error('Error enriching IP info:', error);
       return null;
@@ -184,6 +190,10 @@ class AuthService {
 
     const clientIp = getClientIp(req);
     const locationInfo = await this.enrichIPInfo(clientIp);
+    const ipCountry = locationInfo?.countryCode || null;
+    const createdAt = new Date();
+    // Parcours d'entrée (offre / produit de l'adresse d'inscription), listes fermées seulement ; absent si le site n'en envoie pas.
+    const signup = pickSignup(rawUserData?.signup, { now: createdAt, ipCountry });
 
     const result = await userRepository.create({
       fullName: userData.fullName,
@@ -191,7 +201,9 @@ class AuthService {
       password,
       ...(phone ? { phone } : {}),
       ...(userData.attribution ? { attribution: userData.attribution } : {}),
+      ...(signup ? { signup } : {}),
       // Champs fixés par le serveur uniquement.
+      journey: { account_created: createdAt },
       isVerified: false,
       verificationCode: {
         code: verificationCode,
@@ -412,6 +424,7 @@ class AuthService {
           'verificationCode.expiresAt': '',
         },
       });
+      await stampJourney(user._id, 'email_verified');
 
       // Générer un token et le retourner avec les informations utilisateur
       return {
@@ -547,6 +560,7 @@ class AuthService {
             'verificationCode.otpExpiresAt': '',
           },
         });
+        await stampJourney(user._id, 'phone_verified');
         return {
           token: this.generateToken(user._id, {
             email: user.email,

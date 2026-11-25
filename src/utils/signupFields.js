@@ -7,7 +7,9 @@
  *
  * Tout le reste est fixé par le serveur seulement : isVerified, typeUser, product, verificationCode, employerCompanyId,
  * employments, linkedInId, invitation*, mustChangePassword, firstTime, source/importBatch, reengagement, inviteLogin,
- * pendingChanges, ipHistory, createdAt... Un corps qui les contient est accepté, mais ces clés sont ignorées.
+ * pendingChanges, ipHistory, createdAt, journey... Un corps qui les contient est accepté, mais ces clés sont ignorées.
+ * Le parcours d'entrée (`signup` : offre, produit, adresse, langue) est lu à part, valeurs de listes fermées seulement
+ * (utils/signupJourney.js, pickSignup).
  */
 export const SIGNUP_FIELDS = Object.freeze(['fullName', 'email', 'password', 'phone', 'attribution']);
 
