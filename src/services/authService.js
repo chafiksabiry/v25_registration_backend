@@ -15,6 +15,8 @@ import companyMemberService from './companyMemberService.js';
 import CompanyMembership from '../models/CompanyMembership.js';
 import { activeEmployments, defaultCompanyId } from '../utils/employments.js';
 import { hashReengagementToken, generateReengagementToken } from '../utils/reengagementToken.js';
+import { pickSignup } from '../utils/signupJourney.js';
+import { stampJourney } from './signupJourney.js';
 import {
   normalizeEmail,
   isValidEmail,
@@ -26,6 +28,16 @@ import {
 } from '../utils/reengagementRequest.js';
 import { normalizeOptionalPhone } from '../utils/phone.js';
 
+
+/** Compte désactivé par un administrateur : aucune connexion, aucun jeton (code ACCOUNT_DISABLED, 403). */
+export function assertAccountEnabled(user) {
+  if (user?.disabled === true) {
+    const err = new Error('Account disabled');
+    err.code = 'ACCOUNT_DISABLED';
+    err.statusCode = 403;
+    throw err;
+  }
+}
 
 // Client initialized lazily inside methods to ensure env vars are loaded
 class AuthService {
@@ -148,7 +160,7 @@ class AuthService {
         return null;
       }
 
-      return {
+      const enriched = {
         region: locationInfo.region || null,
         city: locationInfo.city || null,
         isp: locationInfo.isp || null,
@@ -156,6 +168,10 @@ class AuthService {
         coordinates: locationInfo.coordinates || null,
         location: timezoneId
       };
+      // Pays de connexion, lu par register() pour le parcours d'entrée (signup.country) : propriété non énumérable, donc jamais
+      // recopiée dans l'historique IP (même contenu écrit qu'avant).
+      Object.defineProperty(enriched, 'countryCode', { value: locationInfo.countryCode || null, enumerable: false });
+      return enriched;
     } catch (error) {
       console.error('Error enriching IP info:', error);
       return null;
@@ -185,12 +201,19 @@ class AuthService {
 
     const clientIp = getClientIp(req);
     const locationInfo = await this.enrichIPInfo(clientIp);
+    const ipCountry = locationInfo?.countryCode || null;
+    const createdAt = new Date();
+    // Parcours d'entrée (offre / produit de l'adresse d'inscription), listes fermées seulement ; absent si le site n'en envoie pas.
+    const signup = pickSignup(userData?.signup, { now: createdAt, ipCountry });
 
-    const { phone: _rawPhone, ...rest } = userData;
+    // `signup` (lu à part, listes fermées) et `journey` (fixé par le serveur) ne sont jamais recopiés tels quels du corps.
+    const { phone: _rawPhone, signup: _rawSignup, journey: _rawJourney, ...rest } = userData;
     const result = await userRepository.create({
       ...rest,
       email,
       ...(phone ? { phone } : {}),
+      ...(signup ? { signup } : {}),
+      journey: { account_created: createdAt },
       verificationCode: {
         code: verificationCode,
         expiresAt: verificationExpiry
@@ -245,6 +268,8 @@ class AuthService {
       err.code = 'INVALID_PASSWORD';
       throw err;
     }
+
+    assertAccountEnabled(user);
 
     if (!user.isVerified) {
       const err = new Error('Account not verified');
@@ -309,6 +334,7 @@ class AuthService {
     if (!user || user.typeUser !== 'rep') {
       throw fail('Invalid link', 'INVALID_LINK', 400);
     }
+    assertAccountEnabled(user);
     const expiresAt = user.reengagement?.expiresAt;
     if (!expiresAt || expiresAt < new Date()) {
       throw fail('This link has expired', 'LINK_EXPIRED', 410);
@@ -439,6 +465,7 @@ class AuthService {
       if (!user) {
         throw new Error('User not found');
       }
+      assertAccountEnabled(user);
 
       // Vérifier le code de vérification et sa validité
       if (
@@ -458,6 +485,7 @@ class AuthService {
           'verificationCode.expiresAt': '',
         },
       });
+      await stampJourney(user._id, 'email_verified');
 
       // Générer un token et le retourner avec les informations utilisateur
       return {
@@ -471,6 +499,7 @@ class AuthService {
         })
       };
     } catch (error) {
+      if (error.code === 'ACCOUNT_DISABLED') throw error;
       console.error('Error in verifyEmail:', error.message);
       // Propager une erreur pour qu'elle puisse être gérée par l'appelant
       throw new Error(error.message || 'Failed to verify email');
@@ -578,6 +607,7 @@ class AuthService {
       if (!user || !user.verificationCode) {
         throw new Error('User not found or OTP not generated');
       }
+      assertAccountEnabled(user);
 
       const { otp, otpExpiresAt } = user.verificationCode;
 
@@ -591,6 +621,7 @@ class AuthService {
             'verificationCode.otpExpiresAt': '',
           },
         });
+        await stampJourney(user._id, 'phone_verified');
         return {
           token: this.generateToken(user._id, {
             email: user.email,
@@ -608,6 +639,7 @@ class AuthService {
         // throw new Error('Invalid OTP. Please try again.');
       }
     } catch (error) {
+      if (error.code === 'ACCOUNT_DISABLED') throw error;
       console.error('Error in verifyOTPTwilio:', error);
       throw new Error(error.message || 'Failed to verify OTP');
     }
@@ -729,6 +761,7 @@ class AuthService {
       });
       await user.save();
     }
+    assertAccountEnabled(user);
 
     // Generate JWT Token with user info
     const token = jwt.sign({
@@ -858,6 +891,7 @@ class AuthService {
     if (!isMatch) {
       throw new Error('Invalid admin credentials');
     }
+    assertAccountEnabled(user);
 
     const clientIp = getClientIp(req);
     const locationInfo = await this.enrichIPInfo(clientIp);

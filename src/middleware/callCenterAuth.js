@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import { gateAccount } from '../services/accountGate.js';
 
 /**
  * Company MF often keeps a session via userId cookie without a fresh JWT.
@@ -11,7 +12,15 @@ export function authenticateCallCenter(req, res, next) {
     const token = authHeader.slice(7).trim();
     if (token) {
       try {
-        req.user = jwt.verify(token, process.env.JWT_SECRET);
+        const payload = jwt.verify(token, process.env.JWT_SECRET);
+        if (payload?.userId) {
+          // Compte désactivé ou supprimé : refusé même avec un jeton déjà émis (services/accountGate.js).
+          return gateAccount(payload.userId, res, next, () => {
+            req.user = payload;
+            return next();
+          });
+        }
+        req.user = payload;
         return next();
       } catch {
         // fall through to userId-based session
@@ -43,8 +52,10 @@ export function authenticateUserJwt(req, res, next) {
     try {
       const payload = jwt.verify(token, process.env.JWT_SECRET);
       if (payload?.userId) {
-        req.user = payload;
-        return next();
+        return gateAccount(payload.userId, res, next, () => {
+          req.user = payload;
+          return next();
+        });
       }
     } catch {
       // handled below

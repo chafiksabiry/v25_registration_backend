@@ -1,6 +1,9 @@
 import mongoose from 'mongoose';
 import User from '../models/User.js';
 import { formatCompanyOnboarding, formatRepOnboarding } from './adminOnboardingUtils.js';
+import { loadAccountOffers } from './accountOffer.js';
+import { JOURNEY_FILTERS, matchesJourneyFilter, summarizeJourney } from '../utils/signupJourney.js';
+import { isProtectedAccount } from './accountGate.js';
 
 async function loadCompanyProfilesForList(db, users) {
   const companyUserIds = users
@@ -112,6 +115,24 @@ function applyRepProfileToUser(user, agent) {
   };
 }
 
+/** Offre exposée à l'admin : offre (nomad / cloud / null = inconnue), produit CLOUD et d'où elle est lue. */
+export function publicAccountOffer(resolved) {
+  return {
+    offer: resolved?.offer || null,
+    product: resolved?.product || null,
+    source: resolved?.source || null,
+  };
+}
+
+/** Filtre « offre » de la liste : nomad, cloud, ou unknown (offre inconnue). Valeur invalide : pas de filtre. */
+export const OFFER_FILTERS = ['nomad', 'cloud', 'unknown'];
+
+export function matchesOfferFilter(user, offer) {
+  if (!OFFER_FILTERS.includes(offer)) return true;
+  const value = user.accountOffer?.offer || null;
+  return offer === 'unknown' ? value === null : value === offer;
+}
+
 async function enrichUsersWithOnboarding(users) {
   if (!users.length) {
     return users;
@@ -120,7 +141,7 @@ async function enrichUsersWithOnboarding(users) {
   const db = mongoose.connection.db;
   const userObjectIds = users.map((user) => new mongoose.Types.ObjectId(String(user._id)));
 
-  const [agents, companies, companyProfiles] = await Promise.all([
+  const [agents, companies, companyProfiles, accountOffers] = await Promise.all([
     db
       .collection('agents')
       .find({ userId: { $in: userObjectIds } })
@@ -128,6 +149,10 @@ async function enrichUsersWithOnboarding(users) {
       .toArray(),
     db.collection('companies').find({ userId: { $in: userObjectIds } }).project({ userId: 1 }).toArray(),
     loadCompanyProfilesForList(db, users),
+    // Offre réelle (NOMAD / CLOUD + produit) : lectures groupées pour toute la page, pas une par compte.
+    loadAccountOffers(db, users.map((user) => user._id), {
+      signups: new Map(users.filter((user) => user.signup).map((user) => [String(user._id), user.signup])),
+    }),
   ]);
 
   const agentByUserId = new Map(agents.map((agent) => [String(agent.userId), agent]));
@@ -142,7 +167,14 @@ async function enrichUsersWithOnboarding(users) {
   );
 
   return users.map((user) => {
-    let enriched = { ...user };
+    // Parcours d'inscription résumé (statut, dernière étape) ; les champs bruts `signup` / `journey` ne sont pas renvoyés à la liste.
+    const { signup: _signup, journey: _journey, ...listed } = user;
+    const summary = summarizeJourney(user);
+    let enriched = {
+      ...listed,
+      accountOffer: publicAccountOffer(accountOffers.get(String(user._id))),
+      signupJourney: { status: summary.status, lastReached: summary.lastReached, offer: summary.signup?.offer || null, product: summary.signup?.product || null },
+    };
 
     if (user.typeUser === 'rep') {
       const agent = agentByUserId.get(String(user._id));
@@ -189,6 +221,9 @@ export async function getAdminStats() {
   };
 }
 
+/** Comptes protégés (démonstration Apple…) signalés à la liste : la console les rend non sélectionnables pour la suppression en masse. */
+export const markProtected = (users) => users.map((user) => ({ ...user, protectedAccount: isProtectedAccount(user.email) }));
+
 export async function listUsers({
   page = 1,
   limit = 25,
@@ -197,6 +232,9 @@ export async function listUsers({
   verified = '',
   onboardingStatus = '',
   planName = '',
+  status = '',
+  offer = '',
+  journey = '',
 } = {}) {
   const safeLimit = Math.min(Math.max(Number(limit) || 25, 1), 100);
   const safePage = Math.max(Number(page) || 1, 1);
@@ -204,10 +242,20 @@ export async function listUsers({
 
   const filter = {};
   const allowedTypes = ['rep', 'company', 'admin', 'call-center'];
-  const postFilters = Boolean(onboardingStatus || planName);
+  const offerFilter = OFFER_FILTERS.includes(offer) ? offer : '';
+  // Filtre « parcours » : terminé, bloqué à une étape (dernière étape atteinte), non enregistré (compte antérieur).
+  const journeyFilter = JOURNEY_FILTERS.includes(journey) ? journey : '';
+  const postFilters = Boolean(onboardingStatus || planName || offerFilter || journeyFilter);
 
   if (typeUser && allowedTypes.includes(typeUser)) {
     filter.typeUser = typeUser;
+  }
+
+  // Statut du compte (maquette A1) : actif / désactivé.
+  if (status === 'disabled') {
+    filter.disabled = true;
+  } else if (status === 'active') {
+    filter.disabled = { $ne: true };
   }
 
   if (verified === 'true') {
@@ -264,7 +312,7 @@ export async function listUsers({
   if (postFilters) {
     const rawUsers = await User.find(filter)
       .sort({ createdAt: -1 })
-      .select('fullName email phone typeUser isVerified createdAt')
+      .select('fullName email phone typeUser isVerified createdAt disabled disabledAt signup journey')
       .lean();
     let users = await enrichUsersWithOnboarding(rawUsers);
 
@@ -275,12 +323,18 @@ export async function listUsers({
       const normalizedPlan = String(planName).trim().toLowerCase();
       users = users.filter((user) => (user.planName || '').toLowerCase() === normalizedPlan);
     }
+    if (offerFilter) {
+      users = users.filter((user) => matchesOfferFilter(user, offerFilter));
+    }
+    if (journeyFilter) {
+      users = users.filter((user) => matchesJourneyFilter(user.signupJourney, journeyFilter));
+    }
 
     const total = users.length;
     const paginated = users.slice(skip, skip + safeLimit);
 
     return {
-      users: paginated,
+      users: markProtected(paginated),
       pagination: {
         page: safePage,
         limit: safeLimit,
@@ -295,7 +349,7 @@ export async function listUsers({
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(safeLimit)
-      .select('fullName email phone typeUser isVerified createdAt')
+      .select('fullName email phone typeUser isVerified createdAt disabled disabledAt signup journey')
       .lean(),
     User.countDocuments(filter),
   ]);
@@ -303,7 +357,7 @@ export async function listUsers({
   const users = await enrichUsersWithOnboarding(rawUsers);
 
   return {
-    users,
+    users: markProtected(users),
     pagination: {
       page: safePage,
       limit: safeLimit,

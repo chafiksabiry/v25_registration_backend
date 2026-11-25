@@ -5,6 +5,7 @@ import CallCenterWorkspaceState from '../models/CallCenterWorkspaceState.js';
 import { hasEmployment } from '../utils/employments.js';
 import { normalizeContactInput } from './callCenterCompanyProfileValidation.js';
 import { normalizeWorkspaceInput, writableParts } from './callCenterWorkspaceStateValidation.js';
+import { stampJourneyForCompany, workspaceMilestones } from './signupJourney.js';
 
 function fail(statusCode, message) {
   const err = new Error(message);
@@ -55,6 +56,10 @@ export async function saveWorkspaceState(callerUserId, companyId, body) {
   if (value.company) merge('company', null, value.company);
   if (value.user) merge('user', oid(callerUserId), value.user);
   await Promise.all(writes);
+  // Parcours d'inscription du titulaire : « Votre offre » et fin de la mise en route (première fois seulement, jamais bloquant).
+  if (value.company?.onboarding) {
+    for (const milestone of workspaceMilestones(body)) await stampJourneyForCompany(companyId, milestone);
+  }
   return getWorkspaceState(callerUserId, companyId);
 }
 

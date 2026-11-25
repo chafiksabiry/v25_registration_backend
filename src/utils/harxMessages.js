@@ -16,8 +16,20 @@ function publicApiBase() {
   ).replace(/\/$/, '');
 }
 
+/**
+ * Bandeau HARX des e-mails : intégré au message (pièce jointe inline, Content-ID HARX_LOGO_CID),
+ * pour qu'il s'affiche sans « Afficher les images ». sendAppEmail joint le fichier sur le relais SMTP
+ * et, sur l'API Brevo (pas de Content-ID), remplace la référence par l'URL publique harxLogoUrl().
+ */
+export const HARX_LOGO_CID = 'harx-logo';
+export const HARX_LOGO_SRC = `cid:${HARX_LOGO_CID}`;
+
+export function harxLogoUrl() {
+  return `${publicApiBase()}/email/harx-logo.jpg`;
+}
+
 function harxEmailShell({ eyebrow, title, intro, bodyHtml, footer }) {
-  const logoUrl = escapeHtml(`${publicApiBase()}/email/logo-pink.png`);
+  const logoUrl = HARX_LOGO_SRC;
   return `<!DOCTYPE html>
 <html lang="fr">
   <body style="margin:0;padding:0;background-color:#fff1f2;">
@@ -382,6 +394,57 @@ export function clientPortalInvitationEmail({ firstName, email, tempPassword, ce
         <p style="margin:0;text-align:center;">
           <a href="${safeUrl}" style="display:inline-block;background-color:#ec4899;background-image:linear-gradient(90deg,#ff4d4d 0%,#ec4899 100%);color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:12px;font-weight:700;">Ouvrir mon portail</a>
         </p>`,
+    }),
+  };
+}
+
+/** Numéro E.164 lisible : +33 1 42 00 00 07 (France), sinon le numéro tel quel. */
+function readableNumber(e164) {
+  const n = String(e164 || '').trim();
+  const fr = /^\+33(\d)(\d{2})(\d{2})(\d{2})(\d{2})$/.exec(n);
+  return fr ? `+33 ${fr.slice(1).join(' ')}` : n;
+}
+
+/** Offres dont le nom figure dans l'e-mail de suppression (jamais traduit, jamais mélangé) ; toute autre valeur : HARX seul. */
+export const DELETION_EMAIL_PRODUCTS = ['nomad', 'cloud'];
+
+/**
+ * Confirmation de suppression du compte (après la suppression réussie), envoyée à l'adresse supprimée.
+ * `byAdmin` : suppression par l'équipe HARX (maquette A3) ; sinon par l'abonné lui-même (B4).
+ * `product` : offre du compte (« nomad » ou « cloud ») : « HARX NOMAD » / « HARX CLOUD » ; inconnue : « HARX » seul, neutre.
+ * Même récapitulatif que l'écran « Votre compte a été supprimé » ; aucun lien qui demande une connexion (le compte n'existe plus).
+ */
+export function accountDeletedEmail({ email, numbers = [], byAdmin = false, product = null }) {
+  const brand = DELETION_EMAIL_PRODUCTS.includes(product) ? `HARX ${String(product).toUpperCase()}` : 'HARX';
+  const list = (Array.isArray(numbers) ? numbers : []).filter(Boolean).map(readableNumber);
+  const number = list.join(', ');
+  const title = byAdmin ? 'Votre compte a été supprimé par l\'équipe HARX' : 'Votre compte a été supprimé';
+  const items = [
+    'Votre abonnement est arrêté — plus aucun prélèvement.',
+    number ? `Votre numéro ${number} est libéré.` : 'Votre numéro est libéré.',
+    'Vos données sont effacées (contacts, journal d\'appels, messages, pièces d\'identité, minutes et jetons).',
+    `Votre e-mail ${email} est libéré : vous pouvez créer un nouveau compte avec cette adresse.`,
+  ];
+  const intro = byAdmin
+    ? `L'équipe HARX a supprimé votre compte ${brand}. Voici ce que cela signifie :`
+    : `Vous avez supprimé votre compte ${brand}. Voici ce que cela signifie :`;
+  const footer = 'Les factures déjà émises restent disponibles chez notre prestataire de paiement, comme la loi l\'exige. Une question ? Écrivez à support@harx.ai.';
+  return {
+    subject: `Votre compte ${brand} a été supprimé`,
+    text:
+      `${brand}\n\n${title}\n\n${intro}\n` +
+      items.map((t) => `- ${t}`).join('\n') +
+      `\n\n${footer}`,
+    html: harxEmailShell({
+      eyebrow: brand === 'HARX' ? 'COMPTE SUPPRIMÉ' : `${brand.slice(5)} · COMPTE SUPPRIMÉ`,
+      title: escapeHtml(title),
+      intro: escapeHtml(intro),
+      bodyHtml: `
+        <ul style="margin:0 0 8px;padding-left:20px;font-size:14px;line-height:1.7;color:#1e293b;">
+          ${items.map((t) => `<li style="margin:0 0 6px;">${escapeHtml(t)}</li>`).join('')}
+        </ul>
+      `,
+      footer: escapeHtml(footer),
     }),
   };
 }

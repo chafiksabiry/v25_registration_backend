@@ -1,3 +1,4 @@
+import { accountClosureService, sendClosureError } from '../services/accountClosureService.js';
 import userService from '../services/userService.js';
 
 // Contrôleur pour récupérer les détails d'un utilisateur
@@ -223,3 +224,18 @@ export const getUserIPHistory = async (req, res) => {
 };
 
  
+/** POST /api/users/:userId/delete-account — `{ email, password, product? }` (offre du compte : « nomad » | « cloud », pour l'e-mail) : suppression définitive par l'abonné lui-même (maquette B4). */
+export const deleteOwnAccount = async (req, res) => {
+  try {
+    const data = await accountClosureService.deleteAccount({
+      userId: req.params.userId,
+      actor: { type: 'self' },
+      email: req.body?.email,
+      password: req.body?.password,
+      product: req.body?.product,
+    });
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    sendClosureError(res, error);
+  }
+};

@@ -68,6 +68,16 @@ app.get('/email/logo-pink.png', (_req, res) => {
   res.sendFile(logoPath);
 });
 
+// Light HARX header (1120x631 JPEG, ~28 KB): remote fallback of the inline cid:harx-logo image.
+const emailLogoPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'assets', 'harx-email-logo.jpg');
+app.get('/email/harx-logo.jpg', (_req, res) => {
+  res.set('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Cache-Control', 'public, max-age=86400');
+  res.type('jpg');
+  res.sendFile(emailLogoPath);
+});
+
 // Slim HARX banner (1120x239, ~17 KB) for campaign e-mails.
 const bannerPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'assets', 'harx-email-banner.jpg');
 app.get('/email/harx-banner.jpg', (_req, res) => {
