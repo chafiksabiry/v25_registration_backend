@@ -107,3 +107,41 @@ export async function assertCanAddSeat(companyId, db) {
     throw err;
   }
 }
+
+/**
+ * Palier Call Centre du centre pour une décision d'accès :
+ * 1. l'abonnement actif ou en essai le plus récent (même lecture que getCompanyProduct) ;
+ * 2. s'il n'y en a aucun, le dernier palier connu QUEL QUE SOIT le statut (impayé, annulé…) : une décision d'accès ne
+ *    doit pas s'ouvrir parce que le paiement a échoué.
+ * null seulement si le centre n'a jamais eu d'abonnement Call Centre à palier connu.
+ */
+export async function getLastKnownCompanyProduct(companyId, db = mongoose.connection.db) {
+  if (!companyId) return null;
+  const entitled = await lastEntitledSubscription(db, companyId);
+  if (entitled?.planId) {
+    const planId = mongoose.isValidObjectId(String(entitled.planId))
+      ? new mongoose.Types.ObjectId(String(entitled.planId))
+      : entitled.planId;
+    const plan = await db.collection('subscriptionplans').findOne({ _id: planId });
+    const product = productFromPlanMetadata(plan?.metadata);
+    if (product) return product;
+  }
+  const ids = [String(companyId)];
+  if (mongoose.isValidObjectId(String(companyId))) ids.push(new mongoose.Types.ObjectId(String(companyId)));
+  const subscriptions = await db
+    .collection('subscriptions')
+    .find({ companyId: { $in: ids } })
+    .sort({ createdAt: -1 })
+    .limit(20)
+    .toArray();
+  for (const subscription of subscriptions) {
+    if (!subscription?.planId) continue;
+    const planId = mongoose.isValidObjectId(String(subscription.planId))
+      ? new mongoose.Types.ObjectId(String(subscription.planId))
+      : subscription.planId;
+    const plan = await db.collection('subscriptionplans').findOne({ _id: planId });
+    const product = productFromPlanMetadata(plan?.metadata);
+    if (product) return product;
+  }
+  return null;
+}
