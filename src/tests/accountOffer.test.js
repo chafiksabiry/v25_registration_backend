@@ -8,6 +8,8 @@ import {
   lastKnownTierFromSubscriptions,
   loadAccountOffers,
   loadAccountOffer,
+  companiesWithMembersPipeline,
+  otherMembersOf,
 } from '../services/accountOffer.js';
 import { resolveAccountOffer } from '../services/accountClosureService.js';
 import { matchesOfferFilter, publicAccountOffer } from '../services/adminService.js';
@@ -79,6 +81,31 @@ function fakeDb(data) {
         const rows = (data[name] || []).filter((doc) => match(name, filter, doc));
         const cursor = { project: () => cursor, sort: () => cursor, toArray: async () => rows };
         return cursor;
+      },
+      // Lecture groupée des sociétés (companiesWithMembersPipeline) : $match, $lookup (localField / foreignField, tableaux
+      // compris, comme MongoDB) et $project de chemins « $a.b ». Une seule lecture comptée.
+      aggregate: (pipeline) => {
+        calls.push(name);
+        const path = (doc, p) => p.split('.').reduce((v, k) => (Array.isArray(v) ? v.flatMap((x) => (x?.[k] === undefined ? [] : [x[k]])) : v?.[k]), doc);
+        let rows = [...(data[name] || [])];
+        for (const stage of pipeline) {
+          if (stage.$match) rows = rows.filter((doc) => match(name, stage.$match, doc));
+          if (stage.$lookup) {
+            const { from, localField, foreignField, as } = stage.$lookup;
+            rows = rows.map((doc) => ({
+              ...doc,
+              [as]: (data[from] || []).filter((o) => {
+                const v = path(o, foreignField);
+                const local = path(doc, localField);
+                return Array.isArray(v) ? v.some((x) => x instanceof mongoose.Types.ObjectId && local instanceof mongoose.Types.ObjectId && x.equals(local)) : v instanceof mongoose.Types.ObjectId && local instanceof mongoose.Types.ObjectId && v.equals(local);
+              }),
+            }));
+          }
+          if (stage.$project) {
+            rows = rows.map((doc) => Object.fromEntries(Object.entries(stage.$project).map(([k, v]) => [k, typeof v === 'string' ? path(doc, v.slice(1)) : doc[k]])));
+          }
+        }
+        return { toArray: async () => rows };
       },
       findOne: async (filter) => {
         calls.push(`${name}.findOne`);
@@ -166,4 +193,79 @@ test('filtre « offre » de la liste', () => {
   assert.equal(matchesOfferFilter(nomad, 'unknown'), false);
   assert.equal(matchesOfferFilter(nomad, 'taas'), true, 'valeur invalide : pas de filtre');
   assert.deepEqual(publicAccountOffer(undefined), { offer: null, product: null, source: null });
+});
+
+// --- Règle du fondateur : « si avec d'autres membres ça ne peut pas être NOMAD » (même critère que COMPANY_HAS_MEMBERS). ---
+test('resolveAccountOfferDetail : avec d’autres membres, jamais NOMAD (palier nomad_solo, ancien « essentiel », profil solo)', async () => {
+  const states = (rows) => async () => rows;
+  const legacy = productFromPlanMetadata(meta('essentiel'));
+  assert.equal(legacy, 'nomad_solo', 'ancien palier « essentiel » ramené à nomad_solo');
+  for (const tier of ['nomad_solo', legacy]) {
+    const d = await resolveAccountOfferDetail({ companyIds: ['c1'], lastKnownTier: async () => tier, workspaceStates: states([]), hasOtherMembers: true });
+    assert.deepEqual(d, { offer: 'cloud', product: null, source: 'subscription', tier: 'nomad_solo', accountProfile: null, membersOverride: true });
+  }
+  const solo = await resolveAccountOfferDetail({ companyIds: ['c1'], lastKnownTier: async () => null, workspaceStates: states([{ data: { accountProfile: 'solo' } }]), hasOtherMembers: true });
+  assert.deepEqual(solo, { offer: 'cloud', product: null, source: 'accountProfile', tier: null, accountProfile: 'solo', membersOverride: true });
+  // Palier CLOUD d'une autre société du compte : CLOUD + produit, même si la première est en nomad_solo.
+  const tiers = { c1: 'nomad_solo', c2: 'multi_clients' };
+  const mixed = await resolveAccountOfferDetail({ companyIds: ['c1', 'c2'], lastKnownTier: async (id) => tiers[id], workspaceStates: states([]), hasOtherMembers: true });
+  assert.deepEqual([mixed.offer, mixed.product, mixed.membersOverride], ['cloud', 'contact_centre', undefined]);
+  // Seul (sans autres membres) : NOMAD inchangé.
+  const alone = await resolveAccountOfferDetail({ companyIds: ['c1', 'c2'], lastKnownTier: async (id) => tiers[id], workspaceStates: states([]) });
+  assert.deepEqual([alone.offer, alone.product], ['nomad', null]);
+  // Sans aucune donnée d'offre, les membres seuls ne suffisent pas : offre inconnue.
+  assert.equal((await resolveAccountOfferDetail({ companyIds: ['c1'], lastKnownTier: async () => null, workspaceStates: states([]), hasOtherMembers: true })).offer, null);
+});
+
+test('liste admin : comptes « cc » avec d’autres membres jamais NOMAD, comptes seuls inchangés, toujours 4 lectures', async () => {
+  const owners = Array.from({ length: 8 }, (_, i) => oid(`d${i}`));
+  const companies = owners.map((u, i) => ({ _id: oid(`e${i}`), userId: u }));
+  const plans = [
+    { _id: oid('f1'), metadata: meta('nomad_solo') },
+    { _id: oid('f2'), metadata: meta('essentiel') },
+    { _id: oid('f3'), metadata: meta('full_scope') },
+  ];
+  const sub = (i, plan) => ({ companyId: companies[i]._id, status: 'active', planId: plan._id, createdAt: new Date('2026-10-29') });
+  const subscriptions = [sub(0, plans[0]), sub(1, plans[1]), sub(3, plans[2]), sub(5, plans[0]), sub(7, plans[1])];
+  const states = [
+    { companyId: companies[2]._id, scope: 'company', data: { accountProfile: 'solo' } },
+    { companyId: companies[6]._id, scope: 'company', data: { accountProfile: 'solo' } },
+  ];
+  // Membres (critères de otherMembersCount) : agent par employerCompanyId, agent par employments, accès CompanyMembership.
+  const users = [
+    { _id: oid('aa0'), employerCompanyId: companies[0]._id },
+    { _id: oid('aa1'), employments: [{ companyId: companies[1]._id }] },
+    { _id: oid('aa3'), employerCompanyId: companies[3]._id },
+    // Le titulaire rattaché à sa propre société ne compte pas comme « autre membre ».
+    { _id: owners[5], employerCompanyId: companies[5]._id },
+  ];
+  const companymemberships = [
+    { companyId: companies[2]._id, userId: oid('bb2') },
+    { companyId: companies[6]._id, userId: owners[6] },
+    { companyId: companies[7]._id, userId: owners[7] },
+  ];
+  const db = fakeDb({ companies, subscriptions, subscriptionplans: plans, callcenter_workspace_state: states, users, companymemberships });
+  const map = await loadAccountOffers(db, owners);
+
+  assert.equal(db.calls.length, 4, `lectures : ${db.calls.join(', ')}`);
+  const at = (i) => map.get(String(owners[i]));
+  // Avec d'autres membres : CLOUD.
+  assert.deepEqual([at(0).offer, at(0).product, at(0).membersOverride], ['cloud', null, true], 'nomad_solo + agent');
+  assert.deepEqual([at(1).offer, at(1).product, at(1).membersOverride], ['cloud', null, true], 'ancien essentiel + agent (employments)');
+  assert.deepEqual([at(2).offer, at(2).source, at(2).membersOverride], ['cloud', 'accountProfile', true], 'profil solo + membre');
+  assert.deepEqual([at(3).offer, at(3).product], ['cloud', 'entreprise'], 'palier CLOUD + agent : produit gardé');
+  assert.deepEqual(publicAccountOffer(at(0)), { offer: 'cloud', product: null, source: 'subscription' });
+  // Seuls (titulaire seulement) : NOMAD inchangé.
+  assert.deepEqual([at(5).offer, at(5).membersOverride], ['nomad', undefined], 'titulaire agent de sa propre société');
+  assert.deepEqual([at(6).offer, at(6).source, at(6).companyId], ['nomad', 'accountProfile', String(companies[6]._id)]);
+  assert.deepEqual([at(7).offer, at(7).companyId], ['nomad', String(companies[7]._id)]);
+  assert.equal(at(4).offer, null);
+});
+
+test('lecture des sociétés : mêmes critères de membres que le refus COMPANY_HAS_MEMBERS', () => {
+  const pipeline = companiesWithMembersPipeline([String(oid('d1'))]);
+  const lookups = pipeline.filter((s) => s.$lookup).map((s) => [s.$lookup.from, s.$lookup.foreignField]);
+  assert.deepEqual(lookups, [['users', 'employerCompanyId'], ['users', 'employments.companyId'], ['companymemberships', 'companyId']]);
+  assert.equal(otherMembersOf({ userId: 'o', employerAgentIds: ['a', 'o'], employedAgentIds: ['a', 'b'], memberUserIds: ['o', 'm'] }), 3);
+  assert.equal(otherMembersOf({ userId: 'o', employerAgentIds: ['o'], employedAgentIds: [], memberUserIds: ['o'] }), 0);
 });
