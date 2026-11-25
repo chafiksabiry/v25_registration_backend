@@ -1,6 +1,12 @@
 import jwt from 'jsonwebtoken';
 import { gateAccount } from '../services/accountGate.js';
 
+/** Identifiant du compte porté par un jeton (`userId`, ou `id` / `_id` des anciens jetons) ; null pour un jeton de service. */
+export function tokenUserId(decoded) {
+  const id = decoded?.userId ?? decoded?.id ?? decoded?._id;
+  return id ? String(id) : null;
+}
+
 export const authenticate = (req, res, next) => {
   try {
     const token = req.headers.authorization?.split(' ')[1];
