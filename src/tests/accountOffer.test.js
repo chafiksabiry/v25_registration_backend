@@ -10,6 +10,7 @@ import {
   loadAccountOffer,
   companiesWithMembersPipeline,
   otherMembersOf,
+  applySignupOffer,
 } from '../services/accountOffer.js';
 import { resolveAccountOffer } from '../services/accountClosureService.js';
 import { matchesOfferFilter, publicAccountOffer } from '../services/adminService.js';
@@ -268,4 +269,53 @@ test('lecture des sociétés : mêmes critères de membres que le refus COMPANY_
   assert.deepEqual(lookups, [['users', 'employerCompanyId'], ['users', 'employments.companyId'], ['companymemberships', 'companyId']]);
   assert.equal(otherMembersOf({ userId: 'o', employerAgentIds: ['a', 'o'], employedAgentIds: ['a', 'b'], memberUserIds: ['o', 'm'] }), 3);
   assert.equal(otherMembersOf({ userId: 'o', employerAgentIds: ['o'], employedAgentIds: [], memberUserIds: ['o'] }), 0);
+});
+
+test('parcours d’entrée : signup.offer prime sur la déduction, jamais NOMAD avec d’autres membres', async () => {
+  const states = (rows) => async () => rows;
+  // Abonnement Entreprise, mais inscription par l'adresse NOMAD : le parcours fait foi.
+  const d1 = await resolveAccountOfferDetail({ companyIds: ['c1'], lastKnownTier: async () => 'full_scope', workspaceStates: states([]), signup: { offer: 'nomad' } });
+  assert.deepEqual([d1.offer, d1.product, d1.source], ['nomad', null, 'signup']);
+  // CLOUD sans produit au parcours : produit de l'abonnement ; CLOUD Receptionist : produit du parcours.
+  const d2 = await resolveAccountOfferDetail({ companyIds: ['c1'], lastKnownTier: async () => 'full_scope', workspaceStates: states([]), signup: { offer: 'cloud', product: null } });
+  assert.deepEqual([d2.offer, d2.product, d2.source], ['cloud', 'entreprise', 'signup']);
+  const d3 = await resolveAccountOfferDetail({ companyIds: ['c1'], lastKnownTier: async () => 'nomad_solo', workspaceStates: states([]), signup: { offer: 'cloud', product: 'receptionist' } });
+  assert.deepEqual([d3.offer, d3.product], ['cloud', 'receptionist']);
+  // Règle des membres : NOMAD au parcours + autres membres -> déduction (CLOUD), jamais NOMAD.
+  const d4 = await resolveAccountOfferDetail({ companyIds: ['c1'], lastKnownTier: async () => 'nomad_solo', workspaceStates: states([]), hasOtherMembers: true, signup: { offer: 'nomad' } });
+  assert.deepEqual([d4.offer, d4.membersOverride], ['cloud', true]);
+  assert.deepEqual(applySignupOffer({ offer: null, product: null, source: null, tier: null, accountProfile: null }, { offer: 'nomad' }, { hasOtherMembers: true }).offer, 'cloud');
+  // Valeur hors liste ou absente : déduction inchangée.
+  const d5 = await resolveAccountOfferDetail({ companyIds: ['c1'], lastKnownTier: async () => 'accueil', workspaceStates: states([]), signup: { offer: 'admin' } });
+  assert.deepEqual([d5.offer, d5.product, d5.source], ['cloud', 'receptionist', 'subscription']);
+  const d6 = await resolveAccountOfferDetail({ companyIds: [], lastKnownTier: async () => null, workspaceStates: states([]), signup: { offer: 'taas', product: 'receptionist' } });
+  assert.deepEqual([d6.offer, d6.product, d6.source], ['taas', null, 'signup']);
+  // E-mail de suppression : même règle (resolveAccountOffer).
+  assert.equal(await resolveAccountOffer({ companyIds: ['c1'], lastKnownTier: async () => 'accueil', workspaceStates: states([]), signup: { offer: 'nomad' } }), 'nomad');
+});
+
+test('liste admin : parcours d’entrée passé par l’appelant, toujours 4 lectures au plus', async () => {
+  const owners = [oid('d10'), oid('d11'), oid('d12'), oid('d13')];
+  const companies = [{ _id: oid('e10'), userId: owners[0] }, { _id: oid('e11'), userId: owners[1] }, { _id: oid('e12'), userId: owners[2] }];
+  const plans = [{ _id: oid('f10'), metadata: meta('full_scope') }];
+  const subscriptions = [{ companyId: companies[0]._id, status: 'active', planId: plans[0]._id, createdAt: new Date('2026-11-01') }];
+  const users = [{ _id: oid('aa12'), employerCompanyId: companies[2]._id }];
+  const db = fakeDb({ companies, subscriptions, subscriptionplans: plans, callcenter_workspace_state: [], users, companymemberships: [] });
+  const signups = new Map([
+    [String(owners[0]), { offer: 'nomad' }],
+    [String(owners[1]), { offer: 'cloud', product: 'receptionist' }],
+    [String(owners[2]), { offer: 'nomad' }],
+    [String(owners[3]), { offer: 'nomad' }],
+  ]);
+  const map = await loadAccountOffers(db, owners, { signups });
+  assert.ok(db.calls.length <= 4, `lectures : ${db.calls.join(', ')}`);
+  const at = (i) => map.get(String(owners[i]));
+  assert.deepEqual([at(0).offer, at(0).source, at(0).companyId], ['nomad', 'signup', String(companies[0]._id)]);
+  assert.deepEqual([at(1).offer, at(1).product, at(1).companyId], ['cloud', 'receptionist', String(companies[1]._id)]);
+  assert.deepEqual([at(2).offer, at(2).membersOverride], ['cloud', true], 'NOMAD au parcours, mais un agent : jamais NOMAD');
+  assert.deepEqual([at(3).offer, at(3).source, at(3).companyId], ['nomad', 'signup', null], 'sans société : le parcours suffit');
+  // Sans parcours passé : comportement d'avant.
+  const before = await loadAccountOffers(fakeDb({ companies, subscriptions, subscriptionplans: plans, callcenter_workspace_state: [], users, companymemberships: [] }), owners);
+  assert.deepEqual([before.get(String(owners[0])).offer, before.get(String(owners[0])).source], ['cloud', 'subscription']);
+  assert.equal(before.get(String(owners[3])).offer, null);
 });

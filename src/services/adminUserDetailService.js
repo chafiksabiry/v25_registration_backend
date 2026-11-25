@@ -7,6 +7,7 @@ import {
 import { populateAgentForAdmin, populateCompanyForAdmin } from './adminPopulateUtils.js';
 import { enrichAgentMedia } from './adminAgentMediaUtils.js';
 import { loadAccountOffer } from './accountOffer.js';
+import { summarizeJourney } from '../utils/signupJourney.js';
 import { publicAccountOffer } from './adminService.js';
 
 const LIST_LIMIT = 50;
@@ -334,10 +335,12 @@ export async function getUserDetail(userId) {
     platform: null,
     accountOffer: null,
     nomadProfile: null,
+    // Parcours d'inscription (offre d'entrée, étapes datées) ; `recorded: false` pour un compte antérieur au suivi.
+    signupJourney: summarizeJourney(user),
   };
 
   // Offre réelle du compte (NOMAD / CLOUD + produit), et non le type historique (`call-center`) commun à toute inscription téléphonie.
-  const offer = await loadAccountOffer(db, userId);
+  const offer = await loadAccountOffer(db, userId, { signup: user.signup || null });
   detail.accountOffer = publicAccountOffer(offer);
   if (offer?.offer === 'nomad' && offer.companyId) {
     detail.nomadProfile = await loadNomadProfile(db, offer.companyId);
