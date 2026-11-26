@@ -31,6 +31,8 @@ export const SIGNUP_LANGS = Object.freeze(['en', 'fr', 'es', 'ar']);
 export const SIGNUP_ENTRIES = Object.freeze({
   '/nomad/inscription': { offer: 'nomad', product: null },
   '/auth/register-nomad': { offer: 'nomad', product: null },
+  // Compte créé dans l'application mobile (POST /auth/app-signup, utils/appSignup.js) : toujours NOMAD.
+  '/app/ios': { offer: 'nomad', product: null },
   '/cloud/receptionist/inscription': { offer: 'cloud', product: 'receptionist' },
   '/cloud/receptionist/inscription/compte': { offer: 'cloud', product: 'receptionist' },
   '/auth/register-company': { offer: 'taas', product: null },

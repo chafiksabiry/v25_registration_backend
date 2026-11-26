@@ -18,6 +18,7 @@ import { normalizeOptionalPhone } from '../utils/phone.js';
 import { pickSignupFields } from '../utils/signupFields.js';
 import { pickSignup } from '../utils/signupJourney.js';
 import { stampJourney } from './signupJourney.js';
+import { isClaimableAppSignup } from '../utils/appSignup.js';
 import {
   normalizeEmail,
   isValidEmail,
@@ -179,7 +180,7 @@ class AuthService {
 
     const email = String(userData.email || '').trim().toLowerCase();
     const existingUser = await userRepository.findByEmail(email);
-    if (existingUser) {
+    if (existingUser && !isClaimableAppSignup(existingUser)) {
       console.warn("Email already registered");
       throw new Error('Email already registered');
     }
@@ -190,6 +191,13 @@ class AuthService {
 
     const clientIp = getClientIp(req);
     const locationInfo = await this.enrichIPInfo(clientIp);
+
+    if (existingUser) {
+      // Compte créé dans l'app, pas encore activé (utils/appSignup.js) : l'inscription web NOMAD le reprend. Le mot de passe et le nom
+      // choisis ici remplacent ceux de l'app ; le parcours d'entrée (NOMAD, « /app/ios ») et l'accord de contact sont gardés.
+      // La boîte e-mail est prouvée ensuite par le code, comme pour toute inscription.
+      return { result: await this.claimAppSignup(existingUser, { userData, password, phone, verificationCode, verificationExpiry, clientIp, locationInfo }) };
+    }
     const ipCountry = locationInfo?.countryCode || null;
     const createdAt = new Date();
     // Parcours d'entrée (offre / produit de l'adresse d'inscription), listes fermées seulement ; absent si le site n'en envoie pas.
@@ -225,13 +233,28 @@ class AuthService {
     return { result };
   }
 
+  /** Reprise d'un compte créé dans l'app par l'inscription web (voir register). */
+  async claimAppSignup(user, { userData, password, phone, verificationCode, verificationExpiry, clientIp, locationInfo }) {
+    if (typeof userData.fullName === 'string' && userData.fullName.trim()) user.fullName = userData.fullName;
+    user.password = password; // haché par le hook pre('save')
+    if (phone) user.phone = phone;
+    user.verificationCode = { code: verificationCode, expiresAt: verificationExpiry };
+    user.appSignup.pending = false;
+    user.appSignup.claimedAt = new Date();
+    user.ipHistory.push({ ip: clientIp, action: 'register', ...(locationInfo && { locationInfo }) });
+    const saved = await user.save();
+    await this.sendVerificationEmail(saved.email, verificationCode);
+    return saved;
+  }
+
   async checkEmailAvailable(email) {
     const normalized = String(email || '').trim().toLowerCase();
     if (!normalized) {
       throw new Error('Email is required');
     }
     const existingUser = await userRepository.findByEmail(normalized);
-    return { available: !existingUser };
+    // Un compte créé dans l'app et pas encore activé est repris par l'inscription web : l'adresse reste « disponible » pour elle.
+    return { available: !existingUser || isClaimableAppSignup(existingUser) };
   }
 
   // Phone numbers are not required to be unique (décidé le 14/10) — only

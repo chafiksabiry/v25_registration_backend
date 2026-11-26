@@ -233,6 +233,35 @@ const userSchema = new mongoose.Schema({
     ),
     default: undefined,
   },
+  /**
+   * Compte créé dans l'application mobile (POST /auth/app-signup, utils/appSignup.js). `pending` : pas encore activé sur le web
+   * (mot de passe choisi via le lien de l'e-mail). Accord de contact : booléen, date et source (« ios-app »). `relance` : dernier
+   * e-mail envoyé (1 à 3) et arrêt des relances. Absent pour les autres comptes.
+   */
+  appSignup: {
+    type: new mongoose.Schema(
+      {
+        source: { type: String, default: null },
+        at: { type: Date, default: null },
+        pending: { type: Boolean, default: false },
+        claimedAt: { type: Date, default: null },
+        consent: { type: Boolean, default: false },
+        consentAt: { type: Date, default: null },
+        consentSource: { type: String, default: null },
+        unsubscribedAt: { type: Date, default: null },
+        relance: {
+          step: { type: Number, default: 0 },
+          lastSentAt: { type: Date, default: null },
+          stoppedAt: { type: Date, default: null },
+          stopReason: { type: String, default: null },
+          lockUntil: { type: Date, default: null },
+          dryRunStep: { type: Number, default: 0 },
+        },
+      },
+      { _id: false }
+    ),
+    default: undefined,
+  },
 });
 
 userSchema.pre('save', async function(next) {
