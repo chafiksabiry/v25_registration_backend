@@ -202,3 +202,38 @@ export function nomadAppEmail({ step, lang, firstName, country, activationUrl, u
   ].join('\n');
   return { subject, text, html, unsubscribeUrl: unsub };
 }
+
+const DELETION_CODE_TEXTS = {
+  fr: { subject: 'HARX — Code de suppression de votre compte', title: 'Supprimer votre compte', intro: 'Saisissez ce code dans l’app pour confirmer la suppression définitive de votre compte et de votre numéro.', foot: 'Ce code expire dans 10 minutes. Si vous n’avez rien demandé, ignorez cet e-mail : votre compte reste actif.' },
+  en: { subject: 'HARX — Your account deletion code', title: 'Delete your account', intro: 'Enter this code in the app to confirm the permanent deletion of your account and your number.', foot: 'This code expires in 10 minutes. If you did not ask for it, ignore this e-mail: your account stays active.' },
+  es: { subject: 'HARX — Código para eliminar su cuenta', title: 'Eliminar su cuenta', intro: 'Introduzca este código en la app para confirmar la eliminación definitiva de su cuenta y de su número.', foot: 'Este código caduca en 10 minutos. Si no lo ha solicitado, ignore este correo: su cuenta sigue activa.' },
+  ar: { subject: 'HARX — رمز حذف حسابك', title: 'حذف حسابك', intro: 'أدخل هذا الرمز في التطبيق لتأكيد الحذف النهائي لحسابك ورقمك.', foot: 'تنتهي صلاحية هذا الرمز خلال 10 دقائق. إذا لم تطلبه، تجاهل هذه الرسالة: يبقى حسابك نشطًا.' },
+};
+
+/** Code à 6 chiffres de suppression du compte (services/accountDeletionCodeService.js), fr, en, es, ar. */
+export function accountDeletionCodeEmail({ code, lang }) {
+  const L = DELETION_CODE_TEXTS[lang] ? lang : 'en';
+  const T = DELETION_CODE_TEXTS[L];
+  const rtl = L === 'ar';
+  const align = rtl ? 'right' : 'left';
+  const safe = escapeHtml(code);
+  const html = `<!DOCTYPE html>
+<html lang="${L}" dir="${rtl ? 'rtl' : 'ltr'}">
+  <body style="margin:0;padding:0;background-color:#e9ecf3;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#e9ecf3" style="background-color:#e9ecf3;padding:24px 12px;">
+      <tr><td align="center">
+        <table role="presentation" width="560" cellpadding="0" cellspacing="0" bgcolor="#ffffff" style="max-width:560px;width:100%;background-color:#ffffff;border-radius:14px;overflow:hidden;">
+          <tr><td align="center" bgcolor="#050914" style="background-color:#050914;padding:0;line-height:0;font-size:0;"><img src="${HARX_LOGO_SRC}" width="560" alt="HARX" style="display:block;width:100%;max-width:560px;height:auto;border:0;" /></td></tr>
+          <tr><td style="padding:24px;font-family:Inter,Segoe UI,Arial,sans-serif;font-size:15px;line-height:1.6;color:#0b1020;text-align:${align};">
+            <h2 style="margin:0 0 12px;font-size:20px;">${escapeHtml(T.title)}</h2>
+            <p style="margin:0 0 16px;">${escapeHtml(T.intro)}</p>
+            <p dir="ltr" style="margin:0;text-align:center;font-size:32px;font-weight:800;letter-spacing:0.22em;color:#9f1239;">${safe}</p>
+          </td></tr>
+          <tr><td style="padding:14px 24px 20px;font-family:Inter,Segoe UI,Arial,sans-serif;font-size:12px;line-height:1.5;color:#7a829c;border-top:1px solid #eef0f5;text-align:${align};">${escapeHtml(T.foot)}</td></tr>
+        </table>
+      </td></tr>
+    </table>
+  </body>
+</html>`;
+  return { subject: T.subject, text: `${T.title}\n\n${T.intro}\n\n${code}\n\n${T.foot}`, html };
+}
