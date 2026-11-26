@@ -1,4 +1,6 @@
 import { appSignupService, AppSignupError } from '../services/appSignupService.js';
+import { accountDeletionCodeService, DeletionCodeError } from '../services/accountDeletionCodeService.js';
+import { sendClosureError } from '../services/accountClosureService.js';
 
 const PAGE_TEXT = {
   fr: { title: 'Désabonnement', ask: 'Ne plus recevoir les e-mails de rappel HARX ?', button: 'Me désabonner', done: 'C’est fait : vous ne recevrez plus ces e-mails.', bad: 'Ce lien n’est pas valide.' },
@@ -56,5 +58,28 @@ export const unsubscribe = async (req, res) => {
   } catch (error) {
     console.error('[app-signup] désabonnement', error?.message || error);
     res.status(500).type('html').send(page(lang, `<p>${escape(T.bad)}</p>`));
+  }
+};
+
+/** POST /api/auth/account-deletion/request : { email, lang } -> 200 identique que le compte existe ou non. */
+export const requestAccountDeletion = async (req, res) => {
+  try {
+    const { response } = await accountDeletionCodeService.request(req.body);
+    res.status(200).json(response);
+  } catch (error) {
+    if (error instanceof DeletionCodeError) return res.status(error.statusCode).json({ success: false, code: error.code });
+    console.error('[account-deletion] demande', error?.message || error);
+    return res.status(500).json({ success: false, code: 'ACCOUNT_DELETION_FAILED' });
+  }
+};
+
+/** POST /api/auth/account-deletion/confirm : { email, code } -> suppression (mêmes refus que la suppression existante). */
+export const confirmAccountDeletion = async (req, res) => {
+  try {
+    const data = await accountDeletionCodeService.confirm(req.body);
+    res.status(200).json({ success: true, data: { deletedAt: data?.deletedAt ?? null } });
+  } catch (error) {
+    if (error instanceof DeletionCodeError) return res.status(error.statusCode).json({ success: false, code: error.code });
+    return sendClosureError(res, error);
   }
 };

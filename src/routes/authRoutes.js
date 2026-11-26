@@ -3,7 +3,7 @@ import { register, login, verifyEmail, linkedInAuth, sendOTP, sendVerificationEm
 import rateLimit from 'express-rate-limit';
 import { authenticate, optionalAuthenticate, requireBodySelfOrAdmin } from '../middleware/auth.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
-import { appSignup, unsubscribe, unsubscribePage } from '../controllers/appSignupController.js';
+import { appSignup, unsubscribe, unsubscribePage, requestAccountDeletion, confirmAccountDeletion } from '../controllers/appSignupController.js';
 
 const router = express.Router();
 
@@ -34,6 +34,23 @@ router.post('/app-signup', appSignupLimiter, appSignup);
 // Désabonnement des relances (lien et en-tête List-Unsubscribe des e-mails) : GET affiche, POST désabonne (un clic, RFC 8058).
 router.get('/app-signup/unsubscribe', unsubscribePage);
 router.post('/app-signup/unsubscribe', express.urlencoded({ extended: false, limit: '2kb' }), unsubscribe);
+// Suppression du compte confirmée par un code e-mail (app mobile, connecté ou non) : services/accountDeletionCodeService.js.
+const deletionRequestLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: Number(process.env.RATE_LIMIT_DELETION_REQUEST_MAX || 10),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, code: 'RATE_LIMITED' },
+});
+const deletionConfirmLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: Number(process.env.RATE_LIMIT_DELETION_CONFIRM_MAX || 20),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, code: 'RATE_LIMITED' },
+});
+router.post('/account-deletion/request', deletionRequestLimiter, requestAccountDeletion);
+router.post('/account-deletion/confirm', deletionConfirmLimiter, confirmAccountDeletion);
 router.post('/linkedin', linkedInAuth);
 router.post("/signin/linkedin", linkedinSignIn);
 

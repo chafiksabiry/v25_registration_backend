@@ -231,6 +231,10 @@ export function createAccountClosureService(overrides = {}) {
       if (actor?.type === 'self') {
         const passwordOk = sameEmail(email, user.email) && typeof password === 'string' && password !== '' && (await user.comparePassword(password));
         if (!passwordOk) throw new AccountClosureError(403, 'INVALID_CREDENTIALS', 'Email or password is incorrect');
+      } else if (actor?.type === 'self-email-code') {
+        // L'abonné a prouvé la possession de la boîte par un code e-mail à usage unique (services/accountDeletionCodeService.js),
+        // vérifié AVANT cet appel : seule l'adresse doit correspondre. Utilisé par l'app mobile (comptes sans mot de passe connu).
+        if (actor.verified !== true || !sameEmail(email, user.email)) throw new AccountClosureError(403, 'INVALID_CREDENTIALS', 'Email or code is incorrect');
       } else if (actor?.type === 'admin') {
         if (!sameEmail(confirmEmail, user.email)) throw new AccountClosureError(400, 'CONFIRMATION_MISMATCH', 'The typed email does not match the account');
       } else {
@@ -245,7 +249,7 @@ export function createAccountClosureService(overrides = {}) {
 
       // Offre du compte pour l'e-mail de confirmation : celle envoyée par le portail (suppression par l'abonné), sinon lue avant la purge.
       // Une lecture en échec ne bloque jamais la suppression : e-mail neutre (« HARX »).
-      let offer = actor.type === 'self' && DELETION_EMAIL_PRODUCTS.includes(product) ? product : null;
+      let offer = (actor.type === 'self' || actor.type === 'self-email-code') && DELETION_EMAIL_PRODUCTS.includes(product) ? product : null;
       if (!offer) {
         try {
           offer = await d.accountProduct({ companyIds, signup: user.signup || null });
@@ -269,7 +273,7 @@ export function createAccountClosureService(overrides = {}) {
         at,
         actor: actor.type === 'admin'
           ? { type: 'admin', adminId: actor.userId ? String(actor.userId) : null, ...(actor.batchId ? { batchId: String(actor.batchId) } : {}) }
-          : { type: 'self' },
+          : { type: 'self', ...(actor.type === 'self-email-code' ? { method: 'email-code' } : {}) },
         ...summary,
       });
       const deletedEmail = user.email;

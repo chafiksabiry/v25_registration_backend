@@ -234,6 +234,22 @@ const userSchema = new mongoose.Schema({
     default: undefined,
   },
   /**
+   * Code de suppression du compte envoyé par e-mail (services/accountDeletionCodeService.js) : seulement l'empreinte HMAC du code,
+   * expiration courte, nombre d'essais. Effacé à l'usage, à l'expiration ou après trop d'essais.
+   */
+  accountDeletionCode: {
+    type: new mongoose.Schema(
+      {
+        hash: { type: String, default: null },
+        expiresAt: { type: Date, default: null },
+        attempts: { type: Number, default: 0 },
+        requestedAt: { type: Date, default: null },
+      },
+      { _id: false }
+    ),
+    default: undefined,
+  },
+  /**
    * Compte créé dans l'application mobile (POST /auth/app-signup, utils/appSignup.js). `pending` : pas encore activé sur le web
    * (mot de passe choisi via le lien de l'e-mail). Accord de contact : booléen, date et source (« ios-app »). `relance` : dernier
    * e-mail envoyé (1 à 3) et arrêt des relances. Absent pour les autres comptes.
