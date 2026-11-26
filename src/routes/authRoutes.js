@@ -3,6 +3,7 @@ import { register, login, verifyEmail, linkedInAuth, sendOTP, sendVerificationEm
 import rateLimit from 'express-rate-limit';
 import { authenticate, optionalAuthenticate, requireBodySelfOrAdmin } from '../middleware/auth.js';
 import { requireAdmin } from '../middleware/requireAdmin.js';
+import { appSignup, unsubscribe, unsubscribePage } from '../controllers/appSignupController.js';
 
 const router = express.Router();
 
@@ -21,6 +22,18 @@ const reengageRequestLimiter = rateLimit({
   message: { success: false, error: 'Too many requests. Please try again later.', code: 'RATE_LIMITED' },
 });
 router.post('/reengage-request', reengageRequestLimiter, reengageRequest);
+// Création de compte depuis l'application mobile (utils/appSignup.js) : quelques demandes par heure et par adresse IP.
+const appSignupLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: Number(process.env.RATE_LIMIT_APP_SIGNUP_MAX || 5),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, code: 'RATE_LIMITED' },
+});
+router.post('/app-signup', appSignupLimiter, appSignup);
+// Désabonnement des relances (lien et en-tête List-Unsubscribe des e-mails) : GET affiche, POST désabonne (un clic, RFC 8058).
+router.get('/app-signup/unsubscribe', unsubscribePage);
+router.post('/app-signup/unsubscribe', express.urlencoded({ extended: false, limit: '2kb' }), unsubscribe);
 router.post('/linkedin', linkedInAuth);
 router.post("/signin/linkedin", linkedinSignIn);
 

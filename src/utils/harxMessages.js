@@ -1,6 +1,6 @@
 import { frInCountry } from './frCountryPreposition.js';
 
-function escapeHtml(value) {
+export function escapeHtml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -8,7 +8,7 @@ function escapeHtml(value) {
     .replace(/"/g, '&quot;');
 }
 
-function publicApiBase() {
+export function publicApiBase() {
   return (
     process.env.PUBLIC_API_URL ||
     process.env.REGISTRATION_PUBLIC_URL ||
@@ -423,3 +423,4 @@ export function accountDeletedEmail({ email, numbers = [], byAdmin = false, prod
     }),
   };
 }
+

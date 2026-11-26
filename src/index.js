@@ -18,6 +18,7 @@ import agentInvitationRoutes from './routes/agentInvitationRoutes.js';
 import companyMemberRoutes from './routes/companyMemberRoutes.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { attachTeamPresence } from './realtime/teamPresence.js';
+import { startNomadRelanceJob } from './jobs/nomadRelanceJob.js';
 
 dotenv.config();
 
@@ -66,6 +67,16 @@ app.get('/email/harx-logo.jpg', (_req, res) => {
 
 // Slim HARX banner (1120x239, ~17 KB) for campaign e-mails.
 const bannerPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'assets', 'harx-email-banner.jpg');
+// Mot-symbole NOMAD des e-mails de l'app (482x52 @3x) : URL distante de l'image intégrée cid:nomad-wordmark.
+const nomadWordmarkPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'assets', 'nomad-wordmark-email.png');
+app.get('/email/nomad-wordmark.png', (_req, res) => {
+  res.set('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Cache-Control', 'public, max-age=86400');
+  res.type('png');
+  res.sendFile(nomadWordmarkPath);
+});
+
 app.get('/email/harx-banner.jpg', (_req, res) => {
   res.set('Cross-Origin-Resource-Policy', 'cross-origin');
   res.set('Access-Control-Allow-Origin', '*');
@@ -152,6 +163,8 @@ if (shouldStartServer) {
     console.log('----------------------');
   });
   attachTeamPresence(server);
+  // Relances des comptes créés dans l'app (simulation sauf NOMAD_RELANCE_DRY_RUN=false).
+  startNomadRelanceJob();
 } else {
   console.log('Server not started (Serverless mode or missing PORT).');
 }
